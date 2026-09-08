@@ -1,10 +1,9 @@
-import { Navigate } from "react-router-dom";
-import { useAuthMe } from "./hooks/use-auth";
+import { Navigate, Outlet } from "react-router-dom";
+import { useAuthMe } from "./hook/use-auth";
 
-export default function ProtectedRoute({ children }: { children: JSX.Element }) {
+export default function ProtectedRoute() {
   const { data: user, isLoading } = useAuthMe();
 
-  // ⏳ While checking auth
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -13,11 +12,9 @@ export default function ProtectedRoute({ children }: { children: JSX.Element }) 
     );
   }
 
-  // ❌ Not logged in → redirect
   if (!user) {
     return <Navigate to="/login" replace />;
   }
 
-  // ✅ Logged in → allow access
-  return children;
+  return <Outlet />;
 }
