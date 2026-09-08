@@ -20,7 +20,7 @@ if (!supabaseUrl) {
 
 if (!serviceRoleKey) {
   console.warn(
-    "SUPABASE_SERVICE_ROLE_KEY is not configured. Admin database operations may be blocked by RLS."
+    "SUPABASE_SERVICE_ROLE_KEY is not configured. Admin database operations may fail because of RLS."
   );
 }
 
@@ -61,7 +61,7 @@ router.get(
 /**
  * GET /api/admin/overview
  *
- * Returns the core numbers needed by the Admin dashboard.
+ * Core Admin Dashboard statistics.
  */
 router.get(
   "/overview",
@@ -85,29 +85,45 @@ router.get(
       ] = await Promise.all([
         adminSupabase
           .from("users")
-          .select("id", { count: "exact", head: true }),
+          .select("id", {
+            count: "exact",
+            head: true,
+          }),
 
         adminSupabase
           .from("demand_leads")
-          .select("id", { count: "exact", head: true })
-          .eq("status", "active"),
+          .select("id", {
+            count: "exact",
+            head: true,
+          }),
 
         adminSupabase
           .from("supply_leads")
-          .select("id", { count: "exact", head: true })
-          .eq("status", "active"),
+          .select("id", {
+            count: "exact",
+            head: true,
+          }),
 
         adminSupabase
           .from("referrals")
-          .select("id", { count: "exact", head: true }),
+          .select("id", {
+            count: "exact",
+            head: true,
+          }),
 
         adminSupabase
           .from("invites")
-          .select("id", { count: "exact", head: true }),
+          .select("id", {
+            count: "exact",
+            head: true,
+          }),
 
         adminSupabase
           .from("user_subscriptions")
-          .select("id", { count: "exact", head: true }),
+          .select("id", {
+            count: "exact",
+            head: true,
+          }),
 
         adminSupabase
           .from("plans")
@@ -125,7 +141,10 @@ router.get(
       ].filter(Boolean);
 
       if (errors.length > 0) {
-        console.error("Admin overview database errors:", errors);
+        console.error(
+          "Admin overview database errors:",
+          errors
+        );
 
         return res.status(500).json({
           success: false,
@@ -133,7 +152,7 @@ router.get(
         });
       }
 
-      res.json({
+      return res.json({
         success: true,
         overview: {
           users: usersResult.count || 0,
@@ -142,22 +161,32 @@ router.get(
             (demandResult.count || 0) +
             (supplyResult.count || 0),
 
-          demandLeads: demandResult.count || 0,
-          supplyLeads: supplyResult.count || 0,
+          demandLeads:
+            demandResult.count || 0,
 
-          referrals: referralsResult.count || 0,
-          referralLinks: invitesResult.count || 0,
+          supplyLeads:
+            supplyResult.count || 0,
+
+          referrals:
+            referralsResult.count || 0,
+
+          referralLinks:
+            invitesResult.count || 0,
 
           subscriptions:
             subscriptionsResult.count || 0,
 
-          plans: plansResult.data || [],
+          plans:
+            plansResult.data || [],
         },
       });
     } catch (error) {
-      console.error("Admin overview error:", error);
+      console.error(
+        "Admin overview error:",
+        error
+      );
 
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         error: "Failed to load admin overview",
       });
@@ -168,7 +197,7 @@ router.get(
 /**
  * GET /api/admin/users
  *
- * Returns users together with profile and subscription information.
+ * Users and their current subscription/trial information.
  */
 router.get(
   "/users",
@@ -181,7 +210,7 @@ router.get(
         });
       }
 
-      const { data: users, error } =
+      const { data, error } =
         await adminSupabase
           .from("users")
           .select(`
@@ -210,9 +239,9 @@ router.get(
         });
       }
 
-      res.json({
+      return res.json({
         success: true,
-        users: users || [],
+        users: data || [],
       });
     } catch (error) {
       console.error(
@@ -220,7 +249,7 @@ router.get(
         error
       );
 
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         error: "Failed to load users",
       });
@@ -231,7 +260,9 @@ router.get(
 /**
  * GET /api/admin/leads
  *
- * Returns Demand and Supply leads separately.
+ * Returns Demand and Supply leads.
+ *
+ * Demand and Supply are intentionally kept separate.
  */
 router.get(
   "/leads",
@@ -250,17 +281,11 @@ router.get(
       ] = await Promise.all([
         adminSupabase
           .from("demand_leads")
-          .select("*")
-          .order("created_at", {
-            ascending: false,
-          }),
+          .select("*"),
 
         adminSupabase
           .from("supply_leads")
-          .select("*")
-          .order("created_at", {
-            ascending: false,
-          }),
+          .select("*"),
       ]);
 
       if (
@@ -279,13 +304,19 @@ router.get(
         });
       }
 
-      res.json({
+      return res.json({
         success: true,
-        demand: demandResult.data || [],
-        supply: supplyResult.data || [],
+
+        demand:
+          demandResult.data || [],
+
+        supply:
+          supplyResult.data || [],
+
         counts: {
           demand:
             demandResult.data?.length || 0,
+
           supply:
             supplyResult.data?.length || 0,
         },
@@ -296,7 +327,7 @@ router.get(
         error
       );
 
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         error: "Failed to load leads",
       });
@@ -343,7 +374,7 @@ router.get(
         });
       }
 
-      res.json({
+      return res.json({
         success: true,
         referrals: data || [],
       });
@@ -353,7 +384,7 @@ router.get(
         error
       );
 
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         error: "Failed to load referrals",
       });
@@ -364,7 +395,7 @@ router.get(
 /**
  * GET /api/admin/invites
  *
- * Current referral-link/invite records.
+ * Referral links / invite records.
  */
 router.get(
   "/invites",
@@ -408,7 +439,7 @@ router.get(
         });
       }
 
-      res.json({
+      return res.json({
         success: true,
         invites: data || [],
       });
@@ -418,7 +449,7 @@ router.get(
         error
       );
 
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         error: "Failed to load referral links",
       });
@@ -466,7 +497,7 @@ router.get(
         });
       }
 
-      res.json({
+      return res.json({
         success: true,
         subscriptions: data || [],
       });
@@ -476,7 +507,7 @@ router.get(
         error
       );
 
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         error: "Failed to load subscriptions",
       });
