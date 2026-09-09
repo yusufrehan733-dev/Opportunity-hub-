@@ -10,35 +10,125 @@ const RSS_FEEDS = [
 ];
 
 const SKILL_RULES: Record<string, string[]> = {
-  "Customer Support": ["customer support", "customer service", "support specialist", "help desk"],
-  "Programming": ["developer", "software engineer", "programmer", "javascript", "typescript", "react", "node.js", "python"],
-  "Virtual Assistant": ["virtual assistant", "administrative assistant", "executive assistant"],
-  "Sales": ["sales", "business development", "sales representative", "account executive"],
-  "Marketing": ["marketing", "digital marketing", "seo", "social media", "content marketing"],
-  "Graphic Design": ["graphic designer", "graphic design", "photoshop", "illustrator", "canva"],
-  "Writing": ["writer", "copywriter", "content writer", "content writing"],
-  "Data Entry": ["data entry", "data entry clerk"],
-  "Teaching": ["teacher", "tutor", "teaching", "instructor"],
-  "Accounting": ["accountant", "bookkeeper", "accounting"]
+  "Customer Support": [
+    "customer support",
+    "customer service",
+    "support specialist",
+    "help desk"
+  ],
+  "Programming": [
+    "developer",
+    "software engineer",
+    "programmer",
+    "javascript",
+    "typescript",
+    "react",
+    "node.js",
+    "python"
+  ],
+  "Virtual Assistant": [
+    "virtual assistant",
+    "administrative assistant",
+    "executive assistant"
+  ],
+  "Sales": [
+    "sales",
+    "business development",
+    "sales representative",
+    "account executive"
+  ],
+  "Marketing": [
+    "marketing",
+    "digital marketing",
+    "seo",
+    "social media",
+    "content marketing"
+  ],
+  "Graphic Design": [
+    "graphic designer",
+    "graphic design",
+    "photoshop",
+    "illustrator",
+    "canva"
+  ],
+  "Writing": [
+    "writer",
+    "copywriter",
+    "content writer",
+    "content writing"
+  ],
+  "Data Entry": [
+    "data entry",
+    "data entry clerk"
+  ],
+  "Teaching": [
+    "teacher",
+    "tutor",
+    "teaching",
+    "instructor"
+  ],
+  "Accounting": [
+    "accountant",
+    "bookkeeper",
+    "accounting"
+  ]
 };
 
 const COUNTRY_RULES: Record<string, string[]> = {
-  "United Kingdom": ["uk", "united kingdom", "england", "london"],
-  "Canada": ["canada", "toronto", "vancouver"],
-  "United States": ["usa", "united states", "america", "new york", "california"],
-  "Australia": ["australia", "sydney", "melbourne"],
-  "United Arab Emirates": ["uae", "dubai", "abu dhabi"],
-  "Qatar": ["qatar", "doha"],
-  "Germany": ["germany", "berlin"],
-  "Netherlands": ["netherlands", "amsterdam"],
-  "Pakistan": ["pakistan", "islamabad", "lahore", "karachi", "rawalpindi"]
+  "United Kingdom": [
+    "uk",
+    "united kingdom",
+    "england",
+    "london"
+  ],
+  "Canada": [
+    "canada",
+    "toronto",
+    "vancouver"
+  ],
+  "United States": [
+    "usa",
+    "united states",
+    "america",
+    "new york",
+    "california"
+  ],
+  "Australia": [
+    "australia",
+    "sydney",
+    "melbourne"
+  ],
+  "United Arab Emirates": [
+    "uae",
+    "dubai",
+    "abu dhabi"
+  ],
+  "Qatar": [
+    "qatar",
+    "doha"
+  ],
+  "Germany": [
+    "germany",
+    "berlin"
+  ],
+  "Netherlands": [
+    "netherlands",
+    "amsterdam"
+  ],
+  "Pakistan": [
+    "pakistan",
+    "islamabad",
+    "lahore",
+    "karachi",
+    "rawalpindi"
+  ]
 };
 
 function detectSkill(text: string): string {
   const lower = text.toLowerCase();
 
   for (const [skill, keywords] of Object.entries(SKILL_RULES)) {
-    if (keywords.some(keyword => lower.includes(keyword))) {
+    if (keywords.some((keyword) => lower.includes(keyword))) {
       return skill;
     }
   }
@@ -50,7 +140,7 @@ function detectCountry(text: string): string {
   const lower = text.toLowerCase();
 
   for (const [country, keywords] of Object.entries(COUNTRY_RULES)) {
-    if (keywords.some(keyword => lower.includes(keyword))) {
+    if (keywords.some((keyword) => lower.includes(keyword))) {
       return country;
     }
   }
@@ -59,18 +149,32 @@ function detectCountry(text: string): string {
 }
 
 function extractEmail(text: string): string | null {
-  const match = text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+  const match = text.match(
+    /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i
+  );
+
   return match ? match[0] : null;
 }
 
+/**
+ * Strict freshness rule:
+ * Only dated RSS items published within the last 72 hours are accepted.
+ *
+ * Missing or invalid dates are rejected rather than assumed fresh.
+ */
 function isFresh(dateString?: string): boolean {
-  if (!dateString) return true;
+  if (!dateString) {
+    return false;
+  }
 
   const published = new Date(dateString).getTime();
 
-  if (Number.isNaN(published)) return true;
+  if (Number.isNaN(published)) {
+    return false;
+  }
 
-  const ageHours = (Date.now() - published) / (1000 * 60 * 60);
+  const now = Date.now();
+  const ageHours = (now - published) / (1000 * 60 * 60);
 
   return ageHours >= 0 && ageHours <= 72;
 }
@@ -80,6 +184,7 @@ export async function fetchRSSLeads() {
     let inserted = 0;
     let skippedOld = 0;
     let skippedDuplicate = 0;
+    let skippedInvalid = 0;
 
     for (const feedUrl of RSS_FEEDS) {
       try {
@@ -88,7 +193,7 @@ export async function fetchRSSLeads() {
         const feed = await parser.parseURL(feedUrl);
 
         for (const item of feed.items || []) {
-          const title = item.title?.trim() || "Untitled Opportunity";
+          const title = item.title?.trim();
 
           const description =
             item.contentSnippet ||
@@ -96,10 +201,18 @@ export async function fetchRSSLeads() {
             item.summary ||
             "";
 
-          const opportunityUrl = item.link?.trim() || feedUrl;
+          const opportunityUrl = item.link?.trim();
 
-          // Never store old opportunities.
-          if (!isFresh(item.isoDate || item.pubDate)) {
+          // A real RSS opportunity must have a title and direct source URL.
+          if (!title || !opportunityUrl) {
+            skippedInvalid++;
+            continue;
+          }
+
+          // Strict 72-hour freshness.
+          const publishedDate = item.isoDate || item.pubDate;
+
+          if (!isFresh(publishedDate)) {
             skippedOld++;
             continue;
           }
@@ -110,7 +223,7 @@ export async function fetchRSSLeads() {
           const country = detectCountry(combinedText);
           const email = extractEmail(combinedText);
 
-          // Check by original opportunity URL first.
+          // Prevent duplicate source URLs.
           const { data: existingBySource } = await supabase
             .from("demand_leads")
             .select("id")
@@ -134,48 +247,70 @@ export async function fetchRSSLeads() {
             continue;
           }
 
-          const usefulDescription =
-            `${description}\n\nOriginal opportunity / application link:\n${opportunityUrl}`.trim();
+          const usefulDescription = [
+            description.trim(),
+            "",
+            "Original opportunity / application link:",
+            opportunityUrl
+          ]
+            .filter(Boolean)
+            .join("\n")
+            .trim();
 
           const { error } = await supabase
             .from("demand_leads")
             .insert({
-              type: "Demand",
+              // RSS job boards represent organizations offering work.
+              type: "Supply",
+
               source: opportunityUrl,
               client_name: title,
               skill_needed: skill,
               description: usefulDescription,
+
               contact_email: email,
               contact_phone: null,
+              contact_name: null,
+
               title,
-              category: "Remote Jobs",
+              category: "Supply Leads",
               subcategory: "RSS",
+
               country,
               city: null,
+
               budget: null,
               currency: null,
-              contact_name: null,
+
               created_at: new Date().toISOString()
             });
 
           if (error) {
-            console.error("Supabase insert failed:", error);
+            console.error(
+              "Supabase RSS insert failed:",
+              error
+            );
           } else {
             inserted++;
 
             console.log(
-              `REAL LEAD ADDED | ${skill} | ${country} | ${title} | ${opportunityUrl}`
+              `REAL SUPPLY LEAD ADDED | ${skill} | ${country} | ${title} | ${opportunityUrl}`
             );
           }
         }
       } catch (feedError) {
-        console.error("Feed failed:", feedUrl, feedError);
+        console.error(
+          "RSS feed failed:",
+          feedUrl,
+          feedError
+        );
       }
     }
 
     console.log("===== RSS RESULT =====");
     console.log(`Inserted: ${inserted}`);
-    console.log(`Old (>72h): ${skippedOld}`);
+    console.log(`Old/invalid date (>72h): ${skippedOld}`);
+    console.log(`Invalid items: ${skippedInvalid}`);
     console.log(`Duplicates: ${skippedDuplicate}`);
     console.log("======================");
 
@@ -184,4 +319,4 @@ export async function fetchRSSLeads() {
     console.error("RSS import failed:", err);
     return 0;
   }
-}
+              }
