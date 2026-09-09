@@ -1,25 +1,25 @@
-import express from "express";
-import { fetchGoogleLeads } from "../services/googleLeads.js";
-import { fetchRSSLeads } from "../services/rssLeads.js";
+import { fetchGoogleLeads } from "../api-server/src/services/googleLeads.js";
+import { fetchRSSLeads } from "../api-server/src/services/rssLeads.js";
 
-const router = express.Router();
+export default async function handler(req: Request) {
+  if (req.method !== "GET") {
+    return new Response(
+      JSON.stringify({ error: "Method not allowed" }),
+      {
+        status: 405,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }
+    );
+  }
 
-/**
- * Fetch fresh leads using the existing lead engine.
- *
- * Google/Serper and RSS services already contain the project's
- * lead-quality, freshness, filtering, and Supabase insertion logic.
- */
-router.get("/fetch-leads", async (_req, res) => {
+  const results = {
+    google: 0,
+    rss: 0,
+  };
+
   try {
-    const results: {
-      google: number;
-      rss: number;
-    } = {
-      google: 0,
-      rss: 0,
-    };
-
     try {
       results.google = await fetchGoogleLeads();
     } catch (error) {
@@ -46,21 +46,35 @@ router.get("/fetch-leads", async (_req, res) => {
 
     const total = results.google + results.rss;
 
-    return res.json({
-      success: true,
-      count: total,
-      sources: results,
-      freshness: "72_hours",
-    });
+    return new Response(
+      JSON.stringify({
+        success: true,
+        count: total,
+        sources: results,
+        freshness: "72_hours",
+      }),
+      {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }
+    );
   } catch (error) {
-    console.error("Fetch leads route error:", error);
+    console.error("Fetch leads API error:", error);
 
-    return res.status(500).json({
-      success: false,
-      count: 0,
-      error: "Failed to fetch leads",
-    });
+    return new Response(
+      JSON.stringify({
+        success: false,
+        count: 0,
+        error: "Failed to fetch leads",
+      }),
+      {
+        status: 500,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }
+    );
   }
-});
-
-export default router;
+}
