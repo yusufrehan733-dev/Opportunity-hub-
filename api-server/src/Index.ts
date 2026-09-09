@@ -3,6 +3,9 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import "dotenv/config";
 
+import leadsRouter from "./routes/leads.js";
+import fetchLeadsRouter from "./routes/fetchLeads.js";
+
 const app = express();
 
 const PORT = Number(process.env.PORT || 5000);
@@ -44,6 +47,12 @@ app.get("/api", (_req, res) => {
   });
 });
 
+/* Lead routes */
+app.use("/api/leads", leadsRouter);
+
+/* Lead fetching */
+app.use("/api", fetchLeadsRouter);
+
 /* 404 API handler */
 app.use("/api", (_req, res) => {
   res.status(404).json({
@@ -69,6 +78,14 @@ app.use(
   }
 );
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`Opportunity Hub API Server running on port ${PORT}`);
-});
+/*
+ * Local development server.
+ * Vercel handles the app itself in production.
+ */
+if (process.env.VERCEL !== "1") {
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Opportunity Hub API Server running on port ${PORT}`);
+  });
+}
+
+export default app;
