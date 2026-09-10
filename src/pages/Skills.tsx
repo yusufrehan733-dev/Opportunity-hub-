@@ -6,12 +6,15 @@ import { supabase } from "../lib/supabase";
 export default function Skills() {
   const navigate = useNavigate();
 
-  const [data, setData] = useState([]);
-  const [selectedMain, setSelectedMain] = useState(null);
-  const [selectedCategory, setSelectedCategory] = useState(null);
+  const [data, setData] = useState<any[]>([]);
+  const [selectedMain, setSelectedMain] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] =
+    useState<string | null>(null);
 
-  const [user, setUser] = useState(null);
-  const [mySkills, setMySkills] = useState([]);
+  const [user, setUser] = useState<any>(null);
+  const [mySkills, setMySkills] = useState<any[]>([]);
+  const [skillLimit, setSkillLimit] = useState<number>(2);
+  const [planName, setPlanName] = useState("Basic");
 
   useEffect(() => {
     initialize();
@@ -28,6 +31,7 @@ export default function Skills() {
 
     setUser(user);
     await fetchUserSkills(user.id);
+    await fetchUserPlan(user.id);
   }
 
   async function fetchSkills() {
@@ -40,7 +44,7 @@ export default function Skills() {
     }
   }
 
-  async function fetchUserSkills(userId) {
+  async function fetchUserSkills(userId: string) {
     const { data, error } = await supabase
       .from("user_skills")
       .select("*")
@@ -52,7 +56,48 @@ export default function Skills() {
     }
   }
 
-  async function addSkill(skill) {
+  async function fetchUserPlan(userId: string) {
+    const { data: subscription, error } = await supabase
+      .from("user_subscriptions")
+      .select("plan_id, skill_limit")
+      .eq("user_id", userId)
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      return;
+    }
+
+    if (!subscription) {
+      setPlanName("Basic");
+      setSkillLimit(2);
+      return;
+    }
+
+    if (subscription.skill_limit !== null) {
+      setSkillLimit(subscription.skill_limit);
+    }
+
+    const { data: plan } = await supabase
+      .from("plans")
+      .select("name")
+      .eq("id", subscription.plan_id)
+      .maybeSingle();
+
+    if (plan?.name) {
+      setPlanName(plan.name);
+
+      if (plan.name.toLowerCase() === "gold") {
+        setSkillLimit(Infinity);
+      } else if (plan.name.toLowerCase() === "premium") {
+        setSkillLimit(5);
+      } else {
+        setSkillLimit(2);
+      }
+    }
+  }
+
+  async function addSkill(skill: string) {
     if (!user) return;
 
     const exists = mySkills.some(
@@ -61,6 +106,16 @@ export default function Skills() {
 
     if (exists) {
       alert("Skill already added");
+      return;
+    }
+
+    if (
+      Number.isFinite(skillLimit) &&
+      mySkills.length >= skillLimit
+    ) {
+      alert(
+        `${planName} plan allows up to ${skillLimit} skills. Upgrade your plan to add more.`
+      );
       return;
     }
 
@@ -79,7 +134,7 @@ export default function Skills() {
     await fetchUserSkills(user.id);
   }
 
-  async function removeSkill(id) {
+  async function removeSkill(id: string) {
     const { error } = await supabase
       .from("user_skills")
       .delete()
@@ -95,12 +150,10 @@ export default function Skills() {
     );
   }
 
-  // LEVEL 1
   const mainCategories = [
     ...new Set(data.map((item) => item.name)),
   ];
 
-  // LEVEL 2
   const categories = selectedMain
     ? [
         ...new Set(
@@ -111,7 +164,6 @@ export default function Skills() {
       ]
     : [];
 
-  // LEVEL 3
   const subcategories =
     selectedMain && selectedCategory
       ? data
@@ -125,7 +177,6 @@ export default function Skills() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* HEADER */}
       <div className="bg-card border-b">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center gap-4">
           <button
@@ -141,14 +192,18 @@ export default function Skills() {
         </div>
       </div>
 
-      {/* CONTENT */}
       <div className="max-w-7xl mx-auto px-4 py-8 space-y-8">
-
-        {/* MY SKILLS */}
         <div>
-          <h2 className="text-lg font-semibold mb-3">
+          <h2 className="text-lg font-semibold mb-1">
             My Skills ({mySkills.length})
           </h2>
+
+          <p className="text-sm text-muted-foreground mb-3">
+            Plan: {planName} · Limit:{" "}
+            {Number.isFinite(skillLimit)
+              ? skillLimit
+              : "Unlimited"}
+          </p>
 
           {mySkills.length === 0 ? (
             <div className="bg-card border rounded-lg p-4 text-muted-foreground">
@@ -175,7 +230,6 @@ export default function Skills() {
           )}
         </div>
 
-        {/* MAIN CATEGORIES */}
         <div>
           <h2 className="text-lg font-semibold mb-3">
             Main Categories
@@ -201,7 +255,6 @@ export default function Skills() {
           </div>
         </div>
 
-        {/* CATEGORIES */}
         {selectedMain && (
           <div>
             <h2 className="text-lg font-semibold mb-3">
@@ -226,7 +279,6 @@ export default function Skills() {
           </div>
         )}
 
-        {/* SUBCATEGORIES */}
         {selectedCategory && (
           <div>
             <h2 className="text-lg font-semibold mb-3">
@@ -249,4 +301,4 @@ export default function Skills() {
       </div>
     </div>
   );
-}
+        }
