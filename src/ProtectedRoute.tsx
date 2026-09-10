@@ -1,7 +1,7 @@
 import { Navigate, Outlet } from "react-router-dom";
 import { useAuthUser } from "./hook/use-auth";
-import { useTrialStatus } from "./hooks/use-trial-status";
-import { supabase } from "@/lib/supabase";
+import { useTrialStatus } from "./hook/use-trial-status";
+import { supabase } from "./lib/supabase";
 import { useQuery } from "@tanstack/react-query";
 
 function useSubscriptionAccess(userId?: string) {

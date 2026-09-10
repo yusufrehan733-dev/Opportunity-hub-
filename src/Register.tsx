@@ -5,7 +5,9 @@ import { z } from "zod";
 import { motion } from "framer-motion";
 import { Briefcase, ArrowRight } from "lucide-react";
 import { useRegister } from "./hook/use-auth";
-import { Input, Button, Label } from "@/components/ui";
+import { Input } from "./input";
+import { Button } from "./button";
+import { Label } from "./label";
 import { toast } from "sonner";
 
 const registerSchema = z.object({

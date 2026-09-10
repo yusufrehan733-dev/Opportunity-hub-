@@ -3,7 +3,9 @@ import { useState, useEffect } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Briefcase, ArrowRight, Shield, Clock, CheckCircle } from "lucide-react";
-import { Input, Button, Label } from "@/components/ui";
+import { Input } from "./input";
+import { Button } from "./button";
+import { Label } from "./label";
 import { toast } from "sonner";
 
 export default function InviteRegister() {
