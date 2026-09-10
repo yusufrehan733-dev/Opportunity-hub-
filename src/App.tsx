@@ -23,12 +23,11 @@ import NotFound from "./pages/NotFound";
 export default function App() {
   return (
     <Routes>
-      {/* PUBLIC */}
       <Route path="/" element={<Navigate to="/login" replace />} />
       <Route path="/home" element={<Home />} />
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
-      <Route path="/invite-register" element={<InviteRegister />} />
+      <Route path="/invite-register/:token" element={<InviteRegister />} />
       <Route path="/privacy-policy" element={<PrivacyPolicy />} />
       <Route path="/terms-of-service" element={<TermsOfService />} />
       <Route
@@ -36,7 +35,6 @@ export default function App() {
         element={<SubscriptionPolicy />}
       />
 
-      {/* PROTECTED APPLICATION */}
       <Route element={<ProtectedRoute />}>
         <Route path="/dashboard" element={<DashboardLayout />}>
           <Route index element={<Dashboard />} />
@@ -49,7 +47,6 @@ export default function App() {
         </Route>
       </Route>
 
-      {/* FALLBACK */}
       <Route path="*" element={<NotFound />} />
     </Routes>
   );
