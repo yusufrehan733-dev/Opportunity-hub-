@@ -26,22 +26,6 @@ export default async function handler(req: Request) {
   }
 
   try {
-    const url = new URL(req.url);
-
-    const plan = url.searchParams.get("plan") || "basic";
-
-    const limits: Record<string, number> = {
-      basic: 15,
-      premium: 30,
-      gold: 1000,
-    };
-
-    const limit = limits[plan] ?? 15;
-
-    // --------------------------------------------------
-    // ONLY SHOW LEADS FROM THE LAST 72 HOURS
-    // --------------------------------------------------
-
     const seventyTwoHoursAgo = new Date(
       Date.now() - 72 * 60 * 60 * 1000
     ).toISOString();
@@ -71,14 +55,14 @@ export default async function handler(req: Request) {
       .gte("created_at", seventyTwoHoursAgo)
       .order("created_at", {
         ascending: false,
-      })
-      .limit(limit);
+      });
 
     if (error) {
       console.error("Supabase leads error:", error);
 
       return new Response(
         JSON.stringify({
+          success: false,
           leads: [],
           count: 0,
           error: error.message,
@@ -94,6 +78,8 @@ export default async function handler(req: Request) {
 
     const leads = (data || []).map((lead) => ({
       id: lead.id,
+
+      type: lead.type || "Demand",
 
       title:
         lead.title ||
@@ -150,7 +136,6 @@ export default async function handler(req: Request) {
         success: true,
         leads,
         count: leads.length,
-        plan,
         freshness: "72_hours",
       }),
       {
