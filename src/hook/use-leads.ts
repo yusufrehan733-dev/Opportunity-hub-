@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { supabase } from "../lib/supabase";
 
 async function fetchLeads(type?: string) {
   const response = await fetch("/api/leads");
@@ -21,8 +22,7 @@ async function fetchLeads(type?: string) {
 
   return leads.filter(
     (lead: any) =>
-      String(lead.type || "").toLowerCase() ===
-      type.toLowerCase()
+      String(lead.type || "").toLowerCase() === type.toLowerCase()
   );
 }
 
@@ -43,6 +43,17 @@ export function useSupplyLeads() {
 export function useSaasLeads() {
   return useQuery({
     queryKey: ["saas-leads"],
-    queryFn: () => fetchLeads("SaaS"),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("saas_leads")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      return data || [];
+    },
   });
 }
