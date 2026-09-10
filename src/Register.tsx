@@ -1,10 +1,10 @@
-import { Link, useLocation } from "wouter";
+import { Link, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { motion } from "framer-motion";
 import { Briefcase, ArrowRight } from "lucide-react";
-import { useRegister } from "@/hooks/use-auth";
+import { useRegister } from "./hook/use-auth";
 import { Input, Button, Label } from "@/components/ui";
 import { toast } from "sonner";
 
@@ -18,10 +18,14 @@ const registerSchema = z.object({
 type RegisterForm = z.infer<typeof registerSchema>;
 
 export default function Register() {
-  const [, setLocation] = useLocation();
+  const navigate = useNavigate();
   const registerMutation = useRegister();
 
-  const { register, handleSubmit, formState: { errors } } = useForm<RegisterForm>({
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<RegisterForm>({
     resolver: zodResolver(registerSchema),
   });
 
@@ -29,9 +33,9 @@ export default function Register() {
     try {
       await registerMutation.mutateAsync(data);
       toast.success("Account created successfully!");
-      setLocation("/dashboard");
+      navigate("/dashboard", { replace: true });
     } catch (error: any) {
-      toast.error(error.message || "Registration failed");
+      toast.error(error?.message || "Registration failed");
     }
   };
 
@@ -54,9 +58,13 @@ export default function Register() {
             <h2 className="text-3xl font-display font-bold tracking-tight text-foreground">
               Create your account
             </h2>
+
             <p className="mt-2 text-muted-foreground">
               Already have an account?{" "}
-              <Link href="/login" className="font-semibold text-primary hover:text-primary/80 transition-colors">
+              <Link
+                to="/login"
+                className="font-semibold text-primary hover:text-primary/80 transition-colors"
+              >
                 Sign in instead
               </Link>
             </p>
@@ -75,9 +83,17 @@ export default function Register() {
                   id="name"
                   placeholder="Jane Doe"
                   {...register("name")}
-                  className={errors.name ? "border-destructive focus-visible:ring-destructive" : ""}
+                  className={
+                    errors.name
+                      ? "border-destructive focus-visible:ring-destructive"
+                      : ""
+                  }
                 />
-                {errors.name && <p className="text-sm text-destructive">{errors.name.message}</p>}
+                {errors.name && (
+                  <p className="text-sm text-destructive">
+                    {errors.name.message}
+                  </p>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -87,20 +103,35 @@ export default function Register() {
                   type="email"
                   placeholder="name@example.com"
                   {...register("email")}
-                  className={errors.email ? "border-destructive focus-visible:ring-destructive" : ""}
+                  className={
+                    errors.email
+                      ? "border-destructive focus-visible:ring-destructive"
+                      : ""
+                  }
                 />
-                {errors.email && <p className="text-sm text-destructive">{errors.email.message}</p>}
+                {errors.email && (
+                  <p className="text-sm text-destructive">
+                    {errors.email.message}
+                  </p>
+                )}
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="phone">Phone number <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                <Label htmlFor="phone">
+                  Phone number{" "}
+                  <span className="text-muted-foreground text-xs">
+                    (optional)
+                  </span>
+                </Label>
                 <Input
                   id="phone"
                   type="tel"
                   placeholder="+1 555 000 0000"
                   {...register("phone")}
                 />
-                <p className="text-xs text-muted-foreground">One phone number per account.</p>
+                <p className="text-xs text-muted-foreground">
+                  One phone number per account.
+                </p>
               </div>
 
               <div className="space-y-2">
@@ -110,22 +141,47 @@ export default function Register() {
                   type="password"
                   placeholder="At least 6 characters"
                   {...register("password")}
-                  className={errors.password ? "border-destructive focus-visible:ring-destructive" : ""}
+                  className={
+                    errors.password
+                      ? "border-destructive focus-visible:ring-destructive"
+                      : ""
+                  }
                 />
-                {errors.password && <p className="text-sm text-destructive">{errors.password.message}</p>}
+                {errors.password && (
+                  <p className="text-sm text-destructive">
+                    {errors.password.message}
+                  </p>
+                )}
               </div>
 
-              <Button type="submit" className="w-full text-base h-12 mt-4 gap-2" disabled={registerMutation.isPending}>
-                {registerMutation.isPending ? "Creating account..." : "Get started"}
+              <Button
+                type="submit"
+                className="w-full text-base h-12 mt-4 gap-2"
+                disabled={registerMutation.isPending}
+              >
+                {registerMutation.isPending
+                  ? "Creating account..."
+                  : "Get started"}
                 {!registerMutation.isPending && <ArrowRight size={18} />}
               </Button>
             </form>
 
             <p className="mt-4 text-xs text-center text-muted-foreground">
               By registering, you agree to our{" "}
-              <Link href="/terms" className="text-primary hover:underline">Terms of Service</Link>
-              {" "}and{" "}
-              <Link href="/privacy" className="text-primary hover:underline">Privacy Policy</Link>.
+              <Link
+                to="/terms-of-service"
+                className="text-primary hover:underline"
+              >
+                Terms of Service
+              </Link>{" "}
+              and{" "}
+              <Link
+                to="/privacy-policy"
+                className="text-primary hover:underline"
+              >
+                Privacy Policy
+              </Link>
+              .
             </p>
           </motion.div>
         </div>
@@ -137,6 +193,7 @@ export default function Register() {
           src={`${import.meta.env.BASE_URL}auth-bg.png`}
           alt="Abstract mesh gradient"
         />
+
         <div className="absolute inset-0 bg-gradient-to-t from-background via-background/40 to-transparent" />
 
         <div className="absolute top-16 left-16 right-16 z-10 text-white">
@@ -150,11 +207,14 @@ export default function Register() {
               <span className="flex h-2 w-2 rounded-full bg-primary mr-2"></span>
               New Leads Added Daily
             </div>
+
             <h1 className="text-5xl font-display font-bold leading-tight text-white drop-shadow-lg">
               Earn First, <br /> Pay After.
             </h1>
+
             <p className="text-white/80 text-lg max-w-xs">
-              Discover clients in freelancing, teaching, food business, and more.
+              Discover clients in freelancing, teaching, food business, and
+              more.
             </p>
           </motion.div>
         </div>
