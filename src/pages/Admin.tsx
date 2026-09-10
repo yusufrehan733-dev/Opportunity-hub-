@@ -10,7 +10,7 @@ import {
   RefreshCw,
   ShieldCheck,
 } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "../lib/supabase";
 
 type AdminSection =
   | "overview"
@@ -929,9 +929,3 @@ function AdminPlaceholder({
     </section>
   );
 }
-
-Important: this frontend expects the "api/admin.ts" file from my previous step to exist. If you haven't saved that API file yet, save it first.
-
-For now, only replace "src/pages/Admin.tsx". Don't touch the other pages.
-
-After saving, tell me DONE. Then we'll do the fastest possible build check and fix only an actual error—no debugging loop.
