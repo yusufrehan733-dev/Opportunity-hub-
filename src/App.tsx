@@ -16,25 +16,25 @@ import Admin from "./pages/Admin";
 
 import Home from "./pages/Home";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
-import TermsOfService from "./pages/TermsOfService";
 import SubscriptionPolicy from "./pages/SubscriptionPolicy";
 import NotFound from "./pages/NotFound";
 
 export default function App() {
   return (
     <Routes>
+      {/* PUBLIC */}
       <Route path="/" element={<Navigate to="/login" replace />} />
       <Route path="/home" element={<Home />} />
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
       <Route path="/invite-register/:token" element={<InviteRegister />} />
       <Route path="/privacy-policy" element={<PrivacyPolicy />} />
-      <Route path="/terms-of-service" element={<TermsOfService />} />
       <Route
         path="/subscription-policy"
         element={<SubscriptionPolicy />}
       />
 
+      {/* PROTECTED APPLICATION */}
       <Route element={<ProtectedRoute />}>
         <Route path="/dashboard" element={<DashboardLayout />}>
           <Route index element={<Dashboard />} />
@@ -47,6 +47,7 @@ export default function App() {
         </Route>
       </Route>
 
+      {/* FALLBACK */}
       <Route path="*" element={<NotFound />} />
     </Routes>
   );
