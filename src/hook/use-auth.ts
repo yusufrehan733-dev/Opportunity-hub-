@@ -8,9 +8,6 @@ type RegisterData = {
   password: string;
 };
 
-/**
- * GET USER
- */
 export function useAuthUser() {
   return useQuery({
     queryKey: ["user"],
@@ -24,9 +21,6 @@ export function useAuthUser() {
   });
 }
 
-/**
- * LOGIN
- */
 export function useLogin() {
   const queryClient = useQueryClient();
 
@@ -58,12 +52,6 @@ export function useLogin() {
   });
 }
 
-/**
- * REGISTER
- *
- * One email = one trial identity.
- * Existing trial identities can never receive another trial.
- */
 export function useRegister() {
   const queryClient = useQueryClient();
 
@@ -71,7 +59,6 @@ export function useRegister() {
     mutationFn: async (data: RegisterData) => {
       const email = data.email.trim().toLowerCase();
 
-      // Check whether this email has already used/received a trial.
       const { data: existingTrial, error: trialCheckError } =
         await supabase
           .from("trial_identities")
@@ -89,7 +76,6 @@ export function useRegister() {
         );
       }
 
-      // Create the Supabase Auth account.
       const { data: authData, error: signUpError } =
         await supabase.auth.signUp({
           email,
@@ -110,8 +96,8 @@ export function useRegister() {
         throw new Error("Account could not be created.");
       }
 
-      // Create exactly one 14-day trial identity.
       const trialStartedAt = new Date();
+
       const trialEndsAt = new Date(
         trialStartedAt.getTime() +
           14 * 24 * 60 * 60 * 1000
@@ -145,9 +131,6 @@ export function useRegister() {
   });
 }
 
-/**
- * LOGOUT
- */
 export function useLogout() {
   const queryClient = useQueryClient();
 
