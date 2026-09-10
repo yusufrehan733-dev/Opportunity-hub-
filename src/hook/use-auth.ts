@@ -148,4 +148,4 @@ export function useLogout() {
       queryClient.setQueryData(["trial-status"], null);
     },
   });
-        }
+}
