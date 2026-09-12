@@ -302,15 +302,3 @@ export default function InviteRegister() {
     </div>
   );
 }
-
-This is the full version, not a small patch.
-
-After replacing it in GitHub:
-
-Commit message:
-
-fix invite registration and auto login
-
-Then stop. Don't run more commands yet.
-
-This completes the code change for the registration → login → dashboard handoff. Next we test it.
