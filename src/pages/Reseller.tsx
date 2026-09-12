@@ -9,365 +9,297 @@ import {
   MessageCircle,
 } from "lucide-react";
 
+const WHATSAPP_NUMBER = "+923149363009";
+const WHATSAPP_DISPLAY = "+92 314 9363009";
+const SUPPORT_EMAIL = "logicguild186@gmail.com";
+
+const whatsappLink = `https://wa.me/${WHATSAPP_NUMBER.replace("+", "")}`;
+const emailLink = `mailto:${SUPPORT_EMAIL}`;
+
 const PRICING = [
   {
-    plan: "Basic",
+    name: "Basic",
     pakistan: "PKR 1,000",
     international: "20",
-    note: "2 skills",
+    description: "2 skills",
+    icon: Users,
   },
   {
-    plan: "Premium",
+    name: "Premium",
     pakistan: "PKR 2,500",
     international: "35",
-    note: "5 skills",
+    description: "5 skills",
+    icon: Star,
   },
   {
-    plan: "Gold",
+    name: "Gold",
     pakistan: "PKR 6,000",
     international: "70",
-    note: "Unlimited skills",
+    description: "Unlimited skills",
+    icon: Crown,
     highlight: true,
   },
 ];
 
-const WHATSAPP_NUMBER = "+923149363009";
-const DISPLAY_WHATSAPP = "+92 314 9363009";
-const SUPPORT_EMAIL = "logicguild186@gmail.com";
-
 export default function Reseller() {
   return (
-    <div className="max-w-3xl mx-auto space-y-8 py-4">
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-      >
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
-            <Users size={20} />
+    <div className="min-h-screen bg-white text-gray-900">
+      <div className="max-w-6xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+
+        {/* Header */}
+        <motion.div
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-center mb-10"
+        >
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-black text-white mb-4">
+            <Users size={28} />
           </div>
 
-          <h1 className="text-3xl font-display font-bold text-foreground">
-            Reseller Program
+          <h1 className="text-3xl sm:text-4xl font-bold">
+            Opportunity Hub Reseller Program
           </h1>
-        </div>
 
-        <p className="text-muted-foreground text-lg">
-          Earn commissions by bringing new paid subscribers to Opportunity Hub.
-        </p>
-      </motion.div>
-
-      {/* COMMISSION BENEFITS */}
-      <div className="grid sm:grid-cols-3 gap-4">
-        <div className="bg-card border rounded-2xl p-6 flex flex-col">
-          <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary mb-4">
-            <DollarSign size={24} />
-          </div>
-
-          <h2 className="text-lg font-bold text-foreground mb-2">
-            30% Commission
-          </h2>
-
-          <p className="text-muted-foreground text-sm flex-1">
-            Earn 30% commission on every active paid subscription you refer.
-            Commission remains active while the referred subscription remains
-            active.
+          <p className="mt-3 text-gray-600 max-w-2xl mx-auto">
+            Earn commission by introducing Opportunity Hub to teachers,
+            coaches, freelancers, and other professionals who need quality
+            opportunities.
           </p>
-        </div>
+        </motion.div>
 
-        <div className="bg-card border-2 border-amber-300/50 rounded-2xl p-6 flex flex-col relative">
-          <div className="absolute top-0 right-0 bg-amber-500 text-white text-xs font-bold px-3 py-1 rounded-bl-xl">
-            BONUS
+        {/* Commission */}
+        <motion.section
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-2xl border border-gray-200 p-6 sm:p-8 mb-8"
+        >
+          <div className="flex items-center gap-3 mb-4">
+            <DollarSign className="text-black" size={26} />
+            <h2 className="text-2xl font-bold">Your Commission</h2>
           </div>
 
-          <div className="w-12 h-12 rounded-xl bg-amber-100 dark:bg-amber-500/20 flex items-center justify-center text-amber-600 mb-4">
-            <Star size={24} />
-          </div>
-
-          <h2 className="text-lg font-bold text-foreground mb-2">
-            100% Every 10th Sale
-          </h2>
-
-          <p className="text-muted-foreground text-sm flex-1">
-            Every 10th active paid subscription earns{" "}
-            <strong>100% commission</strong>. The bonus repeats on the 20th,
-            30th, 40th sale, and so on.
+          <p className="text-gray-700 leading-7">
+            Resellers earn <strong>30% commission</strong> on every active
+            paid subscription generated through their reseller link.
           </p>
-        </div>
 
-        <div className="bg-card border rounded-2xl p-6 flex flex-col">
-          <div className="w-12 h-12 rounded-xl bg-yellow-100 dark:bg-yellow-500/20 flex items-center justify-center text-yellow-600 mb-4">
-            <Crown size={24} />
+          <div className="mt-5 rounded-xl bg-gray-50 border border-gray-200 p-5">
+            <p className="font-semibold">
+              Every 10th subscription earns <strong>100% commission</strong>.
+            </p>
+
+            <p className="text-sm text-gray-600 mt-2">
+              Example: on the first 9 qualifying subscriptions you earn 30%
+              commission. On the 10th qualifying subscription, you earn 100%
+              commission.
+            </p>
+          </div>
+        </motion.section>
+
+        {/* Pricing */}
+        <motion.section
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-8"
+        >
+          <div className="flex items-center gap-3 mb-5">
+            <Globe size={26} />
+            <h2 className="text-2xl font-bold">Subscription Plans</h2>
           </div>
 
-          <h2 className="text-lg font-bold text-foreground mb-2">
-            Gold Bonus
-          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            {PRICING.map((plan) => {
+              const Icon = plan.icon;
 
-          <p className="text-muted-foreground text-sm flex-1">
-            Every 2 active Gold subscriptions can qualify you for the reseller
-            Gold reward according to the Opportunity Hub reseller program.
-          </p>
-        </div>
-      </div>
-
-      {/* COMMISSION STRUCTURE */}
-      <div className="bg-card border rounded-2xl p-6 space-y-4">
-        <h2 className="text-xl font-bold text-foreground">
-          Commission Structure
-        </h2>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b">
-                <th className="text-left py-2 text-muted-foreground font-medium">
-                  Sale
-                </th>
-                <th className="text-left py-2 text-muted-foreground font-medium">
-                  Commission
-                </th>
-                <th className="text-left py-2 text-muted-foreground font-medium">
-                  Notes
-                </th>
-              </tr>
-            </thead>
-
-            <tbody className="divide-y divide-border">
-              {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => (
-                <tr key={n}>
-                  <td className="py-2 text-foreground">Sale {n}</td>
-                  <td className="py-2 font-semibold text-foreground">
-                    30%
-                  </td>
-                  <td className="py-2 text-muted-foreground">
-                    Standard commission
-                  </td>
-                </tr>
-              ))}
-
-              <tr className="bg-amber-50 dark:bg-amber-500/10">
-                <td className="py-2 text-amber-700 dark:text-amber-400 font-bold">
-                  Sale 10 🎉
-                </td>
-
-                <td className="py-2 text-amber-700 dark:text-amber-400 font-bold">
-                  100%
-                </td>
-
-                <td className="py-2 text-amber-700 dark:text-amber-400">
-                  Bonus — repeats every 10th sale
-                </td>
-              </tr>
-
-              <tr>
-                <td
-                  className="py-2 text-muted-foreground"
-                  colSpan={3}
+              return (
+                <div
+                  key={plan.name}
+                  className={`rounded-2xl border p-6 ${
+                    plan.highlight
+                      ? "border-black shadow-md"
+                      : "border-gray-200"
+                  }`}
                 >
-                  Sales 11–19 → 30% each · Sale 20 → 100% · And so on.
-                </td>
-              </tr>
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="text-xl font-bold">{plan.name}</h3>
+                      <p className="text-sm text-gray-500 mt-1">
+                        {plan.description}
+                      </p>
+                    </div>
 
-              <tr className="bg-yellow-50 dark:bg-yellow-500/10">
-                <td className="py-2 text-yellow-700 dark:text-yellow-400 font-bold">
-                  2 Gold sales ⭐
-                </td>
+                    <Icon size={24} />
+                  </div>
 
-                <td className="py-2 text-yellow-700 dark:text-yellow-400 font-bold">
-                  Gold reward
-                </td>
+                  <div className="border-t border-gray-100 pt-4">
+                    <p className="text-xs uppercase tracking-wide text-gray-500">
+                      Pakistan
+                    </p>
 
-                <td className="py-2 text-yellow-700 dark:text-yellow-400">
-                  Qualifies for the reseller Gold reward
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+                    <p className="text-2xl font-bold mt-1">
+                      {plan.pakistan}
+                      <span className="text-sm font-normal text-gray-500">
+                        {" "}
+                        / month
+                      </span>
+                    </p>
+                  </div>
 
-        <p className="text-xs text-muted-foreground">
-          Example: 10 qualifying sales = 9 sales at 30% + the 10th sale at
-          100%.
-        </p>
-      </div>
+                  <div className="border-t border-gray-100 pt-4 mt-4">
+                    <p className="text-xs uppercase tracking-wide text-gray-500">
+                      International customers
+                    </p>
 
-      {/* PRICING */}
-      <div className="bg-card border rounded-2xl p-6 space-y-4">
-        <div className="flex items-center gap-2 mb-2">
-          <Globe size={20} className="text-primary" />
+                    <p className="text-2xl font-bold mt-1">
+                      {plan.international}
+                      <span className="text-sm font-normal text-gray-500">
+                        {" "}
+                        / month
+                      </span>
+                    </p>
 
-          <h2 className="text-xl font-bold text-foreground">
-            Subscription Pricing
+                    <p className="text-sm font-semibold text-gray-700 mt-2">
+                      Charged in your local currency
+                    </p>
+
+                    <p className="text-xs text-gray-500 mt-2 leading-5">
+                      This international price is a local-currency amount.
+                      For example, customers may pay in USD, GBP, AED, SAR,
+                      QAR, KWD, BHD, or OMR depending on their country.
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </motion.section>
+
+        {/* Important international payment notice */}
+        <motion.section
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-2xl bg-gray-50 border border-gray-200 p-6 sm:p-8 mb-8"
+        >
+          <div className="flex items-center gap-3 mb-4">
+            <Globe size={25} />
+            <h2 className="text-xl font-bold">
+              🌍 International Pricing & Payment
+            </h2>
+          </div>
+
+          <p className="text-gray-700 leading-7">
+            <strong>
+              For customers outside Pakistan, our international plans are
+              20 / 35 / 70 in the customer's local currency.
+            </strong>
+          </p>
+
+          <p className="text-gray-600 leading-7 mt-3">
+            The currency depends on the customer's country. For example,
+            customers in the USA may pay in USD, customers in the UK in GBP,
+            and customers in Gulf countries may pay in AED, SAR, QAR, KWD,
+            BHD, or OMR as applicable.
+          </p>
+
+          <p className="text-gray-600 leading-7 mt-3">
+            <strong>
+              Payment is completed outside the app using the payment method
+              provided by our team.
+            </strong>
+          </p>
+        </motion.section>
+
+        {/* Gold reseller bonus */}
+        <motion.section
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-2xl border border-gray-200 p-6 sm:p-8 mb-8"
+        >
+          <div className="flex items-center gap-3 mb-4">
+            <Crown size={26} />
+            <h2 className="text-2xl font-bold">Gold Reseller Reward</h2>
+          </div>
+
+          <p className="text-gray-700 leading-7">
+            Resellers who generate <strong>2 active Gold subscriptions</strong>
+            can qualify for the Gold reseller reward.
+          </p>
+        </motion.section>
+
+        {/* How to join */}
+        <motion.section
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-2xl border border-gray-200 p-6 sm:p-8 mb-8"
+        >
+          <h2 className="text-2xl font-bold mb-4">How to Join</h2>
+
+          <ol className="list-decimal pl-5 space-y-3 text-gray-700">
+            <li>Contact our team and request your reseller link.</li>
+            <li>Share your unique reseller link with potential customers.</li>
+            <li>Customers subscribe through your link.</li>
+            <li>
+              Your qualifying paid subscriptions are counted toward your
+              commission.
+            </li>
+            <li>
+              Commission status and payment details can be confirmed with our
+              support team.
+            </li>
+          </ol>
+        </motion.section>
+
+        {/* Contact */}
+        <motion.section
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 0, y: 0 }}
+          className="rounded-2xl bg-black text-white p-6 sm:p-8"
+        >
+          <h2 className="text-2xl font-bold mb-3">
+            Need Help With the Reseller Program?
           </h2>
-        </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b">
-                <th className="text-left py-2 text-muted-foreground font-medium">
-                  Plan
-                </th>
+          <p className="text-gray-300 leading-7 mb-6">
+            Contact us directly for reseller registration, payment
+            instructions, commission questions, or your reseller link.
+          </p>
 
-                <th className="text-left py-2 text-muted-foreground font-medium">
-                  Pakistan
-                </th>
-
-                <th className="text-left py-2 text-muted-foreground font-medium">
-                  International
-                </th>
-
-                <th className="text-left py-2 text-muted-foreground font-medium">
-                  Includes
-                </th>
-              </tr>
-            </thead>
-
-            <tbody className="divide-y divide-border">
-              {PRICING.map((p) => (
-                <tr
-                  key={p.plan}
-                  className={
-                    p.highlight
-                      ? "bg-yellow-50 dark:bg-yellow-500/10"
-                      : ""
-                  }
-                >
-                  <td
-                    className={`py-3 font-bold ${
-                      p.highlight
-                        ? "text-yellow-700 dark:text-yellow-400"
-                        : "text-foreground"
-                    }`}
-                  >
-                    {p.plan} {p.highlight ? "⭐" : ""}
-                  </td>
-
-                  <td className="py-3 text-foreground font-semibold">
-                    {p.pakistan}
-                  </td>
-
-                  <td className="py-3 text-foreground font-semibold">
-                    {p.international}
-                  </td>
-
-                  <td className="py-3 text-muted-foreground text-xs">
-                    {p.note}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <p className="text-xs text-muted-foreground">
-          All new users receive a 14-day trial. Final subscription access and
-          payment status are managed by Opportunity Hub.
-        </p>
-      </div>
-
-      {/* HOW TO JOIN */}
-      <div className="bg-card border rounded-2xl p-6 space-y-4">
-        <h2 className="text-xl font-bold text-foreground">
-          How to Join
-        </h2>
-
-        <div className="space-y-3">
-          {[
-            {
-              step: 1,
-              title: "Contact Opportunity Hub",
-              desc: "Contact us by WhatsApp or email to request reseller access.",
-            },
-            {
-              step: 2,
-              title: "Get your reseller link",
-              desc: "After approval, you receive your unique reseller tracking link.",
-            },
-            {
-              step: 3,
-              title: "Refer subscribers",
-              desc: "Share Opportunity Hub with people who need the service.",
-            },
-            {
-              step: 4,
-              title: "Earn commission",
-              desc: "Qualifying active paid subscriptions are counted toward your commission.",
-            },
-          ].map(({ step, title, desc }) => (
-            <div key={step} className="flex gap-4 items-start">
-              <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white text-sm font-bold shrink-0">
-                {step}
-              </div>
-
-              <div>
-                <p className="font-semibold text-foreground">
-                  {title}
-                </p>
-
-                <p className="text-muted-foreground text-sm">
-                  {desc}
-                </p>
-              </div>
+          <div className="space-y-4">
+            <div>
+              <p className="text-sm text-gray-400">WhatsApp</p>
+              <p className="font-semibold text-lg">{WHATSAPP_DISPLAY}</p>
             </div>
-          ))}
-        </div>
-      </div>
 
-      {/* CONTACT US */}
-      <div className="bg-card border rounded-2xl p-6 space-y-5">
-        <div>
-          <h2 className="text-xl font-bold text-foreground">
-            Contact Us
-          </h2>
+            <div>
+              <p className="text-sm text-gray-400">Email</p>
+              <p className="font-semibold text-lg break-all">
+                {SUPPORT_EMAIL}
+              </p>
+            </div>
+          </div>
 
-          <p className="text-muted-foreground text-sm mt-1">
-            You can contact us directly by WhatsApp or email. The contact
-            details are also written below in case a button does not open.
-          </p>
-        </div>
-
-        <div className="space-y-4">
-          <div className="border rounded-xl p-4">
-            <p className="text-sm font-semibold text-foreground mb-1">
-              WhatsApp
-            </p>
-
-            <p className="text-foreground font-medium break-all">
-              {DISPLAY_WHATSAPP}
-            </p>
-
+          <div className="flex flex-col sm:flex-row gap-3 mt-6">
             <a
-              href={`https://wa.me/${WHATSAPP_NUMBER}`}
+              href={whatsappLink}
               target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 mt-3 bg-green-500 text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-green-600 transition-colors"
+              rel="noreferrer"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-white text-black px-5 py-3 font-semibold hover:bg-gray-100 transition"
             >
-              <MessageCircle size={18} />
-              Chat on WhatsApp
+              <MessageCircle size={20} />
+              Contact on WhatsApp
             </a>
-          </div>
-
-          <div className="border rounded-xl p-4">
-            <p className="text-sm font-semibold text-foreground mb-1">
-              Email
-            </p>
-
-            <p className="text-foreground font-medium break-all">
-              {SUPPORT_EMAIL}
-            </p>
 
             <a
-              href={`mailto:${SUPPORT_EMAIL}?subject=Reseller%20Application`}
-              className="inline-flex items-center gap-2 mt-3 bg-primary text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-primary/90 transition-colors"
+              href={emailLink}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-white px-5 py-3 font-semibold hover:bg-white hover:text-black transition"
             >
-              <Mail size={18} />
-              Email Us
+              <Mail size={20} />
+              Email Support
             </a>
           </div>
-        </div>
+        </motion.section>
+
       </div>
     </div>
   );
-}
+  }
