@@ -1,18 +1,12 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import {
-  Briefcase,
-  ArrowRight,
-  Shield,
-  Clock,
-  CheckCircle,
-} from "lucide-react";
-import { Input } from "../components/ui/Input";
-import { Button } from "../components/ui/Button";
-import { Label } from "../components/ui/Label";
+import { Briefcase, ArrowRight, Shield, Clock, CheckCircle } from "lucide-react";
+import { Input } from "./input";
+import { Button } from "./button";
+import { Label } from "./label";
 import { toast } from "sonner";
-import { supabase } from "../supabase";
+import { supabase } from "./supabase";
 
 export default function InviteRegister() {
   const navigate = useNavigate();
@@ -21,22 +15,20 @@ export default function InviteRegister() {
   const [loading, setLoading] = useState(true);
   const [inviteData, setInviteData] = useState<any>(null);
   const [error, setError] = useState("");
-
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    async function verifyInvite() {
-      if (!token) {
-        setError("Invalid invite link");
-        setLoading(false);
-        return;
-      }
+    if (!token) {
+      setError("Invalid invite link");
+      setLoading(false);
+      return;
+    }
 
-      try {
-        const res = await fetch(`/api/auth/invite/${token}`);
+    fetch(`/api/auth/invite/${token}`)
+      .then(async (res) => {
         const data = await res.json();
 
         if (!res.ok) {
@@ -48,26 +40,16 @@ export default function InviteRegister() {
 
         if (data.name) setName(data.name);
         if (data.phone) setPhone(data.phone);
-      } catch {
-        setError("Could not verify invite link");
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    verifyInvite();
+      })
+      .catch(() => setError("Could not verify invite link"))
+      .finally(() => setLoading(false));
   }, [token]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!inviteData?.email) {
-      toast.error("Invite information is missing");
-      return;
-    }
-
-    if (!password || password.length < 6) {
-      toast.error("Password must be at least 6 characters");
+    if (!token) {
+      toast.error("Invalid invite link");
       return;
     }
 
@@ -76,26 +58,21 @@ export default function InviteRegister() {
       return;
     }
 
-    if (!supabase) {
-      toast.error("Authentication is not configured");
+    if (password.length < 6) {
+      toast.error("Password must be at least 6 characters");
       return;
     }
 
     setSubmitting(true);
 
     try {
-      const email = String(inviteData.email).trim().toLowerCase();
-
-      // Create the account and trial through the server.
       const res = await fetch(`/api/auth/invite/${token}/register`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           password,
           name: name.trim(),
-          phone: phone.trim() || null,
+          phone: phone.trim(),
         }),
       });
 
@@ -106,32 +83,31 @@ export default function InviteRegister() {
         return;
       }
 
-      // Create the normal Supabase browser session.
-      const { error: loginError } =
-        await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
+      const email = inviteData?.email;
+
+      if (!email) {
+        toast.error("Account created, but invite email is missing.");
+        navigate("/login");
+        return;
+      }
+
+      const { error: loginError } = await supabase?.auth.signInWithPassword({
+        email,
+        password,
+      }) || { error: new Error("Supabase is not configured") };
 
       if (loginError) {
         toast.error(
-          `Account created, but automatic login failed: ${loginError.message}`
+          "Account created. Please log in with your new email and password."
         );
-        navigate("/login", { replace: true });
+        navigate("/login");
         return;
       }
 
       toast.success("Account created! Welcome to Opportunity Hub");
-
-      // Give Supabase a moment to persist the session before
-      // ProtectedRoute checks authentication.
-      await new Promise((resolve) => setTimeout(resolve, 300));
-
-      navigate("/dashboard", { replace: true });
-    } catch (err: any) {
-      toast.error(
-        err?.message || "Something went wrong. Please try again."
-      );
+      navigate("/dashboard");
+    } catch {
+      toast.error("Something went wrong. Please try again.");
     } finally {
       setSubmitting(false);
     }
@@ -139,7 +115,7 @@ export default function InviteRegister() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background px-4">
+      <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="w-8 h-8 rounded-full border-4 border-primary/30 border-t-primary animate-spin" />
       </div>
     );
@@ -147,44 +123,43 @@ export default function InviteRegister() {
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background px-4 sm:px-6 lg:px-8">
-        <div className="max-w-md w-full bg-card p-8 rounded-2xl border border-border text-center shadow-lg">
-          <div className="w-16 h-16 rounded-2xl bg-destructive/10 flex items-center justify-center mx-auto mb-4 text-destructive">
-            <Shield size={32} />
+      <div className="min-h-screen flex items-center justify-center bg-background px-4">
+        <div className="max-w-md w-full text-center space-y-4">
+          <div className="w-16 h-16 rounded-2xl bg-destructive/10 flex items-center justify-center mx-auto">
+            <Shield size={32} className="text-destructive" />
           </div>
 
           <h2 className="text-2xl font-bold text-foreground">
             Invalid Invite
           </h2>
 
-          <p className="mt-2 text-muted-foreground">{error}</p>
+          <p className="text-muted-foreground">{error}</p>
 
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             This invite link may have already been used or expired.
           </p>
 
-          <Button
+          <button
             onClick={() => navigate("/login")}
-            variant="outline"
-            className="mt-6"
+            className="mt-4 px-5 py-2 rounded-lg border border-border hover:bg-muted"
           >
             Go to Login
-          </Button>
+          </button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex">
-      <div className="flex-1 flex flex-col justify-center px-4 sm:px-6 lg:px-20 xl:px-24 bg-background">
+    <div className="min-h-screen flex bg-background">
+      <div className="flex-1 flex flex-col justify-center px-4 sm:px-6 lg:flex-none lg:w-1/2 lg:px-20 xl:px-24 border-r">
         <div className="mx-auto w-full max-w-sm lg:w-96">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
           >
-            <div className="flex items-center gap-2 text-primary font-display font-bold text-2xl mb-8">
+            <div className="flex items-center gap-2 text-primary font-bold text-2xl mb-8">
               <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-white shadow-lg shadow-primary/30">
                 <Briefcase size={22} />
               </div>
@@ -198,28 +173,26 @@ export default function InviteRegister() {
             <p className="mt-2 text-muted-foreground">
               Complete your registration to start discovering leads.
             </p>
-
-            <div className="mt-4 p-4 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 space-y-2">
-              <div className="flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-400">
-                <Clock size={16} />
-
-                <span className="font-semibold">
-                  {inviteData?.trial_days || 14} days free trial included
-                </span>
-              </div>
-
-              <div className="flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-400">
-                <CheckCircle size={16} />
-
-                <span>
-                  Plan:{" "}
-                  <strong className="capitalize">
-                    {inviteData?.plan || "basic"}
-                  </strong>
-                </span>
-              </div>
-            </div>
           </motion.div>
+
+          <div className="mt-4 p-4 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 space-y-2">
+            <div className="flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-400">
+              <Clock size={16} />
+              <span className="font-semibold">
+                {inviteData?.trial_days || 14} days free trial included
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-400">
+              <CheckCircle size={16} />
+              <span>
+                Plan:{" "}
+                <strong className="capitalize">
+                  {inviteData?.plan || "basic"}
+                </strong>
+              </span>
+            </div>
+          </div>
 
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -229,45 +202,43 @@ export default function InviteRegister() {
           >
             <form onSubmit={handleSubmit} className="space-y-5">
               <div className="space-y-2">
-                <Label htmlFor="email">Email address</Label>
-
-                <Input
+                <label htmlFor="email">Email address</label>
+                <input
                   id="email"
                   type="email"
                   value={inviteData?.email || ""}
                   disabled
-                  className="bg-muted cursor-not-allowed font-medium"
+                  className="w-full px-3 py-2 rounded-lg border border-border bg-muted cursor-not-allowed font-medium"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="name">Full name</Label>
-
-                <Input
+                <label htmlFor="name">Full name</label>
+                <input
                   id="name"
                   placeholder="Your full name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   required
+                  className="w-full px-3 py-2 rounded-lg border border-border bg-background"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="phone">Phone number</Label>
-
-                <Input
+                <label htmlFor="phone">Phone number</label>
+                <input
                   id="phone"
                   type="tel"
                   placeholder="+92 300 0000000"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-border bg-background"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="password">Create a password</Label>
-
-                <Input
+                <label htmlFor="password">Create a password</label>
+                <input
                   id="password"
                   type="password"
                   placeholder="At least 6 characters"
@@ -275,18 +246,18 @@ export default function InviteRegister() {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   minLength={6}
+                  className="w-full px-3 py-2 rounded-lg border border-border bg-background"
                 />
               </div>
 
-              <Button
+              <button
                 type="submit"
-                className="w-full text-base h-12 mt-4 gap-2"
                 disabled={submitting}
+                className="w-full h-12 mt-4 rounded-lg bg-primary text-primary-foreground font-medium flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 {submitting ? "Creating account..." : "Start Free Trial"}
-
                 {!submitting && <ArrowRight size={18} />}
-              </Button>
+              </button>
             </form>
           </motion.div>
         </div>
