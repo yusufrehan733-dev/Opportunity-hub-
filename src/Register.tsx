@@ -12,9 +12,7 @@ export default function Register() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
-  async function handleRegister(e: React.FormEvent) {
-    e.preventDefault();
-
+  async function handleRegister() {
     if (!name.trim()) {
       alert("Please enter your name.");
       return;
@@ -53,14 +51,11 @@ export default function Register() {
       }
 
       alert("Account created successfully!");
-
       navigate("/dashboard", { replace: true });
     } catch (error: any) {
       console.error("Registration error:", error);
-
       alert(
-        error?.message ||
-          "Registration failed. Please try again."
+        error?.message || "Registration failed. Please try again."
       );
     }
   }
@@ -93,88 +88,85 @@ export default function Register() {
           Start your 14-day Opportunity Hub trial.
         </p>
 
-        <form onSubmit={handleRegister}>
-          <input
-            type="text"
-            placeholder="Full name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            style={{
-              width: "100%",
-              padding: 12,
-              marginBottom: 10,
-              boxSizing: "border-box",
-            }}
-          />
+        <input
+          type="text"
+          placeholder="Full name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          style={{
+            width: "100%",
+            padding: 12,
+            marginBottom: 10,
+            boxSizing: "border-box",
+          }}
+        />
 
-          <input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            style={{
-              width: "100%",
-              padding: 12,
-              marginBottom: 10,
-              boxSizing: "border-box",
-            }}
-          />
+        <input
+          type="email"
+          placeholder="Email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          style={{
+            width: "100%",
+            padding: 12,
+            marginBottom: 10,
+            boxSizing: "border-box",
+          }}
+        />
 
-          <input
-            type="tel"
-            placeholder="Phone (optional)"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            style={{
-              width: "100%",
-              padding: 12,
-              marginBottom: 10,
-              boxSizing: "border-box",
-            }}
-          />
+        <input
+          type="tel"
+          placeholder="Phone (optional)"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          style={{
+            width: "100%",
+            padding: 12,
+            marginBottom: 10,
+            boxSizing: "border-box",
+          }}
+        />
 
-          <input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            style={{
-              width: "100%",
-              padding: 12,
-              marginBottom: 10,
-              boxSizing: "border-box",
-            }}
-          />
+        <input
+          type="password"
+          placeholder="Password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          style={{
+            width: "100%",
+            padding: 12,
+            marginBottom: 10,
+            boxSizing: "border-box",
+          }}
+        />
 
-          <input
-            type="password"
-            placeholder="Confirm password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            style={{
-              width: "100%",
-              padding: 12,
-              marginBottom: 15,
-              boxSizing: "border-box",
-            }}
-          />
+        <input
+          type="password"
+          placeholder="Confirm password"
+          value={confirmPassword}
+          onChange={(e) => setConfirmPassword(e.target.value)}
+          style={{
+            width: "100%",
+            padding: 12,
+            marginBottom: 15,
+            boxSizing: "border-box",
+          }}
+        />
 
-          <button
-            type="submit"
-            disabled={registerMutation.isPending}
-            style={{
-              width: "100%",
-              padding: 12,
-              cursor: registerMutation.isPending
-                ? "wait"
-                : "pointer",
-            }}
-          >
-            {registerMutation.isPending
-              ? "Creating account..."
-              : "Create Account"}
-          </button>
-        </form>
+        <button
+          type="button"
+          onClick={handleRegister}
+          disabled={registerMutation.isPending}
+          style={{
+            width: "100%",
+            padding: 12,
+            cursor: registerMutation.isPending ? "wait" : "pointer",
+          }}
+        >
+          {registerMutation.isPending
+            ? "Creating account..."
+            : "Create Account"}
+        </button>
 
         <p style={{ marginTop: 20 }}>
           Already have an account?{" "}
@@ -189,4 +181,4 @@ export default function Register() {
       </div>
     </div>
   );
-            }
+}
