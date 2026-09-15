@@ -11,27 +11,32 @@ export default function Register() {
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [message, setMessage] = useState("");
 
   async function handleRegister() {
+    setMessage("");
+
     if (!name.trim()) {
-      alert("Please enter your name.");
+      setMessage("Please enter your name.");
       return;
     }
 
     if (!email.trim()) {
-      alert("Please enter your email.");
+      setMessage("Please enter your email.");
       return;
     }
 
     if (password.length < 6) {
-      alert("Password must be at least 6 characters.");
+      setMessage("Password must be at least 6 characters.");
       return;
     }
 
     if (password !== confirmPassword) {
-      alert("Passwords do not match.");
+      setMessage("Passwords do not match.");
       return;
     }
+
+    setMessage("Creating your account...");
 
     try {
       const result = await registerMutation.mutateAsync({
@@ -42,19 +47,25 @@ export default function Register() {
       });
 
       if (result.emailConfirmationRequired) {
-        alert(
-          "Account created successfully. Please check your email and confirm your account before logging in."
+        setMessage(
+          "Account created. Please check your email, confirm your account, then log in."
         );
 
-        navigate("/login", { replace: true });
+        setTimeout(() => {
+          navigate("/login", { replace: true });
+        }, 1500);
+
         return;
       }
 
-      alert("Account created successfully!");
-      navigate("/dashboard", { replace: true });
+      setMessage("Account created successfully. Opening your dashboard...");
+
+      setTimeout(() => {
+        navigate("/dashboard", { replace: true });
+      }, 500);
     } catch (error: any) {
       console.error("Registration error:", error);
-      alert(
+      setMessage(
         error?.message || "Registration failed. Please try again."
       );
     }
@@ -168,16 +179,24 @@ export default function Register() {
             : "Create Account"}
         </button>
 
+        {message && (
+          <p
+            style={{
+              marginTop: 15,
+              color: message.includes("successfully") ||
+                message.includes("Account created")
+                ? "green"
+                : "#b00020",
+            }}
+          >
+            {message}
+          </p>
+        )}
+
         <p style={{ marginTop: 20 }}>
           Already have an account?{" "}
           <Link to="/login">Login</Link>
         </p>
-
-        {registerMutation.isError && (
-          <p style={{ color: "#b00020", marginTop: 15 }}>
-            Registration failed. Please try again.
-          </p>
-        )}
       </div>
     </div>
   );
