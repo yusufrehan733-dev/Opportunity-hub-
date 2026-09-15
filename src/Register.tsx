@@ -13,7 +13,8 @@ export default function Register() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [message, setMessage] = useState("");
 
-  async function handleRegister() {
+  async function handleRegister(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
     setMessage("");
 
     if (!name.trim()) {
@@ -65,6 +66,7 @@ export default function Register() {
       }, 500);
     } catch (error: any) {
       console.error("Registration error:", error);
+
       setMessage(
         error?.message || "Registration failed. Please try again."
       );
@@ -99,94 +101,101 @@ export default function Register() {
           Start your 14-day Opportunity Hub trial.
         </p>
 
-        <input
-          type="text"
-          placeholder="Full name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          style={{
-            width: "100%",
-            padding: 12,
-            marginBottom: 10,
-            boxSizing: "border-box",
-          }}
-        />
+        <form onSubmit={handleRegister}>
+          <input
+            type="text"
+            placeholder="Full name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            autoComplete="name"
+            style={{
+              width: "100%",
+              padding: 12,
+              marginBottom: 10,
+              boxSizing: "border-box",
+            }}
+          />
 
-        <input
-          type="email"
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          style={{
-            width: "100%",
-            padding: 12,
-            marginBottom: 10,
-            boxSizing: "border-box",
-          }}
-        />
+          <input
+            type="email"
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            autoComplete="email"
+            style={{
+              width: "100%",
+              padding: 12,
+              marginBottom: 10,
+              boxSizing: "border-box",
+            }}
+          />
 
-        <input
-          type="tel"
-          placeholder="Phone (optional)"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          style={{
-            width: "100%",
-            padding: 12,
-            marginBottom: 10,
-            boxSizing: "border-box",
-          }}
-        />
+          <input
+            type="tel"
+            placeholder="Phone (optional)"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            autoComplete="tel"
+            style={{
+              width: "100%",
+              padding: 12,
+              marginBottom: 10,
+              boxSizing: "border-box",
+            }}
+          />
 
-        <input
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          style={{
-            width: "100%",
-            padding: 12,
-            marginBottom: 10,
-            boxSizing: "border-box",
-          }}
-        />
+          <input
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoComplete="new-password"
+            style={{
+              width: "100%",
+              padding: 12,
+              marginBottom: 10,
+              boxSizing: "border-box",
+            }}
+          />
 
-        <input
-          type="password"
-          placeholder="Confirm password"
-          value={confirmPassword}
-          onChange={(e) => setConfirmPassword(e.target.value)}
-          style={{
-            width: "100%",
-            padding: 12,
-            marginBottom: 15,
-            boxSizing: "border-box",
-          }}
-        />
+          <input
+            type="password"
+            placeholder="Confirm password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            autoComplete="new-password"
+            style={{
+              width: "100%",
+              padding: 12,
+              marginBottom: 15,
+              boxSizing: "border-box",
+            }}
+          />
 
-        <button
-          type="button"
-          onClick={handleRegister}
-          disabled={registerMutation.isPending}
-          style={{
-            width: "100%",
-            padding: 12,
-            cursor: registerMutation.isPending ? "wait" : "pointer",
-          }}
-        >
-          {registerMutation.isPending
-            ? "Creating account..."
-            : "Create Account"}
-        </button>
+          <button
+            type="submit"
+            disabled={registerMutation.isPending}
+            style={{
+              width: "100%",
+              padding: 12,
+              cursor: registerMutation.isPending ? "wait" : "pointer",
+            }}
+          >
+            {registerMutation.isPending
+              ? "Creating account..."
+              : "Create Account"}
+          </button>
+        </form>
 
         {message && (
           <p
             style={{
               marginTop: 15,
-              color: message.includes("successfully") ||
+              color:
+                message.includes("successfully") ||
                 message.includes("Account created")
-                ? "green"
-                : "#b00020",
+                  ? "green"
+                  : "#b00020",
             }}
           >
             {message}
