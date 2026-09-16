@@ -887,7 +887,7 @@ function UserCard({
                 Cancel
               </button>
 
-              <button
+                            <button
                 type="button"
                 onClick={() =>
                   updateUser(
@@ -895,9 +895,10 @@ function UserCard({
                     "deactivate"
                   )
                 }
-                          >
-            Deactivate
-          </button>
+                className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-3 py-2 text-xs text-yellow-300 hover:bg-yellow-500/20"
+              >
+                Deactivate
+              </button>
         )}
       </div>
     </div>
