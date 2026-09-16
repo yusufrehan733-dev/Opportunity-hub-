@@ -15,23 +15,34 @@ export default function Skills() {
   const [mySkills, setMySkills] = useState<any[]>([]);
   const [skillLimit, setSkillLimit] = useState<number>(2);
   const [planName, setPlanName] = useState("Basic");
+  const [loading, setLoading] = useState(true);
+  const [skillsError, setSkillsError] = useState("");
 
   useEffect(() => {
     initialize();
   }, []);
 
   async function initialize() {
+    setLoading(true);
+    setSkillsError("");
+
     await fetchSkills();
 
     const {
       data: { user },
     } = await supabase.auth.getUser();
 
-    if (!user) return;
+    if (!user) {
+      setLoading(false);
+      return;
+    }
 
     setUser(user);
+
     await fetchUserSkills(user.id);
     await fetchUserPlan(user.id);
+
+    setLoading(false);
   }
 
   async function fetchSkills() {
@@ -39,9 +50,16 @@ export default function Skills() {
       .from("skills")
       .select("*");
 
-    if (!error) {
-      setData(data || []);
+    if (error) {
+      console.error("Skills loading error:", error);
+      setSkillsError(error.message);
+      setData([]);
+      return;
     }
+
+    console.log("Skills loaded:", data);
+
+    setData(data || []);
   }
 
   async function fetchUserSkills(userId: string) {
@@ -98,14 +116,18 @@ export default function Skills() {
   }
 
   async function addSkill(skill: string) {
-    if (!user) return;
+    if (!user) {
+      alert("Please log in first.");
+      return;
+    }
 
     const exists = mySkills.some(
-      (s) => s.skill.toLowerCase() === skill.toLowerCase()
+      (s) =>
+        String(s.skill).toLowerCase() === skill.toLowerCase()
     );
 
     if (exists) {
-      alert("Skill already added");
+      alert("Skill already added.");
       return;
     }
 
@@ -151,7 +173,11 @@ export default function Skills() {
   }
 
   const mainCategories = [
-    ...new Set(data.map((item) => item.name)),
+    ...new Set(
+      data
+        .map((item) => item.name)
+        .filter(Boolean)
+    ),
   ];
 
   const categories = selectedMain
@@ -160,45 +186,94 @@ export default function Skills() {
           data
             .filter((item) => item.name === selectedMain)
             .map((item) => item.category)
+            .filter(Boolean)
         ),
       ]
     : [];
 
   const subcategories =
     selectedMain && selectedCategory
-      ? data
-          .filter(
-            (item) =>
-              item.name === selectedMain &&
-              item.category === selectedCategory
-          )
-          .map((item) => item.subcategory)
+      ? [
+          ...new Set(
+            data
+              .filter(
+                (item) =>
+                  item.name === selectedMain &&
+                  item.category === selectedCategory
+              )
+              .map((item) => item.subcategory)
+              .filter(Boolean)
+          ),
+        ]
       : [];
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="bg-card border-b">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center gap-4">
+    <div
+      style={{
+        minHeight: "100vh",
+        background: "#0b0b0b",
+        color: "#fff",
+      }}
+    >
+      {/* HEADER */}
+      <div
+        style={{
+          background: "#111",
+          borderBottom: "1px solid #2a2a2a",
+          padding: "16px 20px",
+        }}
+      >
+        <div
+          style={{
+            maxWidth: 1100,
+            margin: "0 auto",
+            display: "flex",
+            alignItems: "center",
+            gap: 14,
+          }}
+        >
           <button
             onClick={() => navigate("/dashboard")}
-            className="p-2 hover:bg-secondary rounded-lg transition-colors"
+            style={{
+              background: "#1d1d1d",
+              color: "#fff",
+              border: "1px solid #333",
+              borderRadius: 8,
+              padding: 9,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+            }}
           >
             <ArrowLeft size={20} />
           </button>
 
-          <h1 className="text-2xl font-bold text-foreground">
+          <h1 style={{ margin: 0, fontSize: 24 }}>
             Skills
           </h1>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 py-8 space-y-8">
-        <div>
-          <h2 className="text-lg font-semibold mb-1">
+      <div
+        style={{
+          maxWidth: 1100,
+          margin: "0 auto",
+          padding: "30px 20px",
+        }}
+      >
+        {/* MY SKILLS */}
+        <section style={{ marginBottom: 40 }}>
+          <h2 style={{ marginBottom: 6 }}>
             My Skills ({mySkills.length})
           </h2>
 
-          <p className="text-sm text-muted-foreground mb-3">
+          <p
+            style={{
+              color: "#999",
+              marginTop: 0,
+              marginBottom: 16,
+            }}
+          >
             Plan: {planName} · Limit:{" "}
             {Number.isFinite(skillLimit)
               ? skillLimit
@@ -206,21 +281,49 @@ export default function Skills() {
           </p>
 
           {mySkills.length === 0 ? (
-            <div className="bg-card border rounded-lg p-4 text-muted-foreground">
+            <div
+              style={{
+                background: "#151515",
+                border: "1px solid #2d2d2d",
+                borderRadius: 10,
+                padding: 18,
+                color: "#999",
+              }}
+            >
               No skills selected yet.
             </div>
           ) : (
-            <div className="flex flex-wrap gap-2">
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 10,
+              }}
+            >
               {mySkills.map((skill) => (
                 <div
                   key={skill.id}
-                  className="flex items-center gap-2 px-3 py-2 bg-primary text-white rounded-lg"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    background: "#222",
+                    border: "1px solid #444",
+                    borderRadius: 8,
+                    padding: "9px 12px",
+                  }}
                 >
                   <span>{skill.skill}</span>
 
                   <button
                     onClick={() => removeSkill(skill.id)}
-                    className="font-bold"
+                    style={{
+                      background: "transparent",
+                      color: "#aaa",
+                      border: "none",
+                      fontSize: 18,
+                      cursor: "pointer",
+                    }}
                   >
                     ×
                   </button>
@@ -228,77 +331,208 @@ export default function Skills() {
               ))}
             </div>
           )}
-        </div>
+        </section>
 
-        <div>
-          <h2 className="text-lg font-semibold mb-3">
-            Main Categories
-          </h2>
-
-          <div className="flex flex-wrap gap-2">
-            {mainCategories.map((item, index) => (
-              <button
-                key={index}
-                onClick={() => {
-                  setSelectedMain(item);
-                  setSelectedCategory(null);
-                }}
-                className={`px-4 py-2 rounded-lg transition ${
-                  selectedMain === item
-                    ? "bg-primary text-white"
-                    : "bg-secondary hover:bg-primary hover:text-white"
-                }`}
-              >
-                {item}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {selectedMain && (
-          <div>
-            <h2 className="text-lg font-semibold mb-3">
-              Categories
-            </h2>
-
-            <div className="flex flex-wrap gap-2">
-              {categories.map((item, index) => (
-                <button
-                  key={index}
-                  onClick={() => setSelectedCategory(item)}
-                  className={`px-4 py-2 rounded-lg transition ${
-                    selectedCategory === item
-                      ? "bg-primary text-white"
-                      : "bg-secondary hover:bg-primary hover:text-white"
-                  }`}
-                >
-                  {item}
-                </button>
-              ))}
-            </div>
+        {/* ERROR */}
+        {skillsError && (
+          <div
+            style={{
+              background: "#211010",
+              border: "1px solid #5c2929",
+              color: "#ff8d8d",
+              borderRadius: 10,
+              padding: 16,
+              marginBottom: 25,
+            }}
+          >
+            Could not load skills: {skillsError}
           </div>
         )}
 
-        {selectedCategory && (
-          <div>
-            <h2 className="text-lg font-semibold mb-3">
-              Subcategories
-            </h2>
-
-            <div className="flex flex-wrap gap-2">
-              {subcategories.map((item, index) => (
-                <button
-                  key={index}
-                  onClick={() => addSkill(item)}
-                  className="px-4 py-2 bg-card border rounded-lg hover:bg-primary hover:text-white transition"
-                >
-                  {item}
-                </button>
-              ))}
-            </div>
+        {/* LOADING */}
+        {loading ? (
+          <div
+            style={{
+              background: "#151515",
+              border: "1px solid #2d2d2d",
+              borderRadius: 10,
+              padding: 20,
+              color: "#aaa",
+            }}
+          >
+            Loading skill categories...
           </div>
+        ) : (
+          <>
+            {/* MAIN CATEGORIES */}
+            <section style={{ marginBottom: 35 }}>
+              <h2 style={{ marginBottom: 14 }}>
+                Main Categories
+              </h2>
+
+              {mainCategories.length === 0 ? (
+                <div
+                  style={{
+                    background: "#151515",
+                    border: "1px solid #2d2d2d",
+                    borderRadius: 10,
+                    padding: 20,
+                    color: "#999",
+                  }}
+                >
+                  No skill categories found in the database.
+                </div>
+              ) : (
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: 10,
+                  }}
+                >
+                  {mainCategories.map((item) => (
+                    <button
+                      key={item}
+                      onClick={() => {
+                        setSelectedMain(item);
+                        setSelectedCategory(null);
+                      }}
+                      style={{
+                        padding: "11px 17px",
+                        borderRadius: 8,
+                        border:
+                          selectedMain === item
+                            ? "1px solid #00ffae"
+                            : "1px solid #3a3a3a",
+                        background:
+                          selectedMain === item
+                            ? "#00ffae"
+                            : "#1a1a1a",
+                        color:
+                          selectedMain === item
+                            ? "#000"
+                            : "#fff",
+                        cursor: "pointer",
+                        fontWeight: 600,
+                      }}
+                    >
+                      {item}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            {/* CATEGORIES */}
+            {selectedMain && (
+              <section style={{ marginBottom: 35 }}>
+                <h2 style={{ marginBottom: 14 }}>
+                  Categories
+                </h2>
+
+                {categories.length === 0 ? (
+                  <div
+                    style={{
+                      background: "#151515",
+                      border: "1px solid #2d2d2d",
+                      borderRadius: 10,
+                      padding: 18,
+                      color: "#999",
+                    }}
+                  >
+                    No categories found for {selectedMain}.
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: 10,
+                    }}
+                  >
+                    {categories.map((item) => (
+                      <button
+                        key={item}
+                        onClick={() =>
+                          setSelectedCategory(item)
+                        }
+                        style={{
+                          padding: "11px 17px",
+                          borderRadius: 8,
+                          border:
+                            selectedCategory === item
+                              ? "1px solid #00ffae"
+                              : "1px solid #3a3a3a",
+                          background:
+                            selectedCategory === item
+                              ? "#00ffae"
+                              : "#1a1a1a",
+                          color:
+                            selectedCategory === item
+                              ? "#000"
+                              : "#fff",
+                          cursor: "pointer",
+                          fontWeight: 600,
+                        }}
+                      >
+                        {item}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
+
+            {/* SUBCATEGORIES */}
+            {selectedCategory && (
+              <section>
+                <h2 style={{ marginBottom: 14 }}>
+                  Skills
+                </h2>
+
+                {subcategories.length === 0 ? (
+                  <div
+                    style={{
+                      background: "#151515",
+                      border: "1px solid #2d2d2d",
+                      borderRadius: 10,
+                      padding: 18,
+                      color: "#999",
+                    }}
+                  >
+                    No skills found for {selectedCategory}.
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: 10,
+                    }}
+                  >
+                    {subcategories.map((item) => (
+                      <button
+                        key={item}
+                        onClick={() => addSkill(item)}
+                        style={{
+                          padding: "11px 17px",
+                          borderRadius: 8,
+                          border: "1px solid #3a3a3a",
+                          background: "#151515",
+                          color: "#fff",
+                          cursor: "pointer",
+                        }}
+                      >
+                        + {item}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
+          </>
         )}
       </div>
     </div>
   );
-        }
+}
