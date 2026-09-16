@@ -2,7 +2,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import Login from "./Login";
 import Register from "./Register";
 import ResetPassword from "./ResetPassword";
-import Dashboard from "./Dashboard";
+import Dashboard from "./pages/Dashboard";
 
 export default function App() {
   return (
