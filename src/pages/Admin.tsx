@@ -23,18 +23,16 @@ type AdminSection =
   | "links";
 
 type AdminUser = {
-  id: number | string;
+  id: string;
   email: string;
   name?: string | null;
-  invite_code?: string | null;
-  plan: string;
-  is_active: boolean;
+  plan?: string | null;
+  active?: boolean;
+  is_active?: boolean;
   status?: string | null;
-  subscription_status?: string | null;
   subscription_end?: string | null;
   trial_start?: string | null;
   trial_end?: string | null;
-  created_at?: string;
 };
 
 type AdminLead = {
@@ -119,18 +117,13 @@ async function adminRequest(
   } = await supabase.auth.getSession();
 
   if (!session?.access_token) {
-    throw new Error(
-      "You must be logged in as admin."
-    );
+    throw new Error("You must be logged in as admin.");
   }
 
-  const method =
-    options?.method || "GET";
+  const method = options?.method || "GET";
 
   const response = await fetch(
-    `/api/admin?action=${encodeURIComponent(
-      action
-    )}`,
+    `/api/admin?action=${encodeURIComponent(action)}`,
     {
       method,
       headers: {
@@ -139,9 +132,7 @@ async function adminRequest(
       },
       ...(method === "POST"
         ? {
-            body: JSON.stringify(
-              options?.body || {}
-            ),
+            body: JSON.stringify(options?.body || {}),
           }
         : {}),
     }
@@ -152,24 +143,19 @@ async function adminRequest(
   try {
     result = await response.json();
   } catch {
-    throw new Error(
-      "Admin API returned an invalid response."
-    );
+    throw new Error("Admin API returned an invalid response.");
   }
 
   if (!response.ok || !result.success) {
     throw new Error(
-      result.error ||
-        "Admin request failed."
+      result.error || "Admin request failed."
     );
   }
 
   return result;
 }
 
-function dateText(
-  value?: string | null
-) {
+function dateText(value?: string | null) {
   if (!value) return "—";
 
   const date = new Date(value);
@@ -181,21 +167,28 @@ function dateText(
   return date.toLocaleDateString();
 }
 
-function getStatus(user: AdminUser) {
-  return (
-    user.status ||
-    user.subscription_status ||
-    (user.is_active
-      ? "active"
-      : "inactive")
-  );
+function isUserActive(user: AdminUser) {
+  if (typeof user.active === "boolean") {
+    return user.active;
+  }
+
+  if (typeof user.is_active === "boolean") {
+    return user.is_active;
+  }
+
+  return false;
 }
 
-function getStatusClass(
-  user: AdminUser
-) {
-  const status =
-    getStatus(user).toLowerCase();
+function getStatus(user: AdminUser) {
+  if (user.status) {
+    return user.status;
+  }
+
+  return isUserActive(user) ? "active" : "inactive";
+}
+
+function getStatusClass(user: AdminUser) {
+  const status = getStatus(user).toLowerCase();
 
   if (status === "active") {
     return "text-[#00c98b]";
@@ -226,11 +219,8 @@ export default function Admin() {
   const [section, setSection] =
     useState<AdminSection>("overview");
 
-  const [loading, setLoading] =
-    useState(false);
-
-  const [error, setError] =
-    useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const [overview, setOverview] =
     useState<OverviewData | null>(null);
@@ -262,41 +252,27 @@ export default function Admin() {
 
     try {
       if (section === "overview") {
-        const result =
-          await adminRequest(
-            "overview"
-          );
+        const result = await adminRequest("overview");
 
-        setOverview(
-          result.overview || null
-        );
+        setOverview(result.overview || null);
       }
 
       if (section === "users") {
-        const result =
-          await adminRequest("users");
+        const result = await adminRequest("users");
 
-        setUsers(
-          result.users || []
-        );
+        setUsers(result.users || []);
       }
 
       if (section === "links") {
-        const result =
-          await adminRequest("invites");
+        const result = await adminRequest("invites");
 
-        setInvites(
-          result.invites || []
-        );
+        setInvites(result.invites || []);
       }
 
       if (section === "leads") {
-        const result =
-          await adminRequest("leads");
+        const result = await adminRequest("leads");
 
-        setLeads(
-          result.leads || []
-        );
+        setLeads(result.leads || []);
       }
     } catch (err) {
       setError(
@@ -314,15 +290,10 @@ export default function Admin() {
   }, [section]);
 
   async function createInvite() {
-    const email =
-      inviteEmail
-        .trim()
-        .toLowerCase();
+    const email = inviteEmail.trim().toLowerCase();
 
     if (!email) {
-      setInviteResult(
-        "Enter an email address."
-      );
+      setInviteResult("Enter an email address.");
       return;
     }
 
@@ -331,35 +302,30 @@ export default function Admin() {
     setError("");
 
     try {
-      const result =
-        await adminRequest(
-          "create_invite",
-          {
-            method: "POST",
-            body: {
-              email,
-              plan: invitePlan,
-            },
-          }
-        );
+      const result = await adminRequest(
+        "create_invite",
+        {
+          method: "POST",
+          body: {
+            email,
+            plan: invitePlan,
+          },
+        }
+      );
 
-      const code =
-        result.user?.invite_code ||
-        result.invite?.token;
+      const token = result.invite?.token;
 
       setInviteEmail("");
 
       setInviteResult(
-        code
-          ? `Invite ready. Code: ${code}`
+        token
+          ? `Invite ready. Token: ${token}`
           : "Invite created successfully."
       );
 
       if (section === "links") {
         const refreshed =
-          await adminRequest(
-            "invites"
-          );
+          await adminRequest("invites");
 
         setInvites(
           refreshed.invites || []
@@ -385,26 +351,19 @@ export default function Admin() {
     setError("");
 
     try {
-      await adminRequest(
-        "set_user",
-        {
-          method: "POST",
-          body: {
-            id: user.id,
-            action,
-            ...(plan
-              ? { plan }
-              : {}),
-          },
-        }
-      );
+      await adminRequest("set_user", {
+        method: "POST",
+        body: {
+          id: user.id,
+          action,
+          ...(plan ? { plan } : {}),
+        },
+      });
 
       const result =
         await adminRequest("users");
 
-      setUsers(
-        result.users || []
-      );
+      setUsers(result.users || []);
     } catch (err) {
       setError(
         err instanceof Error
@@ -457,7 +416,6 @@ export default function Admin() {
                     : ""
                 }
               />
-
               Refresh
             </button>
           </div>
@@ -469,7 +427,6 @@ export default function Admin() {
           <div className="flex gap-1 overflow-x-auto py-2">
             {sections.map((item) => {
               const Icon = item.icon;
-
               const active =
                 section === item.id;
 
@@ -525,9 +482,7 @@ export default function Admin() {
             inviteLoading={
               inviteLoading
             }
-            inviteResult={
-              inviteResult
-            }
+            inviteResult={inviteResult}
             createInvite={
               createInvite
             }
@@ -556,9 +511,7 @@ export default function Admin() {
             inviteLoading={
               inviteLoading
             }
-            inviteResult={
-              inviteResult
-            }
+            inviteResult={inviteResult}
             createInvite={
               createInvite
             }
@@ -591,11 +544,7 @@ function Overview({
   loading: boolean;
 }) {
   const cards = [
-    [
-      "Users",
-      data?.users ?? "—",
-      Users,
-    ],
+    ["Users", data?.users ?? "—", Users],
     [
       "Active Users",
       data?.activeUsers ?? "—",
@@ -728,13 +677,9 @@ function UsersSection({
   users: AdminUser[];
   loading: boolean;
   inviteEmail: string;
-  setInviteEmail: (
-    v: string
-  ) => void;
+  setInviteEmail: (v: string) => void;
   invitePlan: string;
-  setInvitePlan: (
-    v: string
-  ) => void;
+  setInvitePlan: (v: string) => void;
   inviteLoading: boolean;
   inviteResult: string;
   createInvite: () => void;
@@ -814,14 +759,7 @@ function UserCard({
     plan?: string
   ) => void;
 }) {
-  const status =
-    getStatus(user).toLowerCase();
-
-  const active =
-    user.is_active &&
-    status !== "deactivated" &&
-    status !== "cancelled" &&
-    status !== "expired";
+  const active = isUserActive(user);
 
   return (
     <div className="rounded-xl border border-[#272727] bg-[#141414] p-4">
@@ -829,8 +767,7 @@ function UserCard({
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
             <p className="break-all text-sm font-semibold">
-              {user.email ||
-                "No email"}
+              {user.email || "No email"}
             </p>
 
             {user.name && (
@@ -858,8 +795,7 @@ function UserCard({
               <span>
                 Plan:{" "}
                 <strong>
-                  {user.plan ||
-                    "Basic"}
+                  {user.plan || "Basic"}
                 </strong>
               </span>
             </div>
@@ -869,23 +805,17 @@ function UserCard({
         <div className="grid gap-2 sm:grid-cols-3">
           <DateBox
             label="Trial Start"
-            value={
-              user.trial_start
-            }
+            value={user.trial_start}
           />
 
           <DateBox
             label="Trial Expiry"
-            value={
-              user.trial_end
-            }
+            value={user.trial_end}
           />
 
           <DateBox
             label="Subscription Expiry"
-            value={
-              user.subscription_end
-            }
+            value={user.subscription_end}
           />
         </div>
 
@@ -903,24 +833,15 @@ function UserCard({
             }
             className="rounded-lg border border-[#333] bg-[#101010] px-3 py-2 text-xs"
           >
-            <option>
-              Basic
-            </option>
-            <option>
-              Premium
-            </option>
-            <option>
-              Gold
-            </option>
+            <option>Basic</option>
+            <option>Premium</option>
+            <option>Gold</option>
           </select>
 
           <button
             type="button"
             onClick={() =>
-              updateUser(
-                user,
-                "trial"
-              )
+              updateUser(user, "trial")
             }
             className="rounded-lg border border-[#333] bg-[#181818] px-3 py-2 text-xs hover:bg-[#222]"
           >
@@ -930,10 +851,7 @@ function UserCard({
           <button
             type="button"
             onClick={() =>
-              updateUser(
-                user,
-                "renew"
-              )
+              updateUser(user, "renew")
             }
             className="rounded-lg border border-[#333] bg-[#181818] px-3 py-2 text-xs hover:bg-[#222]"
           >
@@ -977,352 +895,4 @@ function UserCard({
                     "deactivate"
                   )
                 }
-                className="rounded-lg border border-orange-500/30 bg-orange-500/10 px-3 py-2 text-xs text-orange-300 hover:bg-orange-500/20"
-              >
-                Deactivate
-              </button>
-            </>
-          ) : (
-            <button
-              type="button"
-              onClick={() =>
-                updateUser(
-                  user,
-                  "activate"
-                )
-              }
-              className="rounded-lg border border-[#00c98b]/30 bg-[#00c98b]/10 px-3 py-2 text-xs text-[#00c98b] hover:bg-[#00c98b]/20"
-            >
-              Activate / Reactivate
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function DateBox({
-  label,
-  value,
-}: {
-  label: string;
-  value?: string | null;
-}) {
-  return (
-    <div className="rounded-lg border border-[#252525] bg-[#101010] p-3">
-      <div className="flex items-center gap-2">
-        <CalendarDays
-          size={13}
-          className="text-[#666]"
-        />
-
-        <p className="text-[10px] uppercase tracking-wider text-[#666]">
-          {label}
-        </p>
-      </div>
-
-      <p className="mt-1 text-xs text-[#aaa]">
-        {dateText(value)}
-      </p>
-    </div>
-  );
-}
-
-function InviteForm({
-  inviteEmail,
-  setInviteEmail,
-  invitePlan,
-  setInvitePlan,
-  inviteLoading,
-  inviteResult,
-  createInvite,
-}: {
-  inviteEmail: string;
-  setInviteEmail: (
-    v: string
-  ) => void;
-  invitePlan: string;
-  setInvitePlan: (
-    v: string
-  ) => void;
-  inviteLoading: boolean;
-  inviteResult: string;
-  createInvite: () => void;
-}) {
-  return (
-    <div className="rounded-xl border border-[#272727] bg-[#141414] p-4">
-      <h3 className="text-sm font-semibold">
-        Create Customer Invite
-      </h3>
-
-      <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto_auto]">
-        <input
-          value={inviteEmail}
-          onChange={(event) =>
-            setInviteEmail(
-              event.target.value
-            )
-          }
-          placeholder="customer@email.com"
-          type="email"
-          className="h-10 rounded-lg border border-[#333] bg-[#101010] px-3 text-sm outline-none focus:border-[#00c98b]"
-        />
-
-        <select
-          value={invitePlan}
-          onChange={(event) =>
-            setInvitePlan(
-              event.target.value
-            )
-          }
-          className="h-10 rounded-lg border border-[#333] bg-[#101010] px-3 text-sm"
-        >
-          <option>
-            Basic
-          </option>
-          <option>
-            Premium
-          </option>
-          <option>
-            Gold
-          </option>
-        </select>
-
-        <button
-          type="button"
-          onClick={createInvite}
-          disabled={inviteLoading}
-          className="h-10 rounded-lg bg-[#00c98b] px-4 text-sm font-semibold text-black disabled:opacity-50"
-        >
-          {inviteLoading
-            ? "Creating..."
-            : "Create Invite"}
-        </button>
-      </div>
-
-      {inviteResult && (
-        <p className="mt-3 break-all text-xs text-[#aaa]">
-          {inviteResult}
-        </p>
-      )}
-    </div>
-  );
-}
-
-function LeadsSection({
-  leads,
-  loading,
-}: {
-  leads: AdminLead[];
-  loading: boolean;
-}) {
-  return (
-    <section className="space-y-5">
-      <div>
-        <h2 className="text-2xl font-semibold">
-          Leads
-        </h2>
-
-        <p className="mt-1 text-sm text-[#777]">
-          Demand and Supply opportunities.
-        </p>
-      </div>
-
-      {loading && (
-        <p className="text-xs text-[#777]">
-          Loading leads...
-        </p>
-      )}
-
-      <div className="space-y-3">
-        {leads.map((lead) => (
-          <div
-            key={`${lead.type}-${lead.id}`}
-            className="rounded-xl border border-[#272727] bg-[#141414] p-4"
-          >
-            <p className="text-[10px] uppercase tracking-wider text-[#00c98b]">
-              {lead.type ||
-                "Opportunity"}
-            </p>
-
-            <h3 className="mt-1 text-sm font-semibold">
-              {lead.title ||
-                lead.client_name ||
-                "Opportunity"}
-            </h3>
-
-            <p className="mt-2 text-xs text-[#888]">
-              {lead.skill_needed ||
-                "Skill not specified"}
-            </p>
-
-            <div className="mt-3 flex flex-wrap gap-3 text-[11px] text-[#666]">
-              <span>
-                Country:{" "}
-                {lead.country || "—"}
-              </span>
-
-              <span>
-                Source:{" "}
-                {lead.source || "—"}
-              </span>
-
-              <span>
-                Status:{" "}
-                {lead.status || "—"}
-              </span>
-
-              <span>
-                {dateText(
-                  lead.created_at
-                )}
-              </span>
-            </div>
-          </div>
-        ))}
-
-        {leads.length === 0 && (
-          <div className="rounded-xl border border-[#272727] bg-[#141414] p-8 text-center text-sm text-[#666]">
-            No leads found.
-          </div>
-        )}
-      </div>
-    </section>
-  );
-}
-
-function LinksSection({
-  invites,
-  inviteEmail,
-  setInviteEmail,
-  invitePlan,
-  setInvitePlan,
-  inviteLoading,
-  inviteResult,
-  createInvite,
-}: {
-  invites: Invite[];
-  inviteEmail: string;
-  setInviteEmail: (
-    v: string
-  ) => void;
-  invitePlan: string;
-  setInvitePlan: (
-    v: string
-  ) => void;
-  inviteLoading: boolean;
-  inviteResult: string;
-  createInvite: () => void;
-}) {
-  const origin =
-    typeof window !== "undefined"
-      ? window.location.origin
-      : "https://opportunity-hub-umber.vercel.app";
-
-  return (
-    <section className="space-y-5">
-      <div>
-        <h2 className="text-2xl font-semibold">
-          Referral Links
-        </h2>
-
-        <p className="mt-1 text-sm text-[#777]">
-          Email-bound customer invite links.
-        </p>
-      </div>
-
-      <InviteForm
-        inviteEmail={inviteEmail}
-        setInviteEmail={
-          setInviteEmail
-        }
-        invitePlan={invitePlan}
-        setInvitePlan={
-          setInvitePlan
-        }
-        inviteLoading={
-          inviteLoading
-        }
-        inviteResult={
-          inviteResult
-        }
-        createInvite={
-          createInvite
-        }
-      />
-
-      <div className="space-y-3">
-        {invites.map((invite) => {
-          const link =
-            `${origin}/invite-register/` +
-            encodeURIComponent(
-              invite.token
-            );
-
-          return (
-            <div
-              key={String(invite.id)}
-              className="rounded-xl border border-[#272727] bg-[#141414] p-4"
-            >
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <p className="break-all text-sm font-medium">
-                    {invite.email}
-                  </p>
-
-                  <p className="mt-1 text-xs text-[#777]">
-                    {invite.plan ||
-                      "Basic"}{" "}
-                    •{" "}
-                    {invite.used_at
-                      ? "Used"
-                      : "Unused"}
-                  </p>
-                </div>
-
-                <span className="text-[11px] text-[#666]">
-                  {dateText(
-                    invite.created_at
-                  )}
-                </span>
-              </div>
-
-              <div className="mt-3 rounded-lg border border-[#252525] bg-[#101010] p-3">
-                <p className="break-all text-xs text-[#aaa]">
-                  {link}
-                </p>
-              </div>
-            </div>
-          );
-        })}
-
-        {invites.length === 0 && (
-          <div className="rounded-xl border border-[#272727] bg-[#141414] p-8 text-center text-sm text-[#666]">
-            No invite links found.
-          </div>
-        )}
-      </div>
-    </section>
-  );
-}
-
-function Placeholder({
-  title,
-  description,
-}: {
-  title: string;
-  description: string;
-}) {
-  return (
-    <section className="rounded-xl border border-[#272727] bg-[#141414] p-6">
-      <h2 className="text-xl font-semibold">
-        {title}
-      </h2>
-
-      <p className="mt-2 text-sm leading-6 text-[#777]">
-        {description}
-      </p>
-    </section>
-  );
-}
+      
