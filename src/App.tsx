@@ -9,6 +9,7 @@ import Skills from "./pages/Skills";
 import Leads from "./pages/Leads";
 import Reseller from "./pages/Reseller";
 import Contact from "./pages/Contact";
+import Referral from "./pages/Referral";
 
 export default function App() {
   return (
@@ -24,6 +25,7 @@ export default function App() {
       <Route path="/dashboard/leads" element={<Leads />} />
       <Route path="/dashboard/reseller" element={<Reseller />} />
       <Route path="/dashboard/contact" element={<Contact />} />
+      <Route path="/dashboard/referral" element={<Referral />} />
 
       {/* DEFAULT */}
       <Route path="/" element={<Navigate to="/login" replace />} />
