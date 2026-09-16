@@ -325,4 +325,4 @@ export default function Reseller() {
       </div>
     </div>
   );
-}
+        }
