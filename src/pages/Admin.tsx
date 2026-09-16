@@ -895,4 +895,905 @@ function UserCard({
                     "deactivate"
                   )
                 }
+                          >
+            Deactivate
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DateBox({
+  label,
+  value,
+}: {
+  label: string;
+  value?: string | null;
+}) {
+  return (
+    <div
+      style={{
+        background: "#111",
+        border: "1px solid #222",
+        borderRadius: 10,
+        padding: 10,
+      }}
+    >
+      <div
+        style={{
+          fontSize: 11,
+          color: "#777",
+          marginBottom: 4,
+        }}
+      >
+        {label}
+      </div>
+
+      <div
+        style={{
+          fontSize: 13,
+          color: "#ddd",
+        }}
+      >
+        {dateText(value)}
+      </div>
+    </div>
+  );
+}
+
+function InviteForm({
+  onCreated,
+}: {
+  onCreated: () => void;
+}) {
+  const [email, setEmail] = useState("");
+  const [plan, setPlan] = useState("Basic");
+  const [trialDays, setTrialDays] = useState("14");
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
+
+  async function createInvite() {
+    if (!email.trim()) {
+      setMessage("Enter an email.");
+      return;
+    }
+
+    setLoading(true);
+    setMessage("");
+
+    try {
+      const result = await adminRequest("/api/admin", {
+        method: "POST",
+        body: JSON.stringify({
+          action: "create_invite",
+          email: email.trim().toLowerCase(),
+          plan,
+          trial_days: Number(trialDays),
+        }),
+      });
+
+      const token = result.invite?.token;
+
+      if (!token) {
+        throw new Error("Invite was created but no token was returned.");
+      }
+
+      const link = `${window.location.origin}/invite-register/${token}`;
+
+      await navigator.clipboard?.writeText(link);
+
+      setMessage(`Invite created and copied: ${link}`);
+      setEmail("");
+      onCreated();
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Could not create invite."
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div
+      style={{
+        background: "#111",
+        border: "1px solid #222",
+        borderRadius: 14,
+        padding: 16,
+        marginBottom: 20,
+      }}
+    >
+      <h3
+        style={{
+          marginTop: 0,
+          marginBottom: 14,
+        }}
+      >
+        Create Invite
+      </h3>
+
+      <div
+        style={{
+          display: "grid",
+          gap: 10,
+        }}
+      >
+        <input
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+          placeholder="Customer email"
+          type="email"
+          style={{
+            width: "100%",
+            boxSizing: "border-box",
+            background: "#0a0a0a",
+            color: "#fff",
+            border: "1px solid #333",
+            borderRadius: 9,
+            padding: "11px 12px",
+          }}
+        />
+
+        <select
+          value={plan}
+          onChange={(event) => setPlan(event.target.value)}
+          style={{
+            background: "#0a0a0a",
+            color: "#fff",
+            border: "1px solid #333",
+            borderRadius: 9,
+            padding: "11px 12px",
+          }}
+        >
+          <option value="Basic">Basic</option>
+          <option value="Premium">Premium</option>
+          <option value="Gold">Gold</option>
+        </select>
+
+        <input
+          value={trialDays}
+          onChange={(event) => setTrialDays(event.target.value)}
+          type="number"
+          min="1"
+          placeholder="Trial days"
+          style={{
+            background: "#0a0a0a",
+            color: "#fff",
+            border: "1px solid #333",
+            borderRadius: 9,
+            padding: "11px 12px",
+          }}
+        />
+
+        <button
+          type="button"
+          onClick={createInvite}
+          disabled={loading}
+          style={{
+            background: "#fff",
+            color: "#000",
+            border: 0,
+            borderRadius: 9,
+            padding: "11px 14px",
+            fontWeight: 700,
+            cursor: loading ? "wait" : "pointer",
+          }}
+        >
+          {loading ? "Creating..." : "Create Invite Link"}
+        </button>
+
+        {message && (
+          <div
+            style={{
+              fontSize: 12,
+              color: "#aaa",
+              wordBreak: "break-word",
+            }}
+          >
+            {message}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function LeadsSection() {
+  const [data, setData] = useState<{
+    demand?: number;
+    supply?: number;
+    saas?: number;
+  } | null>(null);
+
+  const [loading, setLoading] = useState(true);
+
+  async function load() {
+    setLoading(true);
+
+    try {
+      const result = await adminRequest("/api/admin?section=leads");
+      setData({
+        demand: result.demand?.length ?? 0,
+        supply: result.supply?.length ?? 0,
+        saas: result.saas?.length ?? 0,
+      });
+    } catch {
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  if (loading) {
+    return (
+      <div
+        style={{
+          padding: 20,
+          color: "#aaa",
+        }}
+      >
+        Loading leads...
+      </div>
+    );
+  }
+
+  return (
+    <div
+      style={{
+        display: "grid",
+        gap: 12,
+      }}
+    >
+      <InfoBox
+        title="Demand Leads"
+        value={String(data?.demand ?? 0)}
+        icon={<Target size={18} />}
+      />
+
+      <InfoBox
+        title="Supply Leads"
+        value={String(data?.supply ?? 0)}
+        icon={<Store size={18} />}
+      />
+
+      <InfoBox
+        title="SaaS Leads"
+        value={String(data?.saas ?? 0)}
+        icon={<Users size={18} />}
+      />
+
+      <button
+        type="button"
+        onClick={load}
+        style={{
+          background: "#151515",
+          color: "#fff",
+          border: "1px solid #333",
+          borderRadius: 9,
+          padding: "10px 14px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 7,
+          cursor: "pointer",
+        }}
+      >
+        <RefreshCw size={15} />
+        Refresh Leads
+      </button>
+    </div>
+  );
+}
+
+function LinksSection() {
+  const [invites, setInvites] = useState<Invite[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  async function load() {
+    setLoading(true);
+
+    try {
+      const result = await adminRequest("/api/admin?section=invites");
+      setInvites(result.invites ?? []);
+    } catch {
+      setInvites([]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  if (loading) {
+    return (
+      <div
+        style={{
+          padding: 20,
+          color: "#aaa",
+        }}
+      >
+        Loading referral links...
+      </div>
+    );
+  }
+
+  return (
+    <div
+      style={{
+        display: "grid",
+        gap: 10,
+      }}
+    >
+      {invites.length === 0 ? (
+        <div
+          style={{
+            background: "#111",
+            border: "1px solid #222",
+            borderRadius: 12,
+            padding: 16,
+            color: "#888",
+          }}
+        >
+          No invite links yet.
+        </div>
+      ) : (
+        invites.map((invite) => (
+          <div
+            key={invite.id}
+            style={{
+              background: "#111",
+              border: "1px solid #222",
+              borderRadius: 12,
+              padding: 14,
+            }}
+          >
+            <div
+              style={{
+                fontWeight: 700,
+                marginBottom: 5,
+              }}
+            >
+              {invite.email}
+            </div>
+
+            <div
+              style={{
+                color: "#999",
+                fontSize: 12,
+                marginBottom: 8,
+              }}
+            >
+              Plan: {invite.plan || "Basic"} · Trial:{" "}
+              {invite.trial_days ?? 14} days
+            </div>
+
+            <div
+              style={{
+                fontSize: 11,
+                color: invite.used_at ? "#777" : "#aaa",
+                wordBreak: "break-all",
+              }}
+            >
+              {invite.used_at
+                ? "Used"
+                : `${window.location.origin}/invite-register/${invite.token}`}
+            </div>
+          </div>
+        ))
+      )}
+
+      <button
+        type="button"
+        onClick={load}
+        style={{
+          background: "#151515",
+          color: "#fff",
+          border: "1px solid #333",
+          borderRadius: 9,
+          padding: "10px 14px",
+          cursor: "pointer",
+        }}
+      >
+        Refresh Links
+      </button>
+    </div>
+  );
+}
+
+function Placeholder({
+  title,
+  text,
+}: {
+  title: string;
+  text: string;
+}) {
+  return (
+    <div
+      style={{
+        background: "#111",
+        border: "1px solid #222",
+        borderRadius: 14,
+        padding: 18,
+      }}
+    >
+      <h3
+        style={{
+          marginTop: 0,
+        }}
+      >
+        {title}
+      </h3>
+
+      <div
+        style={{
+          color: "#888",
+          fontSize: 13,
+          lineHeight: 1.5,
+        }}
+      >
+        {text}
+      </div>
+    </div>
+  );
+          }          >
+            Deactivate
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DateBox({
+  label,
+  value,
+}: {
+  label: string;
+  value?: string | null;
+}) {
+  return (
+    <div
+      style={{
+        background: "#111",
+        border: "1px solid #222",
+        borderRadius: 10,
+        padding: 10,
+      }}
+    >
+      <div
+        style={{
+          fontSize: 11,
+          color: "#777",
+          marginBottom: 4,
+        }}
+      >
+        {label}
+      </div>
+
+      <div
+        style={{
+          fontSize: 13,
+          color: "#ddd",
+        }}
+      >
+        {dateText(value)}
+      </div>
+    </div>
+  );
+}
+
+function InviteForm({
+  onCreated,
+}: {
+  onCreated: () => void;
+}) {
+  const [email, setEmail] = useState("");
+  const [plan, setPlan] = useState("Basic");
+  const [trialDays, setTrialDays] = useState("14");
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
+
+  async function createInvite() {
+    if (!email.trim()) {
+      setMessage("Enter an email.");
+      return;
+    }
+
+    setLoading(true);
+    setMessage("");
+
+    try {
+      const result = await adminRequest("/api/admin", {
+        method: "POST",
+        body: JSON.stringify({
+          action: "create_invite",
+          email: email.trim().toLowerCase(),
+          plan,
+          trial_days: Number(trialDays),
+        }),
+      });
+
+      const token = result.invite?.token;
+
+      if (!token) {
+        throw new Error("Invite was created but no token was returned.");
+      }
+
+      const link = `${window.location.origin}/invite-register/${token}`;
+
+      await navigator.clipboard?.writeText(link);
+
+      setMessage(`Invite created and copied: ${link}`);
+      setEmail("");
+      onCreated();
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Could not create invite."
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div
+      style={{
+        background: "#111",
+        border: "1px solid #222",
+        borderRadius: 14,
+        padding: 16,
+        marginBottom: 20,
+      }}
+    >
+      <h3
+        style={{
+          marginTop: 0,
+          marginBottom: 14,
+        }}
+      >
+        Create Invite
+      </h3>
+
+      <div
+        style={{
+          display: "grid",
+          gap: 10,
+        }}
+      >
+        <input
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+          placeholder="Customer email"
+          type="email"
+          style={{
+            width: "100%",
+            boxSizing: "border-box",
+            background: "#0a0a0a",
+            color: "#fff",
+            border: "1px solid #333",
+            borderRadius: 9,
+            padding: "11px 12px",
+          }}
+        />
+
+        <select
+          value={plan}
+          onChange={(event) => setPlan(event.target.value)}
+          style={{
+            background: "#0a0a0a",
+            color: "#fff",
+            border: "1px solid #333",
+            borderRadius: 9,
+            padding: "11px 12px",
+          }}
+        >
+          <option value="Basic">Basic</option>
+          <option value="Premium">Premium</option>
+          <option value="Gold">Gold</option>
+        </select>
+
+        <input
+          value={trialDays}
+          onChange={(event) => setTrialDays(event.target.value)}
+          type="number"
+          min="1"
+          placeholder="Trial days"
+          style={{
+            background: "#0a0a0a",
+            color: "#fff",
+            border: "1px solid #333",
+            borderRadius: 9,
+            padding: "11px 12px",
+          }}
+        />
+
+        <button
+          type="button"
+          onClick={createInvite}
+          disabled={loading}
+          style={{
+            background: "#fff",
+            color: "#000",
+            border: 0,
+            borderRadius: 9,
+            padding: "11px 14px",
+            fontWeight: 700,
+            cursor: loading ? "wait" : "pointer",
+          }}
+        >
+          {loading ? "Creating..." : "Create Invite Link"}
+        </button>
+
+        {message && (
+          <div
+            style={{
+              fontSize: 12,
+              color: "#aaa",
+              wordBreak: "break-word",
+            }}
+          >
+            {message}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function LeadsSection() {
+  const [data, setData] = useState<{
+    demand?: number;
+    supply?: number;
+    saas?: number;
+  } | null>(null);
+
+  const [loading, setLoading] = useState(true);
+
+  async function load() {
+    setLoading(true);
+
+    try {
+      const result = await adminRequest("/api/admin?section=leads");
+      setData({
+        demand: result.demand?.length ?? 0,
+        supply: result.supply?.length ?? 0,
+        saas: result.saas?.length ?? 0,
+      });
+    } catch {
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  if (loading) {
+    return (
+      <div
+        style={{
+          padding: 20,
+          color: "#aaa",
+        }}
+      >
+        Loading leads...
+      </div>
+    );
+  }
+
+  return (
+    <div
+      style={{
+        display: "grid",
+        gap: 12,
+      }}
+    >
+      <InfoBox
+        title="Demand Leads"
+        value={String(data?.demand ?? 0)}
+        icon={<Target size={18} />}
+      />
+
+      <InfoBox
+        title="Supply Leads"
+        value={String(data?.supply ?? 0)}
+        icon={<Store size={18} />}
+      />
+
+      <InfoBox
+        title="SaaS Leads"
+        value={String(data?.saas ?? 0)}
+        icon={<Users size={18} />}
+      />
+
+      <button
+        type="button"
+        onClick={load}
+        style={{
+          background: "#151515",
+          color: "#fff",
+          border: "1px solid #333",
+          borderRadius: 9,
+          padding: "10px 14px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 7,
+          cursor: "pointer",
+        }}
+      >
+        <RefreshCw size={15} />
+        Refresh Leads
+      </button>
+    </div>
+  );
+}
+
+function LinksSection() {
+  const [invites, setInvites] = useState<Invite[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  async function load() {
+    setLoading(true);
+
+    try {
+      const result = await adminRequest("/api/admin?section=invites");
+      setInvites(result.invites ?? []);
+    } catch {
+      setInvites([]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  if (loading) {
+    return (
+      <div
+        style={{
+          padding: 20,
+          color: "#aaa",
+        }}
+      >
+        Loading referral links...
+      </div>
+    );
+  }
+
+  return (
+    <div
+      style={{
+        display: "grid",
+        gap: 10,
+      }}
+    >
+      {invites.length === 0 ? (
+        <div
+          style={{
+            background: "#111",
+            border: "1px solid #222",
+            borderRadius: 12,
+            padding: 16,
+            color: "#888",
+          }}
+        >
+          No invite links yet.
+        </div>
+      ) : (
+        invites.map((invite) => (
+          <div
+            key={invite.id}
+            style={{
+              background: "#111",
+              border: "1px solid #222",
+              borderRadius: 12,
+              padding: 14,
+            }}
+          >
+            <div
+              style={{
+                fontWeight: 700,
+                marginBottom: 5,
+              }}
+            >
+              {invite.email}
+            </div>
+
+            <div
+              style={{
+                color: "#999",
+                fontSize: 12,
+                marginBottom: 8,
+              }}
+            >
+              Plan: {invite.plan || "Basic"} · Trial:{" "}
+              {invite.trial_days ?? 14} days
+            </div>
+
+            <div
+              style={{
+                fontSize: 11,
+                color: invite.used_at ? "#777" : "#aaa",
+                wordBreak: "break-all",
+              }}
+            >
+              {invite.used_at
+                ? "Used"
+                : `${window.location.origin}/invite-register/${invite.token}`}
+            </div>
+          </div>
+        ))
+      )}
+
+      <button
+        type="button"
+        onClick={load}
+        style={{
+          background: "#151515",
+          color: "#fff",
+          border: "1px solid #333",
+          borderRadius: 9,
+          padding: "10px 14px",
+          cursor: "pointer",
+        }}
+      >
+        Refresh Links
+      </button>
+    </div>
+  );
+}
+
+function Placeholder({
+  title,
+  text,
+}: {
+  title: string;
+  text: string;
+}) {
+  return (
+    <div
+      style={{
+        background: "#111",
+        border: "1px solid #222",
+        borderRadius: 14,
+        padding: 18,
+      }}
+    >
+      <h3
+        style={{
+          marginTop: 0,
+        }}
+      >
+        {title}
+      </h3>
+
+      <div
+        style={{
+          color: "#888",
+          fontSize: 13,
+          lineHeight: 1.5,
+        }}
+      >
+        {text}
+      </div>
+    </div>
+  );
+                }
       
