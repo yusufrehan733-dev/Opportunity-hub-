@@ -49,6 +49,19 @@ type AdminLead = {
   status?: string | null;
 };
 
+type Invite = {
+  id: string | number;
+  email: string;
+  token: string;
+  name?: string | null;
+  phone?: string | null;
+  plan?: string | null;
+  trial_days?: number | null;
+  created_at?: string;
+  used_at?: string | null;
+  user_id?: string | null;
+};
+
 type OverviewData = {
   users: number;
   activeUsers: number;
@@ -62,12 +75,36 @@ type OverviewData = {
 };
 
 const sections = [
-  { id: "overview" as const, label: "Overview", icon: ShieldCheck },
-  { id: "users" as const, label: "Users", icon: Users },
-  { id: "leads" as const, label: "Leads", icon: Target },
-  { id: "referrals" as const, label: "Referrals", icon: UserPlus },
-  { id: "resellers" as const, label: "Resellers", icon: Store },
-  { id: "links" as const, label: "Referral Links", icon: Link2 },
+  {
+    id: "overview" as const,
+    label: "Overview",
+    icon: ShieldCheck,
+  },
+  {
+    id: "users" as const,
+    label: "Users",
+    icon: Users,
+  },
+  {
+    id: "leads" as const,
+    label: "Leads",
+    icon: Target,
+  },
+  {
+    id: "referrals" as const,
+    label: "Referrals",
+    icon: UserPlus,
+  },
+  {
+    id: "resellers" as const,
+    label: "Resellers",
+    icon: Store,
+  },
+  {
+    id: "links" as const,
+    label: "Referral Links",
+    icon: Link2,
+  },
 ];
 
 async function adminRequest(
@@ -82,13 +119,18 @@ async function adminRequest(
   } = await supabase.auth.getSession();
 
   if (!session?.access_token) {
-    throw new Error("You must be logged in as admin.");
+    throw new Error(
+      "You must be logged in as admin."
+    );
   }
 
-  const method = options?.method || "GET";
+  const method =
+    options?.method || "GET";
 
   const response = await fetch(
-    `/api/admin?action=${encodeURIComponent(action)}`,
+    `/api/admin?action=${encodeURIComponent(
+      action
+    )}`,
     {
       method,
       headers: {
@@ -97,7 +139,9 @@ async function adminRequest(
       },
       ...(method === "POST"
         ? {
-            body: JSON.stringify(options?.body || {}),
+            body: JSON.stringify(
+              options?.body || {}
+            ),
           }
         : {}),
     }
@@ -108,17 +152,24 @@ async function adminRequest(
   try {
     result = await response.json();
   } catch {
-    throw new Error("Admin API returned an invalid response.");
+    throw new Error(
+      "Admin API returned an invalid response."
+    );
   }
 
   if (!response.ok || !result.success) {
-    throw new Error(result.error || "Admin request failed.");
+    throw new Error(
+      result.error ||
+        "Admin request failed."
+    );
   }
 
   return result;
 }
 
-function dateText(value?: string | null) {
+function dateText(
+  value?: string | null
+) {
   if (!value) return "—";
 
   const date = new Date(value);
@@ -134,15 +185,29 @@ function getStatus(user: AdminUser) {
   return (
     user.status ||
     user.subscription_status ||
-    (user.is_active ? "active" : "inactive")
+    (user.is_active
+      ? "active"
+      : "inactive")
   );
 }
 
-function getStatusClass(user: AdminUser) {
-  const status = getStatus(user).toLowerCase();
+function getStatusClass(
+  user: AdminUser
+) {
+  const status =
+    getStatus(user).toLowerCase();
 
-  if (status === "active") return "text-[#00c98b]";
-  if (status === "trial") return "text-yellow-400";
+  if (status === "active") {
+    return "text-[#00c98b]";
+  }
+
+  if (status === "trial") {
+    return "text-yellow-400";
+  }
+
+  if (status === "deactivated") {
+    return "text-orange-400";
+  }
 
   if (
     status === "expired" ||
@@ -161,19 +226,35 @@ export default function Admin() {
   const [section, setSection] =
     useState<AdminSection>("overview");
 
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [loading, setLoading] =
+    useState(false);
+
+  const [error, setError] =
+    useState("");
 
   const [overview, setOverview] =
     useState<OverviewData | null>(null);
 
-  const [users, setUsers] = useState<AdminUser[]>([]);
-  const [leads, setLeads] = useState<AdminLead[]>([]);
+  const [users, setUsers] =
+    useState<AdminUser[]>([]);
 
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [invitePlan, setInvitePlan] = useState("Basic");
-  const [inviteLoading, setInviteLoading] = useState(false);
-  const [inviteResult, setInviteResult] = useState("");
+  const [leads, setLeads] =
+    useState<AdminLead[]>([]);
+
+  const [invites, setInvites] =
+    useState<Invite[]>([]);
+
+  const [inviteEmail, setInviteEmail] =
+    useState("");
+
+  const [invitePlan, setInvitePlan] =
+    useState("Basic");
+
+  const [inviteLoading, setInviteLoading] =
+    useState(false);
+
+  const [inviteResult, setInviteResult] =
+    useState("");
 
   async function loadData() {
     setLoading(true);
@@ -181,21 +262,41 @@ export default function Admin() {
 
     try {
       if (section === "overview") {
-        const result = await adminRequest("overview");
-        setOverview(result.overview || null);
+        const result =
+          await adminRequest(
+            "overview"
+          );
+
+        setOverview(
+          result.overview || null
+        );
       }
 
-      if (
-        section === "users" ||
-        section === "links"
-      ) {
-        const result = await adminRequest("users");
-        setUsers(result.users || []);
+      if (section === "users") {
+        const result =
+          await adminRequest("users");
+
+        setUsers(
+          result.users || []
+        );
+      }
+
+      if (section === "links") {
+        const result =
+          await adminRequest("invites");
+
+        setInvites(
+          result.invites || []
+        );
       }
 
       if (section === "leads") {
-        const result = await adminRequest("leads");
-        setLeads(result.leads || []);
+        const result =
+          await adminRequest("leads");
+
+        setLeads(
+          result.leads || []
+        );
       }
     } catch (err) {
       setError(
@@ -214,7 +315,9 @@ export default function Admin() {
 
   async function createInvite() {
     const email =
-      inviteEmail.trim().toLowerCase();
+      inviteEmail
+        .trim()
+        .toLowerCase();
 
     if (!email) {
       setInviteResult(
@@ -225,18 +328,20 @@ export default function Admin() {
 
     setInviteLoading(true);
     setInviteResult("");
+    setError("");
 
     try {
-      const result = await adminRequest(
-        "create_invite",
-        {
-          method: "POST",
-          body: {
-            email,
-            plan: invitePlan,
-          },
-        }
-      );
+      const result =
+        await adminRequest(
+          "create_invite",
+          {
+            method: "POST",
+            body: {
+              email,
+              plan: invitePlan,
+            },
+          }
+        );
 
       const code =
         result.user?.invite_code ||
@@ -246,11 +351,20 @@ export default function Admin() {
 
       setInviteResult(
         code
-          ? `Invite created. Code: ${code}`
+          ? `Invite ready. Code: ${code}`
           : "Invite created successfully."
       );
 
-      await loadData();
+      if (section === "links") {
+        const refreshed =
+          await adminRequest(
+            "invites"
+          );
+
+        setInvites(
+          refreshed.invites || []
+        );
+      }
     } catch (err) {
       setInviteResult(
         err instanceof Error
@@ -271,27 +385,26 @@ export default function Admin() {
     setError("");
 
     try {
-      await adminRequest("set_user", {
-        method: "POST",
-        body: {
-          id: user.id,
-          action,
-          plan: plan || user.plan || "Basic",
-          is_active:
-            action === "cancel"
-              ? false
-              : action === "trial" ||
-                action === "renew" ||
-                action === "upgrade"
-              ? true
-              : user.is_active,
-        },
-      });
+      await adminRequest(
+        "set_user",
+        {
+          method: "POST",
+          body: {
+            id: user.id,
+            action,
+            ...(plan
+              ? { plan }
+              : {}),
+          },
+        }
+      );
 
       const result =
         await adminRequest("users");
 
-      setUsers(result.users || []);
+      setUsers(
+        result.users || []
+      );
     } catch (err) {
       setError(
         err instanceof Error
@@ -344,6 +457,7 @@ export default function Admin() {
                     : ""
                 }
               />
+
               Refresh
             </button>
           </div>
@@ -355,6 +469,7 @@ export default function Admin() {
           <div className="flex gap-1 overflow-x-auto py-2">
             {sections.map((item) => {
               const Icon = item.icon;
+
               const active =
                 section === item.id;
 
@@ -400,12 +515,22 @@ export default function Admin() {
             users={users}
             loading={loading}
             inviteEmail={inviteEmail}
-            setInviteEmail={setInviteEmail}
+            setInviteEmail={
+              setInviteEmail
+            }
             invitePlan={invitePlan}
-            setInvitePlan={setInvitePlan}
-            inviteLoading={inviteLoading}
-            inviteResult={inviteResult}
-            createInvite={createInvite}
+            setInvitePlan={
+              setInvitePlan
+            }
+            inviteLoading={
+              inviteLoading
+            }
+            inviteResult={
+              inviteResult
+            }
+            createInvite={
+              createInvite
+            }
             updateUser={updateUser}
           />
         )}
@@ -419,28 +544,38 @@ export default function Admin() {
 
         {section === "links" && (
           <LinksSection
-            users={users}
+            invites={invites}
             inviteEmail={inviteEmail}
-            setInviteEmail={setInviteEmail}
+            setInviteEmail={
+              setInviteEmail
+            }
             invitePlan={invitePlan}
-            setInvitePlan={setInvitePlan}
-            inviteLoading={inviteLoading}
-            inviteResult={inviteResult}
-            createInvite={createInvite}
+            setInvitePlan={
+              setInvitePlan
+            }
+            inviteLoading={
+              inviteLoading
+            }
+            inviteResult={
+              inviteResult
+            }
+            createInvite={
+              createInvite
+            }
           />
         )}
 
         {section === "referrals" && (
           <Placeholder
             title="Referrals"
-            description="Referral tracking records."
+            description="Referral tracking records are available through the admin system."
           />
         )}
 
         {section === "resellers" && (
           <Placeholder
             title="Resellers"
-            description="Reseller commission records."
+            description="Reseller commission records are available through the admin system."
           />
         )}
       </main>
@@ -456,7 +591,11 @@ function Overview({
   loading: boolean;
 }) {
   const cards = [
-    ["Users", data?.users ?? "—", Users],
+    [
+      "Users",
+      data?.users ?? "—",
+      Users,
+    ],
     [
       "Active Users",
       data?.activeUsers ?? "—",
@@ -518,7 +657,59 @@ function Overview({
           )
         )}
       </div>
+
+      {data && (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <InfoBox
+            label="Demand Leads"
+            value={
+              data.demandLeads ?? 0
+            }
+          />
+
+          <InfoBox
+            label="Supply Leads"
+            value={
+              data.supplyLeads ?? 0
+            }
+          />
+
+          <InfoBox
+            label="Referral Links"
+            value={
+              data.referralLinks ?? 0
+            }
+          />
+
+          <InfoBox
+            label="Subscriptions"
+            value={
+              data.subscriptions ?? 0
+            }
+          />
+        </div>
+      )}
     </section>
+  );
+}
+
+function InfoBox({
+  label,
+  value,
+}: {
+  label: string;
+  value: number;
+}) {
+  return (
+    <div className="rounded-xl border border-[#272727] bg-[#141414] p-4">
+      <p className="text-xs text-[#777]">
+        {label}
+      </p>
+
+      <p className="mt-2 text-xl font-semibold">
+        {value}
+      </p>
+    </div>
   );
 }
 
@@ -537,9 +728,13 @@ function UsersSection({
   users: AdminUser[];
   loading: boolean;
   inviteEmail: string;
-  setInviteEmail: (v: string) => void;
+  setInviteEmail: (
+    v: string
+  ) => void;
   invitePlan: string;
-  setInvitePlan: (v: string) => void;
+  setInvitePlan: (
+    v: string
+  ) => void;
   inviteLoading: boolean;
   inviteResult: string;
   createInvite: () => void;
@@ -563,12 +758,22 @@ function UsersSection({
 
       <InviteForm
         inviteEmail={inviteEmail}
-        setInviteEmail={setInviteEmail}
+        setInviteEmail={
+          setInviteEmail
+        }
         invitePlan={invitePlan}
-        setInvitePlan={setInvitePlan}
-        inviteLoading={inviteLoading}
-        inviteResult={inviteResult}
-        createInvite={createInvite}
+        setInvitePlan={
+          setInvitePlan
+        }
+        inviteLoading={
+          inviteLoading
+        }
+        inviteResult={
+          inviteResult
+        }
+        createInvite={
+          createInvite
+        }
       />
 
       {loading && (
@@ -582,7 +787,9 @@ function UsersSection({
           <UserCard
             key={String(user.id)}
             user={user}
-            updateUser={updateUser}
+            updateUser={
+              updateUser
+            }
           />
         ))}
 
@@ -607,13 +814,23 @@ function UserCard({
     plan?: string
   ) => void;
 }) {
+  const status =
+    getStatus(user).toLowerCase();
+
+  const active =
+    user.is_active &&
+    status !== "deactivated" &&
+    status !== "cancelled" &&
+    status !== "expired";
+
   return (
     <div className="rounded-xl border border-[#272727] bg-[#141414] p-4">
       <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
             <p className="break-all text-sm font-semibold">
-              {user.email || "No email"}
+              {user.email ||
+                "No email"}
             </p>
 
             {user.name && (
@@ -641,7 +858,8 @@ function UserCard({
               <span>
                 Plan:{" "}
                 <strong>
-                  {user.plan || "Basic"}
+                  {user.plan ||
+                    "Basic"}
                 </strong>
               </span>
             </div>
@@ -651,23 +869,31 @@ function UserCard({
         <div className="grid gap-2 sm:grid-cols-3">
           <DateBox
             label="Trial Start"
-            value={user.trial_start}
+            value={
+              user.trial_start
+            }
           />
 
           <DateBox
             label="Trial Expiry"
-            value={user.trial_end}
+            value={
+              user.trial_end
+            }
           />
 
           <DateBox
             label="Subscription Expiry"
-            value={user.subscription_end}
+            value={
+              user.subscription_end
+            }
           />
         </div>
 
         <div className="flex flex-wrap gap-2 border-t border-[#252525] pt-3">
           <select
-            defaultValue={user.plan || "Basic"}
+            defaultValue={
+              user.plan || "Basic"
+            }
             onChange={(event) =>
               updateUser(
                 user,
@@ -677,15 +903,24 @@ function UserCard({
             }
             className="rounded-lg border border-[#333] bg-[#101010] px-3 py-2 text-xs"
           >
-            <option>Basic</option>
-            <option>Premium</option>
-            <option>Gold</option>
+            <option>
+              Basic
+            </option>
+            <option>
+              Premium
+            </option>
+            <option>
+              Gold
+            </option>
           </select>
 
           <button
             type="button"
             onClick={() =>
-              updateUser(user, "trial")
+              updateUser(
+                user,
+                "trial"
+              )
             }
             className="rounded-lg border border-[#333] bg-[#181818] px-3 py-2 text-xs hover:bg-[#222]"
           >
@@ -695,7 +930,10 @@ function UserCard({
           <button
             type="button"
             onClick={() =>
-              updateUser(user, "renew")
+              updateUser(
+                user,
+                "renew"
+              )
             }
             className="rounded-lg border border-[#333] bg-[#181818] px-3 py-2 text-xs hover:bg-[#222]"
           >
@@ -708,7 +946,7 @@ function UserCard({
               updateUser(
                 user,
                 "upgrade",
-                user.plan || "Premium"
+                "Premium"
               )
             }
             className="rounded-lg bg-[#00c98b] px-3 py-2 text-xs font-semibold text-black hover:opacity-90"
@@ -716,15 +954,48 @@ function UserCard({
             Upgrade
           </button>
 
-          <button
-            type="button"
-            onClick={() =>
-              updateUser(user, "cancel")
-            }
-            className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300 hover:bg-red-500/20"
-          >
-            Cancel
-          </button>
+          {active ? (
+            <>
+              <button
+                type="button"
+                onClick={() =>
+                  updateUser(
+                    user,
+                    "cancel"
+                  )
+                }
+                className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300 hover:bg-red-500/20"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  updateUser(
+                    user,
+                    "deactivate"
+                  )
+                }
+                className="rounded-lg border border-orange-500/30 bg-orange-500/10 px-3 py-2 text-xs text-orange-300 hover:bg-orange-500/20"
+              >
+                Deactivate
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={() =>
+                updateUser(
+                  user,
+                  "activate"
+                )
+              }
+              className="rounded-lg border border-[#00c98b]/30 bg-[#00c98b]/10 px-3 py-2 text-xs text-[#00c98b] hover:bg-[#00c98b]/20"
+            >
+              Activate / Reactivate
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -768,9 +1039,13 @@ function InviteForm({
   createInvite,
 }: {
   inviteEmail: string;
-  setInviteEmail: (v: string) => void;
+  setInviteEmail: (
+    v: string
+  ) => void;
   invitePlan: string;
-  setInvitePlan: (v: string) => void;
+  setInvitePlan: (
+    v: string
+  ) => void;
   inviteLoading: boolean;
   inviteResult: string;
   createInvite: () => void;
@@ -785,7 +1060,9 @@ function InviteForm({
         <input
           value={inviteEmail}
           onChange={(event) =>
-            setInviteEmail(event.target.value)
+            setInviteEmail(
+              event.target.value
+            )
           }
           placeholder="customer@email.com"
           type="email"
@@ -795,13 +1072,21 @@ function InviteForm({
         <select
           value={invitePlan}
           onChange={(event) =>
-            setInvitePlan(event.target.value)
+            setInvitePlan(
+              event.target.value
+            )
           }
           className="h-10 rounded-lg border border-[#333] bg-[#101010] px-3 text-sm"
         >
-          <option>Basic</option>
-          <option>Premium</option>
-          <option>Gold</option>
+          <option>
+            Basic
+          </option>
+          <option>
+            Premium
+          </option>
+          <option>
+            Gold
+          </option>
         </select>
 
         <button
@@ -857,7 +1142,8 @@ function LeadsSection({
             className="rounded-xl border border-[#272727] bg-[#141414] p-4"
           >
             <p className="text-[10px] uppercase tracking-wider text-[#00c98b]">
-              {lead.type || "Opportunity"}
+              {lead.type ||
+                "Opportunity"}
             </p>
 
             <h3 className="mt-1 text-sm font-semibold">
@@ -873,19 +1159,24 @@ function LeadsSection({
 
             <div className="mt-3 flex flex-wrap gap-3 text-[11px] text-[#666]">
               <span>
-                Country: {lead.country || "—"}
+                Country:{" "}
+                {lead.country || "—"}
               </span>
 
               <span>
-                Source: {lead.source || "—"}
+                Source:{" "}
+                {lead.source || "—"}
               </span>
 
               <span>
-                Status: {lead.status || "—"}
+                Status:{" "}
+                {lead.status || "—"}
               </span>
 
               <span>
-                {dateText(lead.created_at)}
+                {dateText(
+                  lead.created_at
+                )}
               </span>
             </div>
           </div>
@@ -902,7 +1193,7 @@ function LeadsSection({
 }
 
 function LinksSection({
-  users,
+  invites,
   inviteEmail,
   setInviteEmail,
   invitePlan,
@@ -911,11 +1202,15 @@ function LinksSection({
   inviteResult,
   createInvite,
 }: {
-  users: AdminUser[];
+  invites: Invite[];
   inviteEmail: string;
-  setInviteEmail: (v: string) => void;
+  setInviteEmail: (
+    v: string
+  ) => void;
   invitePlan: string;
-  setInvitePlan: (v: string) => void;
+  setInvitePlan: (
+    v: string
+  ) => void;
   inviteLoading: boolean;
   inviteResult: string;
   createInvite: () => void;
@@ -939,37 +1234,59 @@ function LinksSection({
 
       <InviteForm
         inviteEmail={inviteEmail}
-        setInviteEmail={setInviteEmail}
+        setInviteEmail={
+          setInviteEmail
+        }
         invitePlan={invitePlan}
-        setInvitePlan={setInvitePlan}
-        inviteLoading={inviteLoading}
-        inviteResult={inviteResult}
-        createInvite={createInvite}
+        setInvitePlan={
+          setInvitePlan
+        }
+        inviteLoading={
+          inviteLoading
+        }
+        inviteResult={
+          inviteResult
+        }
+        createInvite={
+          createInvite
+        }
       />
 
       <div className="space-y-3">
-        {users.map((user) => {
-          if (!user.invite_code) return null;
-
+        {invites.map((invite) => {
           const link =
-            `${origin}/register?invite=` +
+            `${origin}/invite-register/` +
             encodeURIComponent(
-              user.invite_code
+              invite.token
             );
 
           return (
             <div
-              key={String(user.id)}
+              key={String(invite.id)}
               className="rounded-xl border border-[#272727] bg-[#141414] p-4"
             >
-              <p className="break-all text-sm font-medium">
-                {user.email}
-              </p>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="break-all text-sm font-medium">
+                    {invite.email}
+                  </p>
 
-              <p className="mt-1 text-xs text-[#777]">
-                {user.plan || "Basic"} •{" "}
-                {getStatus(user)}
-              </p>
+                  <p className="mt-1 text-xs text-[#777]">
+                    {invite.plan ||
+                      "Basic"}{" "}
+                    •{" "}
+                    {invite.used_at
+                      ? "Used"
+                      : "Unused"}
+                  </p>
+                </div>
+
+                <span className="text-[11px] text-[#666]">
+                  {dateText(
+                    invite.created_at
+                  )}
+                </span>
+              </div>
 
               <div className="mt-3 rounded-lg border border-[#252525] bg-[#101010] p-3">
                 <p className="break-all text-xs text-[#aaa]">
@@ -980,9 +1297,7 @@ function LinksSection({
           );
         })}
 
-        {users.every(
-          (user) => !user.invite_code
-        ) && (
+        {invites.length === 0 && (
           <div className="rounded-xl border border-[#272727] bg-[#141414] p-8 text-center text-sm text-[#666]">
             No invite links found.
           </div>
