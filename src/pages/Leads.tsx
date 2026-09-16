@@ -1,287 +1,612 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabase";
 
 type Lead = {
-  id: string | number;
-  title?: string | null;
-  description?: string | null;
-  company?: string | null;
-  name?: string | null;
-  country?: string | null;
-  skill?: string | null;
-  category?: string | null;
-  source?: string | null;
-  url?: string | null;
-  contact_url?: string | null;
-  contact?: string | null;
-  phone?: string | null;
-  email?: string | null;
-  whatsapp?: string | null;
-  created_at?: string | null;
-  posted_at?: string | null;
+  id: string;
+  leadType: "Demand" | "Supply" | "SaaS";
+
+  title?: string;
+  name?: string;
+  company?: string;
+
+  description?: string;
+  skill?: string;
+  category?: string;
+  subcategory?: string;
+
+  country?: string;
+  city?: string;
+
+  budget?: string;
+  currency?: string;
+  salary?: string;
+
+  contactName?: string;
+  email?: string;
+  phone?: string;
+  contact?: string;
+
+  source?: string;
+  openUrl?: string;
+
+  createdAt?: string;
 };
+
+const countries = [
+  "USA",
+  "Canada",
+  "UK",
+  "UAE",
+  "Qatar",
+  "Saudi Arabia",
+  "Kuwait",
+  "Oman",
+  "Bahrain",
+  "Australia",
+  "Norway",
+  "Finland",
+  "Pakistan",
+  "India",
+  "Bangladesh",
+];
 
 export default function Leads() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
 
+  const [typeFilter, setTypeFilter] = useState("All");
+  const [countryFilter, setCountryFilter] = useState("All");
+
   useEffect(() => {
-    fetchLeads();
+    loadLeads();
   }, []);
 
-  async function fetchLeads() {
+  async function loadLeads() {
     setLoading(true);
     setErrorMsg("");
 
-    const { data, error } = await supabase
-      .from("demand_leads")
-      .select("*")
-      .order("created_at", { ascending: false });
+    const [demandResult, supplyResult, saasResult] =
+      await Promise.all([
+        supabase.from("demand_lead").select("*"),
+        supabase.from("supply_leads").select("*"),
+        supabase.from("saas_leads").select("*"),
+      ]);
 
-    console.log("LEADS DATA:", data);
-    console.log("LEADS ERROR:", error);
+    const errors = [
+      demandResult.error,
+      supplyResult.error,
+      saasResult.error,
+    ].filter(Boolean);
 
-    if (error) {
-      setErrorMsg(error.message);
-      setLeads([]);
-    } else {
-      setLeads((data || []) as Lead[]);
+    if (errors.length > 0) {
+      console.error("Lead errors:", errors);
     }
 
+    const demand: Lead[] = (demandResult.data || []).map(
+      (row: any) => ({
+        id: row.id,
+        leadType: "Demand",
+
+        title: row.title || row.skill_needed || "Service Opportunity",
+        name: row.client_name,
+
+        description: row.description,
+        skill: row.skill_needed,
+        category: row.category,
+        subcategory: row.subcategory,
+
+        country: row.country,
+        city: row.city,
+
+        budget: row.budget,
+        currency: row.currency,
+
+        contactName: row.contact_name,
+        email: row.contact_email,
+        phone: row.contact_phone,
+
+        source: row.source,
+        openUrl: row.source,
+
+        createdAt: row.created_at,
+      })
+    );
+
+    const supply: Lead[] = (supplyResult.data || []).map(
+      (row: any) => ({
+        id: row.id,
+        leadType: "Supply",
+
+        title: row.job_title || row.position || "Job Opportunity",
+        name: row.company_name,
+        company: row.company_name,
+
+        description: row.description,
+        skill: row.required_skill,
+        category: row.category,
+        subcategory: row.subcategory,
+
+        country: row.country,
+        city: row.city,
+
+        salary: row.salary_range,
+
+        email: row.contact_email,
+        phone: row.contact_phone,
+
+        openUrl: row.apply_url || row.company_website,
+        source: row.company_website,
+
+        createdAt: row.created_at,
+      })
+    );
+
+    const saas: Lead[] = (saasResult.data || []).map(
+      (row: any) => ({
+        id: row.id,
+        leadType: "SaaS",
+
+        title: row.name || "SaaS Opportunity",
+        name: row.name,
+        company: row.platform,
+
+        description: row.description,
+        category: row.niche,
+
+        contact: row.contact,
+        email: row.content_email,
+
+        openUrl: row.landing_url,
+
+        createdAt: row.created_at,
+      })
+    );
+
+    setLeads([...demand, ...supply, ...saas]);
     setLoading(false);
+
+    if (errors.length === 3) {
+      setErrorMsg("Could not load leads. Please check database access.");
+    }
+  }
+
+  const filteredLeads = useMemo(() => {
+    return leads.filter((lead) => {
+      const typeMatches =
+        typeFilter === "All" || lead.leadType === typeFilter;
+
+      const countryMatches =
+        countryFilter === "All" ||
+        (lead.country || "").toLowerCase() ===
+          countryFilter.toLowerCase();
+
+      return typeMatches && countryMatches;
+    });
+  }, [leads, typeFilter, countryFilter]);
+
+  function openLink(url?: string) {
+    if (!url) return;
+
+    let finalUrl = url.trim();
+
+    if (
+      !finalUrl.startsWith("http://") &&
+      !finalUrl.startsWith("https://")
+    ) {
+      finalUrl = `https://${finalUrl}`;
+    }
+
+    window.open(finalUrl, "_blank", "noopener,noreferrer");
+  }
+
+  function openWhatsApp(phone?: string) {
+    if (!phone) return;
+
+    const cleanPhone = phone.replace(/[^\d+]/g, "");
+
+    window.open(
+      `https://wa.me/${cleanPhone.replace("+", "")}`,
+      "_blank",
+      "noopener,noreferrer"
+    );
+  }
+
+  function callPhone(phone?: string) {
+    if (!phone) return;
+    window.location.href = `tel:${phone}`;
+  }
+
+  function sendEmail(email?: string) {
+    if (!email) return;
+    window.location.href = `mailto:${email}`;
+  }
+
+  function formatDate(date?: string) {
+    if (!date) return "";
+
+    const parsed = new Date(date);
+
+    if (Number.isNaN(parsed.getTime())) return "";
+
+    return parsed.toLocaleDateString();
   }
 
   return (
     <div
       style={{
         minHeight: "100vh",
-        background: "#f5f5f5",
+        background: "#0b0b0b",
+        color: "#fff",
         padding: "24px",
-        color: "#111",
       }}
     >
-      <div style={{ maxWidth: "1100px", margin: "0 auto" }}>
-        <div
+      <div
+        style={{
+          maxWidth: "1200px",
+          margin: "0 auto",
+        }}
+      >
+        <h1
           style={{
-            background: "#111",
-            color: "#fff",
-            padding: "20px",
-            borderRadius: "10px",
-            marginBottom: "20px",
+            marginTop: 0,
+            marginBottom: 6,
+            fontSize: "28px",
           }}
         >
-          <h1 style={{ margin: 0 }}>Leads</h1>
+          Leads
+        </h1>
 
-          <p style={{ margin: "8px 0 0", color: "#ccc" }}>
-            Fresh opportunities matching your skills
-          </p>
+        <p
+          style={{
+            color: "#999",
+            marginTop: 0,
+            marginBottom: 24,
+          }}
+        >
+          Find real opportunities and contact them directly.
+        </p>
 
-          <div
+        {/* CATEGORY FILTER */}
+        <div
+          style={{
+            display: "flex",
+            gap: 8,
+            flexWrap: "wrap",
+            marginBottom: 14,
+          }}
+        >
+          {["All", "Demand", "Supply", "SaaS"].map((type) => (
+            <button
+              key={type}
+              onClick={() => setTypeFilter(type)}
+              style={{
+                padding: "9px 16px",
+                borderRadius: 8,
+                border: "1px solid #333",
+                background:
+                  typeFilter === type ? "#00c98b" : "#181818",
+                color:
+                  typeFilter === type ? "#000" : "#fff",
+                cursor: "pointer",
+                fontWeight: 600,
+              }}
+            >
+              {type}
+            </button>
+          ))}
+        </div>
+
+        {/* COUNTRY FILTER */}
+        <div style={{ marginBottom: 24 }}>
+          <select
+            value={countryFilter}
+            onChange={(e) => setCountryFilter(e.target.value)}
             style={{
-              marginTop: "14px",
-              display: "inline-block",
-              background: "#222",
-              padding: "8px 12px",
-              borderRadius: "6px",
+              width: "100%",
+              maxWidth: "320px",
+              padding: "11px 12px",
+              borderRadius: 8,
+              border: "1px solid #333",
+              background: "#181818",
+              color: "#fff",
+              fontSize: "15px",
             }}
           >
-            {loading ? "Loading..." : `${leads.length} leads found`}
-          </div>
+            <option value="All">All Countries</option>
+
+            {countries.map((country) => (
+              <option key={country} value={country}>
+                {country}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* STATUS */}
+        <div
+          style={{
+            color: "#aaa",
+            marginBottom: 16,
+          }}
+        >
+          {loading
+            ? "Loading leads..."
+            : `${filteredLeads.length} leads found`}
         </div>
 
         {errorMsg && (
           <div
             style={{
-              background: "#fff",
-              border: "1px solid #d00",
-              color: "#b00000",
-              padding: "15px",
-              borderRadius: "8px",
-              marginBottom: "20px",
+              background: "#251313",
+              border: "1px solid #6b2b2b",
+              color: "#ff8d8d",
+              padding: 14,
+              borderRadius: 8,
+              marginBottom: 16,
             }}
           >
-            <strong>Could not load leads</strong>
-            <div style={{ marginTop: "5px" }}>{errorMsg}</div>
+            {errorMsg}
           </div>
         )}
 
-        {!loading && !errorMsg && leads.length === 0 && (
+        {/* LEADS */}
+        {!loading && filteredLeads.length === 0 && (
           <div
             style={{
-              background: "#fff",
-              padding: "30px",
-              borderRadius: "10px",
+              background: "#151515",
+              border: "1px solid #292929",
+              borderRadius: 10,
+              padding: 30,
               textAlign: "center",
+              color: "#999",
             }}
           >
-            <h3>No leads found</h3>
-            <p style={{ color: "#666" }}>
-              No demand leads are currently available.
-            </p>
+            No leads found for this filter.
           </div>
         )}
 
-        <div style={{ display: "grid", gap: "16px" }}>
-          {leads.map((lead) => (
+        <div
+          style={{
+            display: "grid",
+            gap: 14,
+          }}
+        >
+          {filteredLeads.map((lead) => (
             <div
-              key={lead.id}
+              key={`${lead.leadType}-${lead.id}`}
               style={{
-                background: "#fff",
-                border: "1px solid #ddd",
-                borderRadius: "10px",
-                padding: "20px",
+                background: "#151515",
+                border: "1px solid #292929",
+                borderRadius: 10,
+                padding: 18,
               }}
             >
-              <h2 style={{ marginTop: 0 }}>
-                {lead.title || "Opportunity"}
-              </h2>
-
-              {lead.company && (
-                <p>
-                  <strong>Company:</strong> {lead.company}
-                </p>
-              )}
-
-              {lead.name && (
-                <p>
-                  <strong>Contact:</strong> {lead.name}
-                </p>
-              )}
-
-              {lead.country && (
-                <p>
-                  <strong>Country:</strong> {lead.country}
-                </p>
-              )}
-
-              {lead.skill && (
-                <p>
-                  <strong>Skill:</strong> {lead.skill}
-                </p>
-              )}
-
-              {lead.category && (
-                <p>
-                  <strong>Category:</strong> {lead.category}
-                </p>
-              )}
-
-              {lead.description && (
-                <div
-                  style={{
-                    background: "#f7f7f7",
-                    padding: "12px",
-                    borderRadius: "6px",
-                    margin: "12px 0",
-                    lineHeight: 1.5,
-                  }}
-                >
-                  {lead.description}
-                </div>
-              )}
-
+              {/* HEADER */}
               <div
                 style={{
                   display: "flex",
+                  justifyContent: "space-between",
+                  gap: 12,
                   flexWrap: "wrap",
-                  gap: "10px",
-                  marginTop: "15px",
                 }}
               >
-                {lead.url && (
-                  <a
-                    href={lead.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                <div>
+                  <div
                     style={{
-                      background: "#111",
-                      color: "#fff",
-                      padding: "9px 14px",
-                      borderRadius: "6px",
-                      textDecoration: "none",
+                      color: "#00c98b",
+                      fontSize: 12,
+                      fontWeight: 700,
+                      textTransform: "uppercase",
+                      marginBottom: 6,
                     }}
                   >
-                    View Opportunity
-                  </a>
-                )}
+                    {lead.leadType}
+                  </div>
 
-                {lead.contact_url && (
-                  <a
-                    href={lead.contact_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <h2
                     style={{
-                      background: "#333",
-                      color: "#fff",
-                      padding: "9px 14px",
-                      borderRadius: "6px",
-                      textDecoration: "none",
+                      margin: 0,
+                      fontSize: 20,
                     }}
                   >
-                    Contact
-                  </a>
-                )}
+                    {lead.title || "Opportunity"}
+                  </h2>
+                </div>
 
-                {lead.whatsapp && (
-                  <a
-                    href={lead.whatsapp}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                {lead.createdAt && (
+                  <div
                     style={{
-                      background: "#222",
-                      color: "#fff",
-                      padding: "9px 14px",
-                      borderRadius: "6px",
-                      textDecoration: "none",
+                      color: "#777",
+                      fontSize: 12,
                     }}
                   >
-                    WhatsApp
-                  </a>
-                )}
-
-                {lead.phone && (
-                  <a
-                    href={`tel:${lead.phone}`}
-                    style={{
-                      background: "#222",
-                      color: "#fff",
-                      padding: "9px 14px",
-                      borderRadius: "6px",
-                      textDecoration: "none",
-                    }}
-                  >
-                    Call
-                  </a>
-                )}
-
-                {lead.email && (
-                  <a
-                    href={`mailto:${lead.email}`}
-                    style={{
-                      background: "#222",
-                      color: "#fff",
-                      padding: "9px 14px",
-                      borderRadius: "6px",
-                      textDecoration: "none",
-                    }}
-                  >
-                    Email
-                  </a>
+                    {formatDate(lead.createdAt)}
+                  </div>
                 )}
               </div>
 
-              {lead.source && (
-                <p
+              {/* DETAILS */}
+              <div
+                style={{
+                  marginTop: 14,
+                  display: "flex",
+                  gap: 8,
+                  flexWrap: "wrap",
+                }}
+              >
+                {lead.country && (
+                  <span style={tagStyle}>
+                    🌍 {lead.country}
+                  </span>
+                )}
+
+                {lead.city && (
+                  <span style={tagStyle}>
+                    📍 {lead.city}
+                  </span>
+                )}
+
+                {lead.skill && (
+                  <span style={tagStyle}>
+                    🛠 {lead.skill}
+                  </span>
+                )}
+
+                {lead.category && (
+                  <span style={tagStyle}>
+                    {lead.category}
+                  </span>
+                )}
+              </div>
+
+              {lead.name && (
+                <div
                   style={{
-                    marginTop: "15px",
-                    marginBottom: 0,
-                    fontSize: "13px",
-                    color: "#777",
+                    marginTop: 14,
+                    color: "#ddd",
                   }}
                 >
-                  Source: {lead.source}
+                  <strong>
+                    {lead.leadType === "Supply"
+                      ? "Company:"
+                      : "Name:"}
+                  </strong>{" "}
+                  {lead.name}
+                </div>
+              )}
+
+              {lead.description && (
+                <p
+                  style={{
+                    color: "#bbb",
+                    lineHeight: 1.55,
+                    marginBottom: 0,
+                  }}
+                >
+                  {lead.description}
                 </p>
+              )}
+
+              {/* MONEY */}
+              {(lead.budget || lead.salary) && (
+                <div
+                  style={{
+                    marginTop: 12,
+                    color: "#00c98b",
+                    fontWeight: 600,
+                  }}
+                >
+                  {lead.budget &&
+                    `Budget: ${
+                      lead.currency || ""
+                    } ${lead.budget}`}
+
+                  {lead.salary &&
+                    `Salary: ${lead.salary}`}
+                </div>
+              )}
+
+              {/* CONTACT */}
+              {(lead.contactName ||
+                lead.email ||
+                lead.phone ||
+                lead.contact) && (
+                <div
+                  style={{
+                    marginTop: 16,
+                    paddingTop: 14,
+                    borderTop: "1px solid #292929",
+                  }}
+                >
+                  {lead.contactName && (
+                    <div
+                      style={{
+                        color: "#ddd",
+                        marginBottom: 8,
+                      }}
+                    >
+                      Contact: {lead.contactName}
+                    </div>
+                  )}
+
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: 8,
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    {lead.phone && (
+                      <>
+                        <button
+                          onClick={() =>
+                            callPhone(lead.phone)
+                          }
+                          style={buttonStyle}
+                        >
+                          📞 Call
+                        </button>
+
+                        <button
+                          onClick={() =>
+                            openWhatsApp(lead.phone)
+                          }
+                          style={buttonStyle}
+                        >
+                          WhatsApp
+                        </button>
+                      </>
+                    )}
+
+                    {lead.email && (
+                      <button
+                        onClick={() =>
+                          sendEmail(lead.email)
+                        }
+                        style={buttonStyle}
+                      >
+                        ✉ Email
+                      </button>
+                    )}
+
+                    {lead.contact &&
+                      !lead.email &&
+                      !lead.phone && (
+                        <button
+                          onClick={() =>
+                            openLink(lead.contact)
+                          }
+                          style={buttonStyle}
+                        >
+                          Contact
+                        </button>
+                      )}
+                  </div>
+                </div>
+              )}
+
+              {/* SOURCE / APPLY */}
+              {lead.openUrl && (
+                <button
+                  onClick={() =>
+                    openLink(lead.openUrl)
+                  }
+                  style={{
+                    ...buttonStyle,
+                    marginTop: 14,
+                    background: "#00c98b",
+                    color: "#000",
+                    borderColor: "#00c98b",
+                    fontWeight: 700,
+                  }}
+                >
+                  {lead.leadType === "Supply"
+                    ? "Apply / Open Opportunity"
+                    : lead.leadType === "SaaS"
+                    ? "Open Landing Page"
+                    : "Open Source"}
+                </button>
               )}
             </div>
           ))}
@@ -290,3 +615,21 @@ export default function Leads() {
     </div>
   );
 }
+
+const tagStyle = {
+  background: "#202020",
+  border: "1px solid #333",
+  color: "#ccc",
+  padding: "5px 9px",
+  borderRadius: 6,
+  fontSize: 12,
+};
+
+const buttonStyle = {
+  padding: "9px 13px",
+  borderRadius: 7,
+  border: "1px solid #444",
+  background: "#222",
+  color: "#fff",
+  cursor: "pointer",
+};
