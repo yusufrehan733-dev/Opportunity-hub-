@@ -2,9 +2,11 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import Login from "./Login";
 import Register from "./Register";
 import ResetPassword from "./ResetPassword";
+
 import Dashboard from "./pages/Dashboard";
 import Skills from "./pages/Skills";
 import Leads from "./pages/Leads";
+import Reseller from "./pages/Reseller";
 
 export default function App() {
   return (
@@ -18,6 +20,7 @@ export default function App() {
       <Route path="/dashboard" element={<Dashboard />} />
       <Route path="/dashboard/skills" element={<Skills />} />
       <Route path="/dashboard/leads" element={<Leads />} />
+      <Route path="/dashboard/reseller" element={<Reseller />} />
 
       {/* DEFAULT */}
       <Route path="/" element={<Navigate to="/login" replace />} />
