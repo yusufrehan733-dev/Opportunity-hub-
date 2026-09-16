@@ -1,10 +1,13 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Briefcase, ArrowRight, Shield, Clock, CheckCircle } from "lucide-react";
-import { Input } from "./input";
-import { Button } from "./button";
-import { Label } from "./label";
+import {
+  Briefcase,
+  ArrowRight,
+  Shield,
+  Clock,
+  CheckCircle,
+} from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "./supabase";
 
@@ -66,7 +69,7 @@ export default function InviteRegister() {
     setSubmitting(true);
 
     try {
-      const res = await fetch(`/api/auth/invite/${token}/register`, {
+      const res = await fetch(`/api/auth/invite/${token}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -91,10 +94,11 @@ export default function InviteRegister() {
         return;
       }
 
-      const { error: loginError } = await supabase?.auth.signInWithPassword({
-        email,
-        password,
-      }) || { error: new Error("Supabase is not configured") };
+      const { error: loginError } =
+        (await supabase?.auth.signInWithPassword({
+          email,
+          password,
+        })) || { error: new Error("Supabase is not configured") };
 
       if (loginError) {
         toast.error(
@@ -272,4 +276,4 @@ export default function InviteRegister() {
       </div>
     </div>
   );
-}
+            }
