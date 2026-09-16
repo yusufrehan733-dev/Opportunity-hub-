@@ -79,6 +79,14 @@ function getStatus(user: any) {
 
   let status = user.subscription_status || "trial";
 
+  /*
+   * Deactivated is an explicit admin access state.
+   * It must remain different from cancellation.
+   */
+  if (status === "deactivated") {
+    return "deactivated";
+  }
+
   if (
     status !== "cancelled" &&
     subscriptionEnd &&
@@ -97,6 +105,16 @@ function getStatus(user: any) {
   }
 
   return status;
+}
+
+function isUserActive(user: any) {
+  const status = getStatus(user);
+
+  return (
+    status !== "expired" &&
+    status !== "cancelled" &&
+    status !== "deactivated"
+  );
 }
 
 function getOrigin(req: any) {
@@ -148,10 +166,14 @@ export default async function handler(
       ] = await Promise.all([
         supabase
           .from("users")
-          .select("id", {
-            count: "exact",
-            head: true,
-          }),
+          .select(
+            `
+              id,
+              subscription_status,
+              subscription_end,
+              trial_end
+            `
+          ),
 
         supabase
           .from("demand_lead")
@@ -201,11 +223,17 @@ export default async function handler(
         });
       }
 
+      const allUsers =
+        usersResult.data || [];
+
+      const activeUsers =
+        allUsers.filter(isUserActive).length;
+
       return res.status(200).json({
         success: true,
         overview: {
-          users: usersResult.count || 0,
-          activeUsers: usersResult.count || 0,
+          users: allUsers.length,
+          activeUsers,
           activeLeads:
             (demandResult.count || 0) +
             (supplyResult.count || 0),
@@ -226,9 +254,6 @@ export default async function handler(
 
     /*
      * USERS
-     *
-     * Subscription/trial information comes from
-     * the users table.
      */
     if (
       req.method === "GET" &&
@@ -265,9 +290,6 @@ export default async function handler(
         });
       }
 
-      /*
-       * Get actual Supabase Auth emails.
-       */
       let authUsers: any[] = [];
 
       try {
@@ -314,8 +336,7 @@ export default async function handler(
             status,
 
             is_active:
-              status !== "expired" &&
-              status !== "cancelled",
+              isUserActive(user),
           };
         }
       );
@@ -362,14 +383,10 @@ export default async function handler(
           demandResult.error ||
           supplyResult.error;
 
-        console.error(
-          "Admin leads error:",
-          error
-        );
-
         return res.status(500).json({
           success: false,
-          error: error?.message ||
+          error:
+            error?.message ||
             "Failed to load leads",
         });
       }
@@ -455,11 +472,7 @@ export default async function handler(
     }
 
     /*
-     * INVITES
-     *
-     * Supports both:
-     * action=invites
-     * action=links
+     * INVITES / REFERRAL LINKS
      */
     if (
       req.method === "GET" &&
@@ -486,11 +499,6 @@ export default async function handler(
           });
 
       if (error) {
-        console.error(
-          "Admin invites error:",
-          error
-        );
-
         return res.status(500).json({
           success: false,
           error: error.message,
@@ -571,9 +579,6 @@ export default async function handler(
         });
       }
 
-      /*
-       * One email = one invite.
-       */
       const {
         data: existing,
         error: existingError,
@@ -586,11 +591,6 @@ export default async function handler(
         .maybeSingle();
 
       if (existingError) {
-        console.error(
-          "Existing invite lookup:",
-          existingError
-        );
-
         return res.status(500).json({
           success: false,
           error: existingError.message,
@@ -630,11 +630,6 @@ export default async function handler(
         .single();
 
       if (error) {
-        console.error(
-          "Create invite error:",
-          error
-        );
-
         return res.status(500).json({
           success: false,
           error: error.message,
@@ -653,14 +648,14 @@ export default async function handler(
     }
 
     /*
-     * SET USER
+     * USER ACTIONS
      *
-     * Supports:
      * trial
      * renew
      * upgrade
      * cancel
-     * direct plan changes
+     * deactivate
+     * activate
      */
     if (
       req.method === "POST" &&
@@ -677,15 +672,36 @@ export default async function handler(
         });
       }
 
+      const requestedAction =
+        typeof body.action === "string"
+          ? body.action
+          : "";
+
       const newPlan =
         typeof body.plan === "string"
           ? body.plan
           : undefined;
 
-      const requestedAction =
-        typeof body.action === "string"
-          ? body.action
-          : "";
+      const allowedActions = [
+        "trial",
+        "renew",
+        "upgrade",
+        "cancel",
+        "deactivate",
+        "activate",
+      ];
+
+      if (
+        !allowedActions.includes(
+          requestedAction
+        )
+      ) {
+        return res.status(400).json({
+          success: false,
+          error:
+            "Invalid user action",
+        });
+      }
 
       if (
         newPlan &&
@@ -727,12 +743,8 @@ export default async function handler(
         any
       > = {};
 
-      if (newPlan) {
-        updates.plan = newPlan;
-      }
-
       /*
-       * TRIAL
+       * START / RESET 14-DAY TRIAL
        */
       if (
         requestedAction === "trial"
@@ -748,7 +760,7 @@ export default async function handler(
       }
 
       /*
-       * RENEW
+       * RENEW 30 DAYS
        */
       if (
         requestedAction === "renew"
@@ -773,7 +785,7 @@ export default async function handler(
       }
 
       /*
-       * UPGRADE
+       * CHANGE / UPGRADE PLAN
        */
       if (
         requestedAction === "upgrade"
@@ -787,7 +799,6 @@ export default async function handler(
         }
 
         updates.plan = newPlan;
-
         updates.subscription_status =
           "active";
 
@@ -809,6 +820,8 @@ export default async function handler(
 
       /*
        * CANCEL
+       *
+       * Cancellation is NOT deactivation.
        */
       if (
         requestedAction === "cancel"
@@ -818,34 +831,46 @@ export default async function handler(
       }
 
       /*
-       * Existing Admin UI may send is_active.
+       * DEACTIVATE
+       *
+       * Access is disabled while preserving
+       * subscription/trial dates.
        */
       if (
-        typeof body.is_active ===
-        "boolean"
+        requestedAction ===
+        "deactivate"
       ) {
-        if (body.is_active) {
-          updates.subscription_status =
-            "active";
+        updates.subscription_status =
+          "deactivated";
+      }
 
-          const currentEnd =
-            currentUser.subscription_end
-              ? new Date(
-                  currentUser.subscription_end
-                )
-              : null;
+      /*
+       * ACTIVATE / REACTIVATE
+       */
+      if (
+        requestedAction === "activate"
+      ) {
+        updates.subscription_status =
+          "active";
 
-          if (
-            !currentEnd ||
-            currentEnd < now
-          ) {
-            updates.subscription_end =
-              addDays(now, 30);
-          }
-        } else {
-          updates.subscription_status =
-            "cancelled";
+        const currentEnd =
+          currentUser.subscription_end
+            ? new Date(
+                currentUser.subscription_end
+              )
+            : null;
+
+        if (
+          !currentEnd ||
+          currentEnd < now
+        ) {
+          updates.subscription_end =
+            addDays(now, 30);
         }
+      }
+
+      if (newPlan) {
+        updates.plan = newPlan;
       }
 
       const {
@@ -870,23 +895,20 @@ export default async function handler(
         });
       }
 
+      const status =
+        getStatus(data);
+
       return res.status(200).json({
         success: true,
         user: {
           ...data,
-          status: getStatus(data),
+          status,
           is_active:
-            getStatus(data) !==
-              "expired" &&
-            getStatus(data) !==
-              "cancelled",
+            isUserActive(data),
         },
       });
     }
 
-    /*
-     * Unknown action
-     */
     return res.status(404).json({
       success: false,
       error:
