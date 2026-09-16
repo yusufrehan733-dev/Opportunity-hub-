@@ -32,13 +32,21 @@ export function useLogin() {
       email: string;
       password: string;
     }) => {
+      const email = data.email.trim().toLowerCase();
+
+      if (!email || !data.password) {
+        throw new Error("Please enter email and password.");
+      }
+
       const { data: result, error } =
         await supabase.auth.signInWithPassword({
-          email: data.email.trim().toLowerCase(),
+          email,
           password: data.password,
         });
 
-      if (error) throw error;
+      if (error) {
+        throw new Error("Invalid email or password.");
+      }
 
       if (!result.user) {
         throw new Error("Login succeeded but no user was returned.");
@@ -90,10 +98,58 @@ export function useRegister() {
 
     onSuccess: (result) => {
       queryClient.setQueryData(["user"], result.user);
-
       queryClient.invalidateQueries({
         queryKey: ["trial-status"],
       });
+    },
+  });
+}
+
+export function useResetPassword() {
+  return useMutation({
+    mutationFn: async (email: string) => {
+      const cleanEmail = email.trim().toLowerCase();
+
+      if (!cleanEmail) {
+        throw new Error("Please enter your email address.");
+      }
+
+      const { error } = await supabase.auth.resetPasswordForEmail(
+        cleanEmail,
+        {
+          redirectTo: `${window.location.origin}/reset-password`,
+        }
+      );
+
+      if (error) throw error;
+    },
+  });
+}
+
+export function useUpdatePassword() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (password: string) => {
+      if (password.length < 6) {
+        throw new Error("Password must be at least 6 characters.");
+      }
+
+      const { data, error } = await supabase.auth.updateUser({
+        password,
+      });
+
+      if (error) throw error;
+
+      if (!data.user) {
+        throw new Error("Password could not be updated.");
+      }
+
+      return data.user;
+    },
+
+    onSuccess: (user) => {
+      queryClient.setQueryData(["user"], user);
     },
   });
 }
