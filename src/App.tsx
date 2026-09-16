@@ -10,6 +10,7 @@ import Leads from "./pages/Leads";
 import Reseller from "./pages/Reseller";
 import Contact from "./pages/Contact";
 import Referral from "./pages/Referral";
+import Admin from "./pages/Admin";
 
 export default function App() {
   return (
@@ -26,10 +27,19 @@ export default function App() {
       <Route path="/dashboard/reseller" element={<Reseller />} />
       <Route path="/dashboard/contact" element={<Contact />} />
       <Route path="/dashboard/referral" element={<Referral />} />
+      <Route path="/dashboard/admin" element={<Admin />} />
 
       {/* DEFAULT */}
-      <Route path="/" element={<Navigate to="/login" replace />} />
-      <Route path="*" element={<Navigate to="/login" replace />} />
+      <Route
+        path="/"
+        element={<Navigate to="/login" replace />}
+      />
+
+      {/* UNKNOWN ROUTES */}
+      <Route
+        path="*"
+        element={<Navigate to="/login" replace />}
+      />
     </Routes>
   );
 }
