@@ -193,7 +193,9 @@ export default async function handler(
   res: any
 ) {
   /*
-   * Allow Vercel/browser preflight requests.
+   * =========================
+   * OPTIONS / PREFLIGHT
+   * =========================
    */
   if (req.method === "OPTIONS") {
     res.setHeader(
@@ -213,9 +215,9 @@ export default async function handler(
   }
 
   /*
-   * Create Supabase client only when the
-   * request actually reaches this function.
-   * This prevents a module-load crash.
+   * =========================
+   * SUPABASE
+   * =========================
    */
   let supabase: any;
 
@@ -235,6 +237,11 @@ export default async function handler(
     });
   }
 
+  /*
+   * =========================
+   * ADMIN AUTH
+   * =========================
+   */
   const admin = await requireAdmin(
     req,
     res,
@@ -285,12 +292,6 @@ export default async function handler(
           isUserActive
         ).length;
 
-      /*
-       * Secondary counts are deliberately
-       * independent. If one optional table
-       * has an issue, the Admin dashboard
-       * still loads.
-       */
       let demandLeads = 0;
       let supplyLeads = 0;
       let referralLinks = 0;
@@ -371,6 +372,11 @@ export default async function handler(
      * =========================
      * USERS
      * =========================
+     *
+     * IMPORTANT:
+     * subscription_app has intentionally
+     * been removed because that column
+     * does not exist in users.
      */
     if (
       req.method === "GET" &&
@@ -386,7 +392,6 @@ export default async function handler(
               plan,
               subscription_status,
               subscription_end,
-              subscription_app,
               trial_start,
               trial_end,
               invite_code,
@@ -592,7 +597,7 @@ export default async function handler(
 
     /*
      * =========================
-     * INVITES
+     * INVITES / LINKS
      * =========================
      */
     if (
@@ -873,6 +878,9 @@ export default async function handler(
         any
       > = {};
 
+      /*
+       * START / RESET TRIAL
+       */
       if (
         requestedAction === "trial"
       ) {
@@ -886,6 +894,9 @@ export default async function handler(
           "trial";
       }
 
+      /*
+       * RENEW FOR 30 DAYS
+       */
       if (
         requestedAction === "renew"
       ) {
@@ -908,6 +919,9 @@ export default async function handler(
           addDays(start, 30);
       }
 
+      /*
+       * UPGRADE / CHANGE PLAN
+       */
       if (
         requestedAction === "upgrade"
       ) {
@@ -939,6 +953,9 @@ export default async function handler(
         }
       }
 
+      /*
+       * CANCEL
+       */
       if (
         requestedAction === "cancel"
       ) {
@@ -946,6 +963,9 @@ export default async function handler(
           "cancelled";
       }
 
+      /*
+       * DEACTIVATE
+       */
       if (
         requestedAction ===
         "deactivate"
@@ -954,6 +974,9 @@ export default async function handler(
           "deactivated";
       }
 
+      /*
+       * ACTIVATE / REACTIVATE
+       */
       if (
         requestedAction === "activate"
       ) {
@@ -977,12 +1000,16 @@ export default async function handler(
       }
 
       /*
-       * Allow plan to accompany an action.
+       * Allow a plan to accompany
+       * any supported action.
        */
       if (newPlan) {
         updates.plan = newPlan;
       }
 
+      /*
+       * Update user.
+       */
       const {
         data,
         error,
@@ -993,46 +1020,4 @@ export default async function handler(
         .select()
         .single();
 
-      if (error) {
-        console.error(
-          "Set user error:",
-          error
-        );
-
-        return sendJson(res, 500, {
-          success: false,
-          error: error.message,
-        });
-      }
-
-      return sendJson(res, 200, {
-        success: true,
-        user: {
-          ...data,
-          status:
-            getStatus(data),
-          is_active:
-            isUserActive(data),
-        },
-      });
-    }
-
-    return sendJson(res, 404, {
-      success: false,
-      error:
-        `Unknown admin action: ${action}`,
-    });
-  } catch (error: any) {
-    console.error(
-      "Admin API error:",
-      error
-    );
-
-    return sendJson(res, 500, {
-      success: false,
-      error:
-        error?.message ||
-        "Admin request failed",
-    });
-  }
-}
+   
