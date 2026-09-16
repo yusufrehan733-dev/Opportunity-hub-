@@ -32,7 +32,6 @@ type AdminUser = {
   status?: string | null;
   subscription_status?: string | null;
   subscription_end?: string | null;
-  subscription_app?: string | null;
   trial_start?: string | null;
   trial_end?: string | null;
   created_at?: string;
@@ -40,837 +39,14 @@ type AdminUser = {
 
 type AdminLead = {
   id: string;
-  type: string | null;
-  title: string | null;
-  client_name: string | null;
-  skill_needed: string | null;
-  country: string | null;
-  source: string | null;
-  created_at: string;
-  status: string | null;
-};
-
-type OverviewData = {
-  users: number;
-  activeUsers: number;
-  activeLeads: number;
-  resellers: number;
-  demandLeads?: number;
-  supplyLeads?: number;
-  referrals?: number;
-  referralLinks?: number;
-  subscriptions?: number;
-};
-
-const sections: {
-  id: AdminSection;
-  label: string;
-  icon: typeof Users;
-}[] = [
-  { id: "overview", label: "Overview", icon: ShieldCheck },
-  { id: "users", label: "Users", icon: Users },
-  { id: "leads", label: "Leads", icon: Target },
-  { id: "referrals", label: "Referrals", icon: UserPlus },
-  { id: "resellers", label: "Resellers", icon: Store },
-  { id: "links", label: "Referral Links", icon: Link2 },
-];
-
-async function adminRequest(
-  action: string,
-  options?: {
-    method?: "GET" | "POST";
-    body?: Record<string, unknown>;
-  }
-) {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  if (!session?.access_token) {
-    throw new Error("You must be logged in as admin.");
-  }
-
-  const method = options?.method || "GET";
-
-  const response = await fetch(
-    `/api/admin?action=${encodeURIComponent(action)}`,
-    {
-      method,
-      headers: {
-        Authorization: `Bearer ${session.access_token}`,
-        "Content-Type": "application/json",
-      },
-      ...(method === "POST"
-        ? {
-            body: JSON.stringify(options?.body || {}),
-          }
-        : {}),
-    }
-  );
-
-  let result: any;
-
-  try {
-    result = await response.json();
-  } catch {
-    throw new Error("Admin API returned an invalid response.");
-  }
-
-  if (!response.ok || !result.success) {
-    throw new Error(result.error || "Admin request failed.");
-  }
-
-  return result;
-}
-
-function formatDate(value?: string | null) {
-  if (!value) return "—";
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) return "—";
-
-  return date.toLocaleDateString();
-}
-
-function statusLabel(user: AdminUser) {
-  return (
-    user.status ||
-    user.subscription_status ||
-    (user.is_active ? "active" : "inactive")
-  );
-}
-
-function statusClass(user: AdminUser) {
-  const status = statusLabel(user).toLowerCase();
-
-  if (status === "active") {
-    return "text-[#00c98b]";
-  }
-
-  if (status === "trial") {
-    return "text-yellow-400";
-  }
-
-  if (
-    status === "expired" ||
-    status === "cancelled" ||
-    status === "inactive"
-  ) {
-    return "text-red-400";
-  }
-
-  return "text-[#aaa]";
-}
-
-export default function Admin() {
-  const navigate = useNavigate();
-
-  const [activeSection, setActiveSection] =
-    useState<AdminSection>("overview");
-
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  const [overview, setOverview] =
-    useState<OverviewData | null>(null);
-
-  const [users, setUsers] = useState<AdminUser[]>([]);
-  const [leads, setLeads] = useState<AdminLead[]>([]);
-
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [invitePlan, setInvitePlan] = useState("Basic");
-  const [inviteLoading, setInviteLoading] = useState(false);
-  const [inviteResult, setInviteResult] = useState("");
-
-  const loadOverview = async () => {
-    const result = await adminRequest("overview");
-    setOverview(result.overview || null);
-  };
-
-  const loadUsers = async () => {
-    const result = await adminRequest("users");
-    setUsers(result.users || []);
-  };
-
-  const loadLeads = async () => {
-    const result = await adminRequest("leads");
-    setLeads(result.leads || []);
-  };
-
-  const loadData = async () => {
-    setLoading(true);
-    setError("");
-
-    try {
-      if (activeSection === "overview") {
-        await loadOverview();
-      }
-
-      if (
-        activeSection === "users" ||
-        activeSection === "links"
-      ) {
-        await loadUsers();
-      }
-
-      if (activeSection === "leads") {
-        await loadLeads();
-      }
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Failed to load admin data."
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadData();
-  }, [activeSection]);
-
-  const createInvite = async () => {
-    const email = inviteEmail.trim().toLowerCase();
-
-    if (!email) {
-      setInviteResult("Enter an email address.");
-      return;
-    }
-
-    setInviteLoading(true);
-    setInviteResult("");
-
-    try {
-      const result = await adminRequest(
-        "create_invite",
-        {
-          method: "POST",
-          body: {
-            email,
-            plan: invitePlan,
-          },
-        }
-      );
-
-      const code =
-        result.user?.invite_code ||
-        result.invite?.token;
-
-      setInviteEmail("");
-
-      setInviteResult(
-        code
-          ? `Invite created. Code: ${code}`
-          : "Invite created successfully."
-      );
-
-      await loadUsers();
-    } catch (err) {
-      setInviteResult(
-        err instanceof Error
-          ? err.message
-          : "Could not create invite."
-      );
-    } finally {
-      setInviteLoading(false);
-    }
-  };
-
-  const updateUser = async (
-    user: AdminUser,
-    options: {
-      action?: string;
-      plan?: string;
-      isActive?: boolean;
-    }
-  ) => {
-    setLoading(true);
-    setError("");
-
-    try {
-      await adminRequest("set_user", {
-        method: "POST",
-        body: {
-          id: user.id,
-          plan: options.plan || user.plan || "Basic",
-          is_active:
-            typeof options.isActive === "boolean"
-              ? options.isActive
-              : user.is_active,
-          action: options.action || "",
-        },
-      });
-
-      await loadUsers();
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Could not update user."
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white">
-      <header className="border-b border-[#272727] bg-[#111]">
-        <div className="mx-auto max-w-7xl px-4 py-4">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => navigate("/dashboard")}
-                className="rounded-lg p-2 text-[#aaa] hover:bg-[#222] hover:text-white"
-              >
-                <ArrowLeft size={19} />
-              </button>
-
-              <div>
-                <h1 className="text-xl font-semibold">
-                  Admin Panel
-                </h1>
-                <p className="text-xs text-[#777]">
-                  Opportunity Hub administration
-                </p>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={loadData}
-              disabled={loading}
-              className="inline-flex items-center gap-2 rounded-lg border border-[#333] bg-[#181818] px-3 py-2 text-xs font-medium hover:bg-[#222] disabled:opacity-50"
-            >
-              <RefreshCw
-                size={15}
-                className={
-                  loading ? "animate-spin" : ""
-                }
-              />
-              Refresh
-            </button>
-          </div>
-        </div>
-      </header>
-
-      <div className="border-b border-[#272727] bg-[#111]">
-        <div className="mx-auto max-w-7xl px-4">
-          <div className="flex gap-1 overflow-x-auto py-2">
-            {sections.map((section) => {
-              const Icon = section.icon;
-              const active =
-                activeSection === section.id;
-
-              return (
-                <button
-                  key={section.id}
-                  type="button"
-                  onClick={() =>
-                    setActiveSection(section.id)
-                  }
-                  className={[
-                    "flex items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-xs font-medium",
-                    active
-                      ? "bg-[#00c98b] text-black"
-                      : "text-[#888] hover:bg-[#222] hover:text-white",
-                  ].join(" ")}
-                >
-                  <Icon size={15} />
-                  {section.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
-      <main className="mx-auto max-w-7xl px-4 py-6">
-        {error && (
-          <div className="mb-5 rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">
-            {error}
-          </div>
-        )}
-
-        {activeSection === "overview" && (
-          <Overview
-            data={overview}
-            loading={loading}
-          />
-        )}
-
-        {activeSection === "users" && (
-          <UsersSection
-            users={users}
-            loading={loading}
-            inviteEmail={inviteEmail}
-            setInviteEmail={setInviteEmail}
-            invitePlan={invitePlan}
-            setInvitePlan={setInvitePlan}
-            inviteLoading={inviteLoading}
-            inviteResult={inviteResult}
-            createInvite={createInvite}
-            updateUser={updateUser}
-          />
-        )}
-
-        {activeSection === "leads" && (
-          <LeadsSection
-            leads={leads}
-            loading={loading}
-          />
-        )}
-
-        {activeSection === "links" && (
-          <LinksSection
-            users={users}
-            inviteEmail={inviteEmail}
-            setInviteEmail={setInviteEmail}
-            invitePlan={invitePlan}
-            setInvitePlan={setInvitePlan}
-            inviteLoading={inviteLoading}
-            inviteResult={inviteResult}
-            createInvite={createInvite}
-          />
-        )}
-
-        {activeSection === "referrals" && (
-          <Placeholder
-            title="Referrals"
-            description="Referral records can be viewed here. The core referral system remains separate from reseller commissions."
-          />
-        )}
-
-        {activeSection === "resellers" && (
-          <Placeholder
-            title="Resellers"
-            description="Reseller commission records can be connected here."
-          />
-        )}
-      </main>
-    </div>
-  );
-}
-
-function Overview({
-  data,
-  loading,
-}: {
-  data: OverviewData | null;
-  loading: boolean;
-}) {
-  const cards = [
-    ["Users", data?.users ?? "—", Users],
-    [
-      "Active Users",
-      data?.activeUsers ?? "—",
-      UserPlus,
-    ],
-    [
-      "Active Leads",
-      data?.activeLeads ?? "—",
-      Target,
-    ],
-    [
-      "Resellers",
-      data?.resellers ?? "—",
-      Store,
-    ],
-  ] as const;
-
-  return (
-    <section className="space-y-5">
-      <div>
-        <h2 className="text-2xl font-semibold">
-          Admin Dashboard
-        </h2>
-
-        <p className="mt-1 text-sm text-[#777]">
-          Core Opportunity Hub controls.
-        </p>
-
-        {loading && (
-          <p className="mt-2 text-xs text-[#777]">
-            Loading...
-          </p>
-        )}
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {cards.map(([label, value, Icon]) => (
-          <div
-            key={label}
-            className="rounded-xl border border-[#272727] bg-[#141414] p-4"
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-[#777]">
-                  {label}
-                </p>
-
-                <p className="mt-2 text-2xl font-semibold">
-                  {value}
-                </p>
-              </div>
-
-              <div className="rounded-lg bg-[#202020] p-2.5 text-[#00c98b]">
-                <Icon size={18} />
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <div className="rounded-xl border border-[#272727] bg-[#141414] p-4">
-        <div className="flex gap-3">
-          <ShieldCheck
-            size={20}
-            className="shrink-0 text-[#00c98b]"
-          />
-
-          <div>
-            <h3 className="text-sm font-semibold">
-              Protected Admin Access
-            </h3>
-
-            <p className="mt-1 text-xs leading-5 text-[#777]">
-              Customer plans, trial periods and subscription
-              access are controlled through the protected admin API.
-            </p>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function UsersSection({
-  users,
-  loading,
-  inviteEmail,
-  setInviteEmail,
-  invitePlan,
-  setInvitePlan,
-  inviteLoading,
-  inviteResult,
-  createInvite,
-  updateUser,
-}: {
-  users: AdminUser[];
-  loading: boolean;
-  inviteEmail: string;
-  setInviteEmail: (value: string) => void;
-  invitePlan: string;
-  setInvitePlan: (value: string) => void;
-  inviteLoading: boolean;
-  inviteResult: string;
-  createInvite: () => void;
-  updateUser: (
-    user: AdminUser,
-    options: {
-      action?: string;
-      plan?: string;
-      isActive?: boolean;
-    }
-  ) => void;
-}) {
-  return (
-    <section className="space-y-5">
-      <div>
-        <h2 className="text-2xl font-semibold">
-          Users
-        </h2>
-
-        <p className="mt-1 text-sm text-[#777]">
-          Manage customers, trials, plans and access.
-        </p>
-      </div>
-
-      <InviteForm
-        inviteEmail={inviteEmail}
-        setInviteEmail={setInviteEmail}
-        invitePlan={invitePlan}
-        setInvitePlan={setInvitePlan}
-        inviteLoading={inviteLoading}
-        inviteResult={inviteResult}
-        createInvite={createInvite}
-      />
-
-      {loading && (
-        <p className="text-xs text-[#777]">
-          Updating...
-        </p>
-      )}
-
-      <div className="space-y-3">
-        {users.map((user) => (
-          <UserCard
-            key={String(user.id)}
-            user={user}
-            updateUser={updateUser}
-          />
-        ))}
-
-        {users.length === 0 && (
-          <div className="rounded-xl border border-[#272727] bg-[#141414] p-8 text-center text-sm text-[#666]">
-            No users found.
-          </div>
-        )}
-      </div>
-    </section>
-  );
-}
-
-function UserCard({
-  user,
-  updateUser,
-}: {
-  user: AdminUser;
-  updateUser: (
-    user: AdminUser,
-    options: {
-      action?: string;
-      plan?: string;
-      isActive?: boolean;
-    }
-  ) => void;
-}) {
-  const status = statusLabel(user);
-
-  return (
-    <div className="rounded-xl border border-[#272727] bg-[#141414] p-4">
-      <div className="flex flex-col gap-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0">
-            <p className="break-all text-sm font-semibold">
-              {user.email || "No email"}
-            </p>
-
-            {user.name && (
-              <p className="mt-1 text-xs text-[#777]">
-                {user.name}
-              </p>
-            )}
-
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <span
-                className={`text-xs font-medium capitalize ${statusClass(
-                  user
-                )}`}
-              >
-                {status}
-              </span>
-
-              <span className="text-[#444]">•</span>
-
-              <span className="text-xs text-[#aaa]">
-                {user.plan || "Basic"}
-              </span>
-            </div>
-          </div>
-
-          <div className="rounded-lg border border-[#292929] bg-[#101010] px-3 py-2 text-xs">
-            <div className="flex items-center gap-2">
-              <CreditCard
-                size={14}
-                className="text-[#00c98b]"
-              />
-              <span>
-                Plan:{" "}
-                <strong className="text-white">
-                  {user.plan || "Basic"}
-                </strong>
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid gap-2 sm:grid-cols-3">
-          <InfoBox
-            label="Trial Start"
-            value={formatDate(user.trial_start)}
-          />
-
-          <InfoBox
-            label="Trial Expiry"
-            value={formatDate(user.trial_end)}
-          />
-
-          <InfoBox
-            label="Subscription Expiry"
-            value={formatDate(
-              user.subscription_end
-            )}
-          />
-        </div>
-
-        <div className="flex flex-wrap gap-2 border-t border-[#252525] pt-3">
-          <select
-            defaultValue={user.plan || "Basic"}
-            onChange={(event) =>
-              updateUser(user, {
-                plan: event.target.value,
-                action: "upgrade",
-              })
-            }
-            className="rounded-lg border border-[#333] bg-[#101010] px-3 py-2 text-xs"
-          >
-            <option>Basic</option>
-            <option>Premium</option>
-            <option>Gold</option>
-          </select>
-
-          <button
-            type="button"
-            onClick={() =>
-              updateUser(user, {
-                action: "trial",
-              })
-            }
-            className="rounded-lg border border-[#333] bg-[#181818] px-3 py-2 text-xs hover:bg-[#222]"
-          >
-            Start 14-Day Trial
-          </button>
-
-          <button
-            type="button"
-            onClick={() =>
-              updateUser(user, {
-                action: "renew",
-              })
-            }
-            className="rounded-lg border border-[#333] bg-[#181818] px-3 py-2 text-xs hover:bg-[#222]"
-          >
-            Renew 30 Days
-          </button>
-
-          <button
-            type="button"
-            onClick={() =>
-              updateUser(user, {
-                action: "upgrade",
-                plan: user.plan || "Premium",
-                isActive: true,
-              })
-            }
-            className="rounded-lg bg-[#00c98b] px-3 py-2 text-xs font-semibold text-black hover:opacity-90"
-          >
-            Upgrade / Activate
-          </button>
-
-          <button
-            type="button"
-            onClick={() =>
-              updateUser(user, {
-                action: "cancel",
-                isActive: false,
-              })
-            }
-            className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300 hover:bg-red-500/20"
-          >
-            Cancel
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function InfoBox({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="rounded-lg border border-[#252525] bg-[#101010] p-3">
-      <div className="flex items-center gap-2">
-        <CalendarDays
-          size={13}
-          className="text-[#666]"
-        />
-        <p className="text-[10px] uppercase tracking-wider text-[#666]">
-          {label}
-        </p>
-      </div>
-
-      <p className="mt-1 text-xs font-medium text-[#aaa]">
-        {value}
-      </p>
-    </div>
-  );
-}
-
-function InviteForm({
-  inviteEmail,
-  setInviteEmail,
-  invitePlan,
-  setInvitePlan,
-  inviteLoading,
-  inviteResult,
-  createInvite,
-}: {
-  inviteEmail: string;
-  setInviteEmail: (value: string) => void;
-  invitePlan: string;
-  setInvitePlan: (value: string) => void;
-  inviteLoading: boolean;
-  inviteResult: string;
-  cimport { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import {
-  ArrowLeft,
-  Users,
-  Target,
-  UserPlus,
-  Store,
-  Link2,
-  RefreshCw,
-  ShieldCheck,
-  CalendarDays,
-  CreditCard,
-} from "lucide-react";
-import { supabase } from "../lib/supabase";
-
-type AdminSection =
-  | "overview"
-  | "users"
-  | "leads"
-  | "referrals"
-  | "resellers"
-  | "links";
-
-type AdminUser = {
-  id: number | string;
-  email: string;
-  name?: string | null;
-  invite_code?: string | null;
-  plan: string;
-  is_active: boolean;
+  type?: string | null;
+  title?: string | null;
+  client_name?: string | null;
+  skill_needed?: string | null;
+  country?: string | null;
+  source?: string | null;
+  created_at?: string;
   status?: string | null;
-  subscription_status?: string | null;
-  subscription_end?: string | null;
-  subscription_app?: string | null;
-  trial_start?: string | null;
-  trial_end?: string | null;
-  created_at?: string;
-};
-
-type AdminLead = {
-  id: string;
-  type: string | null;
-  title: string | null;
-  client_name: string | null;
-  skill_needed: string | null;
-  country: string | null;
-  source: string | null;
-  created_at: string;
-  status: string | null;
 };
 
 type OverviewData = {
@@ -885,17 +61,13 @@ type OverviewData = {
   subscriptions?: number;
 };
 
-const sections: {
-  id: AdminSection;
-  label: string;
-  icon: typeof Users;
-}[] = [
-  { id: "overview", label: "Overview", icon: ShieldCheck },
-  { id: "users", label: "Users", icon: Users },
-  { id: "leads", label: "Leads", icon: Target },
-  { id: "referrals", label: "Referrals", icon: UserPlus },
-  { id: "resellers", label: "Resellers", icon: Store },
-  { id: "links", label: "Referral Links", icon: Link2 },
+const sections = [
+  { id: "overview" as const, label: "Overview", icon: ShieldCheck },
+  { id: "users" as const, label: "Users", icon: Users },
+  { id: "leads" as const, label: "Leads", icon: Target },
+  { id: "referrals" as const, label: "Referrals", icon: UserPlus },
+  { id: "resellers" as const, label: "Resellers", icon: Store },
+  { id: "links" as const, label: "Referral Links", icon: Link2 },
 ];
 
 async function adminRequest(
@@ -946,17 +118,19 @@ async function adminRequest(
   return result;
 }
 
-function formatDate(value?: string | null) {
+function dateText(value?: string | null) {
   if (!value) return "—";
 
   const date = new Date(value);
 
-  if (Number.isNaN(date.getTime())) return "—";
+  if (Number.isNaN(date.getTime())) {
+    return "—";
+  }
 
   return date.toLocaleDateString();
 }
 
-function statusLabel(user: AdminUser) {
+function getStatus(user: AdminUser) {
   return (
     user.status ||
     user.subscription_status ||
@@ -964,16 +138,11 @@ function statusLabel(user: AdminUser) {
   );
 }
 
-function statusClass(user: AdminUser) {
-  const status = statusLabel(user).toLowerCase();
+function getStatusClass(user: AdminUser) {
+  const status = getStatus(user).toLowerCase();
 
-  if (status === "active") {
-    return "text-[#00c98b]";
-  }
-
-  if (status === "trial") {
-    return "text-yellow-400";
-  }
+  if (status === "active") return "text-[#00c98b]";
+  if (status === "trial") return "text-yellow-400";
 
   if (
     status === "expired" ||
@@ -989,7 +158,7 @@ function statusClass(user: AdminUser) {
 export default function Admin() {
   const navigate = useNavigate();
 
-  const [activeSection, setActiveSection] =
+  const [section, setSection] =
     useState<AdminSection>("overview");
 
   const [loading, setLoading] = useState(false);
@@ -1006,39 +175,27 @@ export default function Admin() {
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteResult, setInviteResult] = useState("");
 
-  const loadOverview = async () => {
-    const result = await adminRequest("overview");
-    setOverview(result.overview || null);
-  };
-
-  const loadUsers = async () => {
-    const result = await adminRequest("users");
-    setUsers(result.users || []);
-  };
-
-  const loadLeads = async () => {
-    const result = await adminRequest("leads");
-    setLeads(result.leads || []);
-  };
-
-  const loadData = async () => {
+  async function loadData() {
     setLoading(true);
     setError("");
 
     try {
-      if (activeSection === "overview") {
-        await loadOverview();
+      if (section === "overview") {
+        const result = await adminRequest("overview");
+        setOverview(result.overview || null);
       }
 
       if (
-        activeSection === "users" ||
-        activeSection === "links"
+        section === "users" ||
+        section === "links"
       ) {
-        await loadUsers();
+        const result = await adminRequest("users");
+        setUsers(result.users || []);
       }
 
-      if (activeSection === "leads") {
-        await loadLeads();
+      if (section === "leads") {
+        const result = await adminRequest("leads");
+        setLeads(result.leads || []);
       }
     } catch (err) {
       setError(
@@ -1049,17 +206,20 @@ export default function Admin() {
     } finally {
       setLoading(false);
     }
-  };
+  }
 
   useEffect(() => {
     loadData();
-  }, [activeSection]);
+  }, [section]);
 
-  const createInvite = async () => {
-    const email = inviteEmail.trim().toLowerCase();
+  async function createInvite() {
+    const email =
+      inviteEmail.trim().toLowerCase();
 
     if (!email) {
-      setInviteResult("Enter an email address.");
+      setInviteResult(
+        "Enter an email address."
+      );
       return;
     }
 
@@ -1090,7 +250,7 @@ export default function Admin() {
           : "Invite created successfully."
       );
 
-      await loadUsers();
+      await loadData();
     } catch (err) {
       setInviteResult(
         err instanceof Error
@@ -1100,16 +260,13 @@ export default function Admin() {
     } finally {
       setInviteLoading(false);
     }
-  };
+  }
 
-  const updateUser = async (
+  async function updateUser(
     user: AdminUser,
-    options: {
-      action?: string;
-      plan?: string;
-      isActive?: boolean;
-    }
-  ) => {
+    action: string,
+    plan?: string
+  ) {
     setLoading(true);
     setError("");
 
@@ -1118,16 +275,23 @@ export default function Admin() {
         method: "POST",
         body: {
           id: user.id,
-          plan: options.plan || user.plan || "Basic",
+          action,
+          plan: plan || user.plan || "Basic",
           is_active:
-            typeof options.isActive === "boolean"
-              ? options.isActive
+            action === "cancel"
+              ? false
+              : action === "trial" ||
+                action === "renew" ||
+                action === "upgrade"
+              ? true
               : user.is_active,
-          action: options.action || "",
         },
       });
 
-      await loadUsers();
+      const result =
+        await adminRequest("users");
+
+      setUsers(result.users || []);
     } catch (err) {
       setError(
         err instanceof Error
@@ -1137,7 +301,7 @@ export default function Admin() {
     } finally {
       setLoading(false);
     }
-  };
+  }
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white">
@@ -1147,7 +311,9 @@ export default function Admin() {
             <div className="flex items-center gap-3">
               <button
                 type="button"
-                onClick={() => navigate("/dashboard")}
+                onClick={() =>
+                  navigate("/dashboard")
+                }
                 className="rounded-lg p-2 text-[#aaa] hover:bg-[#222] hover:text-white"
               >
                 <ArrowLeft size={19} />
@@ -1157,6 +323,7 @@ export default function Admin() {
                 <h1 className="text-xl font-semibold">
                   Admin Panel
                 </h1>
+
                 <p className="text-xs text-[#777]">
                   Opportunity Hub administration
                 </p>
@@ -1172,7 +339,9 @@ export default function Admin() {
               <RefreshCw
                 size={15}
                 className={
-                  loading ? "animate-spin" : ""
+                  loading
+                    ? "animate-spin"
+                    : ""
                 }
               />
               Refresh
@@ -1184,17 +353,17 @@ export default function Admin() {
       <div className="border-b border-[#272727] bg-[#111]">
         <div className="mx-auto max-w-7xl px-4">
           <div className="flex gap-1 overflow-x-auto py-2">
-            {sections.map((section) => {
-              const Icon = section.icon;
+            {sections.map((item) => {
+              const Icon = item.icon;
               const active =
-                activeSection === section.id;
+                section === item.id;
 
               return (
                 <button
-                  key={section.id}
+                  key={item.id}
                   type="button"
                   onClick={() =>
-                    setActiveSection(section.id)
+                    setSection(item.id)
                   }
                   className={[
                     "flex items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-xs font-medium",
@@ -1204,7 +373,7 @@ export default function Admin() {
                   ].join(" ")}
                 >
                   <Icon size={15} />
-                  {section.label}
+                  {item.label}
                 </button>
               );
             })}
@@ -1219,14 +388,14 @@ export default function Admin() {
           </div>
         )}
 
-        {activeSection === "overview" && (
+        {section === "overview" && (
           <Overview
             data={overview}
             loading={loading}
           />
         )}
 
-        {activeSection === "users" && (
+        {section === "users" && (
           <UsersSection
             users={users}
             loading={loading}
@@ -1241,14 +410,14 @@ export default function Admin() {
           />
         )}
 
-        {activeSection === "leads" && (
+        {section === "leads" && (
           <LeadsSection
             leads={leads}
             loading={loading}
           />
         )}
 
-        {activeSection === "links" && (
+        {section === "links" && (
           <LinksSection
             users={users}
             inviteEmail={inviteEmail}
@@ -1261,17 +430,17 @@ export default function Admin() {
           />
         )}
 
-        {activeSection === "referrals" && (
+        {section === "referrals" && (
           <Placeholder
             title="Referrals"
-            description="Referral records can be viewed here. The core referral system remains separate from reseller commissions."
+            description="Referral tracking records."
           />
         )}
 
-        {activeSection === "resellers" && (
+        {section === "resellers" && (
           <Placeholder
             title="Resellers"
-            description="Reseller commission records can be connected here."
+            description="Reseller commission records."
           />
         )}
       </main>
@@ -1324,48 +493,30 @@ function Overview({
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {cards.map(([label, value, Icon]) => (
-          <div
-            key={label}
-            className="rounded-xl border border-[#272727] bg-[#141414] p-4"
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-[#777]">
-                  {label}
-                </p>
+        {cards.map(
+          ([label, value, Icon]) => (
+            <div
+              key={label}
+              className="rounded-xl border border-[#272727] bg-[#141414] p-4"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-[#777]">
+                    {label}
+                  </p>
 
-                <p className="mt-2 text-2xl font-semibold">
-                  {value}
-                </p>
-              </div>
+                  <p className="mt-2 text-2xl font-semibold">
+                    {value}
+                  </p>
+                </div>
 
-              <div className="rounded-lg bg-[#202020] p-2.5 text-[#00c98b]">
-                <Icon size={18} />
+                <div className="rounded-lg bg-[#202020] p-2.5 text-[#00c98b]">
+                  <Icon size={18} />
+                </div>
               </div>
             </div>
-          </div>
-        ))}
-      </div>
-
-      <div className="rounded-xl border border-[#272727] bg-[#141414] p-4">
-        <div className="flex gap-3">
-          <ShieldCheck
-            size={20}
-            className="shrink-0 text-[#00c98b]"
-          />
-
-          <div>
-            <h3 className="text-sm font-semibold">
-              Protected Admin Access
-            </h3>
-
-            <p className="mt-1 text-xs leading-5 text-[#777]">
-              Customer plans, trial periods and subscription
-              access are controlled through the protected admin API.
-            </p>
-          </div>
-        </div>
+          )
+        )}
       </div>
     </section>
   );
@@ -1386,19 +537,16 @@ function UsersSection({
   users: AdminUser[];
   loading: boolean;
   inviteEmail: string;
-  setInviteEmail: (value: string) => void;
+  setInviteEmail: (v: string) => void;
   invitePlan: string;
-  setInvitePlan: (value: string) => void;
+  setInvitePlan: (v: string) => void;
   inviteLoading: boolean;
   inviteResult: string;
   createInvite: () => void;
   updateUser: (
     user: AdminUser,
-    options: {
-      action?: string;
-      plan?: string;
-      isActive?: boolean;
-    }
+    action: string,
+    plan?: string
   ) => void;
 }) {
   return (
@@ -1409,7 +557,7 @@ function UsersSection({
         </h2>
 
         <p className="mt-1 text-sm text-[#777]">
-          Manage customers, trials, plans and access.
+          Manage trials, subscriptions and access.
         </p>
       </div>
 
@@ -1455,15 +603,10 @@ function UserCard({
   user: AdminUser;
   updateUser: (
     user: AdminUser,
-    options: {
-      action?: string;
-      plan?: string;
-      isActive?: boolean;
-    }
+    action: string,
+    plan?: string
   ) => void;
 }) {
-  const status = statusLabel(user);
-
   return (
     <div className="rounded-xl border border-[#272727] bg-[#141414] p-4">
       <div className="flex flex-col gap-4">
@@ -1479,32 +622,25 @@ function UserCard({
               </p>
             )}
 
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <span
-                className={`text-xs font-medium capitalize ${statusClass(
-                  user
-                )}`}
-              >
-                {status}
-              </span>
-
-              <span className="text-[#444]">•</span>
-
-              <span className="text-xs text-[#aaa]">
-                {user.plan || "Basic"}
-              </span>
-            </div>
+            <p
+              className={`mt-2 text-xs font-medium capitalize ${getStatusClass(
+                user
+              )}`}
+            >
+              {getStatus(user)}
+            </p>
           </div>
 
-          <div className="rounded-lg border border-[#292929] bg-[#101010] px-3 py-2 text-xs">
-            <div className="flex items-center gap-2">
+          <div className="rounded-lg border border-[#292929] bg-[#101010] px-3 py-2">
+            <div className="flex items-center gap-2 text-xs">
               <CreditCard
                 size={14}
                 className="text-[#00c98b]"
               />
+
               <span>
                 Plan:{" "}
-                <strong className="text-white">
+                <strong>
                   {user.plan || "Basic"}
                 </strong>
               </span>
@@ -1513,21 +649,19 @@ function UserCard({
         </div>
 
         <div className="grid gap-2 sm:grid-cols-3">
-          <InfoBox
+          <DateBox
             label="Trial Start"
-            value={formatDate(user.trial_start)}
+            value={user.trial_start}
           />
 
-          <InfoBox
+          <DateBox
             label="Trial Expiry"
-            value={formatDate(user.trial_end)}
+            value={user.trial_end}
           />
 
-          <InfoBox
+          <DateBox
             label="Subscription Expiry"
-            value={formatDate(
-              user.subscription_end
-            )}
+            value={user.subscription_end}
           />
         </div>
 
@@ -1535,10 +669,11 @@ function UserCard({
           <select
             defaultValue={user.plan || "Basic"}
             onChange={(event) =>
-              updateUser(user, {
-                plan: event.target.value,
-                action: "upgrade",
-              })
+              updateUser(
+                user,
+                "upgrade",
+                event.target.value
+              )
             }
             className="rounded-lg border border-[#333] bg-[#101010] px-3 py-2 text-xs"
           >
@@ -1550,48 +685,41 @@ function UserCard({
           <button
             type="button"
             onClick={() =>
-              updateUser(user, {
-                action: "trial",
-              })
+              updateUser(user, "trial")
             }
             className="rounded-lg border border-[#333] bg-[#181818] px-3 py-2 text-xs hover:bg-[#222]"
           >
-            Start 14-Day Trial
+            14-Day Trial
           </button>
 
           <button
             type="button"
             onClick={() =>
-              updateUser(user, {
-                action: "renew",
-              })
+              updateUser(user, "renew")
             }
             className="rounded-lg border border-[#333] bg-[#181818] px-3 py-2 text-xs hover:bg-[#222]"
           >
-            Renew 30 Days
+            Renew
           </button>
 
           <button
             type="button"
             onClick={() =>
-              updateUser(user, {
-                action: "upgrade",
-                plan: user.plan || "Premium",
-                isActive: true,
-              })
+              updateUser(
+                user,
+                "upgrade",
+                user.plan || "Premium"
+              )
             }
             className="rounded-lg bg-[#00c98b] px-3 py-2 text-xs font-semibold text-black hover:opacity-90"
           >
-            Upgrade / Activate
+            Upgrade
           </button>
 
           <button
             type="button"
             onClick={() =>
-              updateUser(user, {
-                action: "cancel",
-                isActive: false,
-              })
+              updateUser(user, "cancel")
             }
             className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300 hover:bg-red-500/20"
           >
@@ -1603,12 +731,12 @@ function UserCard({
   );
 }
 
-function InfoBox({
+function DateBox({
   label,
   value,
 }: {
   label: string;
-  value: string;
+  value?: string | null;
 }) {
   return (
     <div className="rounded-lg border border-[#252525] bg-[#101010] p-3">
@@ -1617,13 +745,14 @@ function InfoBox({
           size={13}
           className="text-[#666]"
         />
+
         <p className="text-[10px] uppercase tracking-wider text-[#666]">
           {label}
         </p>
       </div>
 
-      <p className="mt-1 text-xs font-medium text-[#aaa]">
-        {value}
+      <p className="mt-1 text-xs text-[#aaa]">
+        {dateText(value)}
       </p>
     </div>
   );
@@ -1639,9 +768,246 @@ function InviteForm({
   createInvite,
 }: {
   inviteEmail: string;
-  setInviteEmail: (value: string) => void;
+  setInviteEmail: (v: string) => void;
   invitePlan: string;
-  setInvitePlan: (value: string) => void;
+  setInvitePlan: (v: string) => void;
   inviteLoading: boolean;
   inviteResult: string;
-  c
+  createInvite: () => void;
+}) {
+  return (
+    <div className="rounded-xl border border-[#272727] bg-[#141414] p-4">
+      <h3 className="text-sm font-semibold">
+        Create Customer Invite
+      </h3>
+
+      <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto_auto]">
+        <input
+          value={inviteEmail}
+          onChange={(event) =>
+            setInviteEmail(event.target.value)
+          }
+          placeholder="customer@email.com"
+          type="email"
+          className="h-10 rounded-lg border border-[#333] bg-[#101010] px-3 text-sm outline-none focus:border-[#00c98b]"
+        />
+
+        <select
+          value={invitePlan}
+          onChange={(event) =>
+            setInvitePlan(event.target.value)
+          }
+          className="h-10 rounded-lg border border-[#333] bg-[#101010] px-3 text-sm"
+        >
+          <option>Basic</option>
+          <option>Premium</option>
+          <option>Gold</option>
+        </select>
+
+        <button
+          type="button"
+          onClick={createInvite}
+          disabled={inviteLoading}
+          className="h-10 rounded-lg bg-[#00c98b] px-4 text-sm font-semibold text-black disabled:opacity-50"
+        >
+          {inviteLoading
+            ? "Creating..."
+            : "Create Invite"}
+        </button>
+      </div>
+
+      {inviteResult && (
+        <p className="mt-3 break-all text-xs text-[#aaa]">
+          {inviteResult}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function LeadsSection({
+  leads,
+  loading,
+}: {
+  leads: AdminLead[];
+  loading: boolean;
+}) {
+  return (
+    <section className="space-y-5">
+      <div>
+        <h2 className="text-2xl font-semibold">
+          Leads
+        </h2>
+
+        <p className="mt-1 text-sm text-[#777]">
+          Demand and Supply opportunities.
+        </p>
+      </div>
+
+      {loading && (
+        <p className="text-xs text-[#777]">
+          Loading leads...
+        </p>
+      )}
+
+      <div className="space-y-3">
+        {leads.map((lead) => (
+          <div
+            key={`${lead.type}-${lead.id}`}
+            className="rounded-xl border border-[#272727] bg-[#141414] p-4"
+          >
+            <p className="text-[10px] uppercase tracking-wider text-[#00c98b]">
+              {lead.type || "Opportunity"}
+            </p>
+
+            <h3 className="mt-1 text-sm font-semibold">
+              {lead.title ||
+                lead.client_name ||
+                "Opportunity"}
+            </h3>
+
+            <p className="mt-2 text-xs text-[#888]">
+              {lead.skill_needed ||
+                "Skill not specified"}
+            </p>
+
+            <div className="mt-3 flex flex-wrap gap-3 text-[11px] text-[#666]">
+              <span>
+                Country: {lead.country || "—"}
+              </span>
+
+              <span>
+                Source: {lead.source || "—"}
+              </span>
+
+              <span>
+                Status: {lead.status || "—"}
+              </span>
+
+              <span>
+                {dateText(lead.created_at)}
+              </span>
+            </div>
+          </div>
+        ))}
+
+        {leads.length === 0 && (
+          <div className="rounded-xl border border-[#272727] bg-[#141414] p-8 text-center text-sm text-[#666]">
+            No leads found.
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function LinksSection({
+  users,
+  inviteEmail,
+  setInviteEmail,
+  invitePlan,
+  setInvitePlan,
+  inviteLoading,
+  inviteResult,
+  createInvite,
+}: {
+  users: AdminUser[];
+  inviteEmail: string;
+  setInviteEmail: (v: string) => void;
+  invitePlan: string;
+  setInvitePlan: (v: string) => void;
+  inviteLoading: boolean;
+  inviteResult: string;
+  createInvite: () => void;
+}) {
+  const origin =
+    typeof window !== "undefined"
+      ? window.location.origin
+      : "https://opportunity-hub-umber.vercel.app";
+
+  return (
+    <section className="space-y-5">
+      <div>
+        <h2 className="text-2xl font-semibold">
+          Referral Links
+        </h2>
+
+        <p className="mt-1 text-sm text-[#777]">
+          Email-bound customer invite links.
+        </p>
+      </div>
+
+      <InviteForm
+        inviteEmail={inviteEmail}
+        setInviteEmail={setInviteEmail}
+        invitePlan={invitePlan}
+        setInvitePlan={setInvitePlan}
+        inviteLoading={inviteLoading}
+        inviteResult={inviteResult}
+        createInvite={createInvite}
+      />
+
+      <div className="space-y-3">
+        {users.map((user) => {
+          if (!user.invite_code) return null;
+
+          const link =
+            `${origin}/register?invite=` +
+            encodeURIComponent(
+              user.invite_code
+            );
+
+          return (
+            <div
+              key={String(user.id)}
+              className="rounded-xl border border-[#272727] bg-[#141414] p-4"
+            >
+              <p className="break-all text-sm font-medium">
+                {user.email}
+              </p>
+
+              <p className="mt-1 text-xs text-[#777]">
+                {user.plan || "Basic"} •{" "}
+                {getStatus(user)}
+              </p>
+
+              <div className="mt-3 rounded-lg border border-[#252525] bg-[#101010] p-3">
+                <p className="break-all text-xs text-[#aaa]">
+                  {link}
+                </p>
+              </div>
+            </div>
+          );
+        })}
+
+        {users.every(
+          (user) => !user.invite_code
+        ) && (
+          <div className="rounded-xl border border-[#272727] bg-[#141414] p-8 text-center text-sm text-[#666]">
+            No invite links found.
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function Placeholder({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}) {
+  return (
+    <section className="rounded-xl border border-[#272727] bg-[#141414] p-6">
+      <h2 className="text-xl font-semibold">
+        {title}
+      </h2>
+
+      <p className="mt-2 text-sm leading-6 text-[#777]">
+        {description}
+      </p>
+    </section>
+  );
+}
