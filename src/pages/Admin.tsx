@@ -23,7 +23,7 @@ type AdminSection =
 type AdminUser = {
   id: number;
   email: string;
-  invite_code: string;
+  invite_code: string | null;
   plan: string;
   is_active: boolean;
   created_at: string;
@@ -31,7 +31,7 @@ type AdminUser = {
 
 type AdminLead = {
   id: string;
-  type: string;
+  type: string | null;
   title: string | null;
   client_name: string | null;
   skill_needed: string | null;
@@ -94,7 +94,13 @@ async function adminRequest(
     }
   );
 
-  const result = await response.json();
+  let result: any;
+
+  try {
+    result = await response.json();
+  } catch {
+    throw new Error("Admin API returned an invalid response.");
+  }
 
   if (!response.ok || !result.success) {
     throw new Error(result.error || "Admin request failed.");
@@ -125,7 +131,7 @@ export default function Admin() {
 
   const loadOverview = async () => {
     const result = await adminRequest("overview");
-    setOverview(result.overview);
+    setOverview(result.overview || null);
   };
 
   const loadUsers = async () => {
@@ -147,16 +153,15 @@ export default function Admin() {
         await loadOverview();
       }
 
-      if (activeSection === "users") {
+      if (
+        activeSection === "users" ||
+        activeSection === "links"
+      ) {
         await loadUsers();
       }
 
       if (activeSection === "leads") {
         await loadLeads();
-      }
-
-      if (activeSection === "links") {
-        await loadUsers();
       }
     } catch (err) {
       setError(
@@ -172,10 +177,6 @@ export default function Admin() {
   useEffect(() => {
     loadData();
   }, [activeSection]);
-
-  const handleRefresh = async () => {
-    await loadData();
-  };
 
   const createInvite = async () => {
     const email = inviteEmail.trim().toLowerCase();
@@ -200,9 +201,10 @@ export default function Admin() {
       const code = result.user?.invite_code;
 
       setInviteEmail("");
+
       setInviteResult(
         code
-          ? `Invite created: ${code}`
+          ? `Invite created successfully. Code: ${code}`
           : "Invite created successfully."
       );
 
@@ -249,26 +251,25 @@ export default function Admin() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <header className="border-b bg-card">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between gap-4">
+    <div className="min-h-screen bg-[#0a0a0a] text-white">
+      <header className="border-b border-[#272727] bg-[#111]">
+        <div className="mx-auto max-w-7xl px-4 py-4">
+          <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <button
                 type="button"
                 onClick={() => navigate("/dashboard")}
-                className="p-2 rounded-lg hover:bg-secondary transition-colors"
-                aria-label="Back to dashboard"
+                className="rounded-lg p-2 text-[#aaa] hover:bg-[#222] hover:text-white"
               >
-                <ArrowLeft size={20} />
+                <ArrowLeft size={19} />
               </button>
 
               <div>
-                <h1 className="text-xl sm:text-2xl font-bold">
+                <h1 className="text-xl font-semibold">
                   Admin Panel
                 </h1>
 
-                <p className="text-sm text-muted-foreground">
+                <p className="text-xs text-[#777]">
                   Opportunity Hub administration
                 </p>
               </div>
@@ -276,24 +277,22 @@ export default function Admin() {
 
             <button
               type="button"
-              onClick={handleRefresh}
+              onClick={loadData}
               disabled={loading}
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border bg-card hover:bg-secondary transition-colors disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-lg border border-[#333] bg-[#181818] px-3 py-2 text-xs font-medium hover:bg-[#222] disabled:opacity-50"
             >
               <RefreshCw
-                size={16}
+                size={15}
                 className={loading ? "animate-spin" : ""}
               />
-              <span className="hidden sm:inline">
-                {loading ? "Refreshing..." : "Refresh"}
-              </span>
+              Refresh
             </button>
           </div>
         </div>
       </header>
 
-      <div className="border-b bg-card">
-        <div className="max-w-7xl mx-auto px-4">
+      <div className="border-b border-[#272727] bg-[#111]">
+        <div className="mx-auto max-w-7xl px-4">
           <div className="flex gap-1 overflow-x-auto py-2">
             {sections.map((section) => {
               const Icon = section.icon;
@@ -308,13 +307,13 @@ export default function Admin() {
                     setActiveSection(section.id)
                   }
                   className={[
-                    "flex items-center gap-2 whitespace-nowrap px-4 py-2 rounded-lg text-sm font-medium transition-colors",
+                    "flex items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-xs font-medium",
                     active
-                      ? "bg-primary text-primary-foreground"
-                      : "hover:bg-secondary text-muted-foreground",
+                      ? "bg-[#00c98b] text-black"
+                      : "text-[#888] hover:bg-[#222] hover:text-white",
                   ].join(" ")}
                 >
-                  <Icon size={16} />
+                  <Icon size={15} />
                   {section.label}
                 </button>
               );
@@ -323,9 +322,9 @@ export default function Admin() {
         </div>
       </div>
 
-      <main className="max-w-7xl mx-auto px-4 py-6">
+      <main className="mx-auto max-w-7xl px-4 py-6">
         {error && (
-          <div className="mb-5 rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm">
+          <div className="mb-5 rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">
             {error}
           </div>
         )}
@@ -372,16 +371,16 @@ export default function Admin() {
         )}
 
         {activeSection === "referrals" && (
-          <AdminPlaceholder
+          <Placeholder
             title="Referrals"
-            description="Referral tracking will be connected after the core admin controls."
+            description="Referral tracking is ready for connection to the referral records."
           />
         )}
 
         {activeSection === "resellers" && (
-          <AdminPlaceholder
+          <Placeholder
             title="Resellers"
-            description="Reseller commission tracking will be connected after the core admin controls."
+            description="Reseller commission tracking is ready for connection to the reseller records."
           />
         )}
       </main>
@@ -397,100 +396,95 @@ function Overview({
   loading: boolean;
 }) {
   const cards = [
-    {
-      label: "Users",
-      value: data?.users ?? "—",
-      description: "Allowed accounts",
-      icon: Users,
-    },
-    {
-      label: "Active Leads",
-      value: data?.activeLeads ?? "—",
-      description: "Fresh 72-hour leads",
-      icon: Target,
-    },
-    {
-      label: "Active Users",
-      value: data?.activeUsers ?? "—",
-      description: "Currently enabled",
-      icon: UserPlus,
-    },
-    {
-      label: "Resellers",
-      value: data?.resellers ?? "—",
-      description: "Active reseller accounts",
-      icon: Store,
-    },
-  ];
+    ["Users", data?.users ?? "—", "Allowed accounts", Users],
+    [
+      "Active Users",
+      data?.activeUsers ?? "—",
+      "Currently enabled",
+      UserPlus,
+    ],
+    [
+      "Active Leads",
+      data?.activeLeads ?? "—",
+      "Fresh opportunities",
+      Target,
+    ],
+    [
+      "Resellers",
+      data?.resellers ?? "—",
+      "Reseller accounts",
+      Store,
+    ],
+  ] as const;
 
   return (
-    <div className="space-y-6">
+    <section className="space-y-5">
       <div>
-        <h2 className="text-2xl font-bold">
+        <h2 className="text-2xl font-semibold">
           Admin Dashboard
         </h2>
 
-        <p className="mt-1 text-muted-foreground">
+        <p className="mt-1 text-sm text-[#777]">
           Core Opportunity Hub controls.
         </p>
 
         {loading && (
-          <p className="mt-2 text-sm text-muted-foreground">
+          <p className="mt-2 text-xs text-[#777]">
             Loading...
           </p>
         )}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {cards.map((card) => {
-          const Icon = card.icon;
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {cards.map(([label, value, description, Icon]) => (
+          <div
+            key={label}
+            className="rounded-xl border border-[#272727] bg-[#141414] p-4"
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-[#777]">
+                  {label}
+                </p>
 
-          return (
-            <div
-              key={card.label}
-              className="bg-card border rounded-xl p-5"
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">
-                    {card.label}
-                  </p>
-
-                  <p className="mt-2 text-3xl font-bold">
-                    {card.value}
-                  </p>
-                </div>
-
-                <div className="p-3 rounded-lg bg-secondary">
-                  <Icon size={20} />
-                </div>
+                <p className="mt-2 text-2xl font-semibold">
+                  {value}
+                </p>
               </div>
 
-              <p className="mt-3 text-xs text-muted-foreground">
-                {card.description}
-              </p>
+              <div className="rounded-lg bg-[#202020] p-2.5 text-[#00c98b]">
+                <Icon size={18} />
+              </div>
             </div>
-          );
-        })}
+
+            <p className="mt-2 text-[11px] text-[#666]">
+              {description}
+            </p>
+          </div>
+        ))}
       </div>
 
-      <div className="rounded-xl border bg-card p-5">
+      <div className="rounded-xl border border-[#272727] bg-[#141414] p-4">
         <div className="flex gap-3">
-          <ShieldCheck size={22} className="shrink-0" />
+          <ShieldCheck
+            size={20}
+            className="shrink-0 text-[#00c98b]"
+          />
 
           <div>
-            <h3 className="font-semibold">
-              Server-protected admin
+            <h3 className="text-sm font-semibold">
+              Protected Admin Access
             </h3>
 
-            <p className="mt-1 text-sm text-muted-foreground">
-              Admin actions are authorized by the Vercel API
-              using the authenticated Supabase account.
+            <p className="mt-1 text-xs leading-5 text-[#777]">
+              Administrative requests are sent through the
+              protected Vercel API using the authenticated
+              Supabase session.
             </p>
           </div>
         </div>
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -522,76 +516,41 @@ function UsersSection({
   return (
     <section className="space-y-5">
       <div>
-        <h2 className="text-2xl font-bold">Users</h2>
+        <h2 className="text-2xl font-semibold">
+          Users
+        </h2>
 
-        <p className="mt-1 text-muted-foreground">
-          Manage invites, plans and account access.
+        <p className="mt-1 text-sm text-[#777]">
+          Manage customer invites, plans and access.
         </p>
       </div>
 
-      <div className="rounded-xl border bg-card p-5">
-        <h3 className="font-semibold">
-          Create customer invite
-        </h3>
+      <InviteForm
+        inviteEmail={inviteEmail}
+        setInviteEmail={setInviteEmail}
+        invitePlan={invitePlan}
+        setInvitePlan={setInvitePlan}
+        inviteLoading={inviteLoading}
+        inviteResult={inviteResult}
+        createInvite={createInvite}
+      />
 
-        <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto_auto]">
-          <input
-            value={inviteEmail}
-            onChange={(event) =>
-              setInviteEmail(event.target.value)
-            }
-            placeholder="customer@email.com"
-            type="email"
-            className="h-10 rounded-lg border bg-background px-3 text-sm"
-          />
-
-          <select
-            value={invitePlan}
-            onChange={(event) =>
-              setInvitePlan(event.target.value)
-            }
-            className="h-10 rounded-lg border bg-background px-3 text-sm"
-          >
-            <option>Basic</option>
-            <option>Premium</option>
-            <option>Gold</option>
-          </select>
-
-          <button
-            type="button"
-            onClick={createInvite}
-            disabled={inviteLoading}
-            className="h-10 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-50"
-          >
-            {inviteLoading
-              ? "Creating..."
-              : "Create Invite"}
-          </button>
-        </div>
-
-        {inviteResult && (
-          <p className="mt-3 text-sm">
-            {inviteResult}
-          </p>
-        )}
-      </div>
-
-      <div className="rounded-xl border bg-card overflow-hidden">
+      <div className="overflow-hidden rounded-xl border border-[#272727] bg-[#141414]">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="border-b bg-secondary/40">
+            <thead className="border-b border-[#272727] bg-[#101010]">
               <tr>
-                <th className="text-left p-3">
+                <th className="p-3 text-left text-xs text-[#777]">
                   Email
                 </th>
-                <th className="text-left p-3">
+                <th className="p-3 text-left text-xs text-[#777]">
                   Plan
                 </th>
-                <th className="text-left p-3">
+                <th className="p-3 text-left text-xs text-[#777]">
                   Status
                 </th>
-                <th className="text-left p-3">
-                  Actions
+                <th className="p-3 text-left text-xs text-[#777]">
+                  Action
                 </th>
               </tr>
             </thead>
@@ -600,15 +559,15 @@ function UsersSection({
               {users.map((user) => (
                 <tr
                   key={user.id}
-                  className="border-b last:border-0"
+                  className="border-b border-[#222] last:border-0"
                 >
-                  <td className="p-3">
+                  <td className="max-w-[220px] truncate p-3">
                     {user.email}
                   </td>
 
                   <td className="p-3">
                     <select
-                      value={user.plan}
+                      value={user.plan || "Basic"}
                       onChange={(event) =>
                         updateUser(
                           user,
@@ -616,7 +575,7 @@ function UsersSection({
                           user.is_active
                         )
                       }
-                      className="h-9 rounded-md border bg-background px-2"
+                      className="rounded-md border border-[#333] bg-[#101010] px-2 py-1.5 text-xs"
                     >
                       <option>Basic</option>
                       <option>Premium</option>
@@ -624,12 +583,12 @@ function UsersSection({
                     </select>
                   </td>
 
-                  <td className="p-3">
+                  <td className="p-3 text-xs">
                     <span
                       className={
                         user.is_active
-                          ? "text-green-600"
-                          : "text-red-600"
+                          ? "text-[#00c98b]"
+                          : "text-red-400"
                       }
                     >
                       {user.is_active
@@ -648,7 +607,7 @@ function UsersSection({
                           !user.is_active
                         )
                       }
-                      className="rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-secondary"
+                      className="rounded-md border border-[#333] px-3 py-1.5 text-xs hover:bg-[#222]"
                     >
                       {user.is_active
                         ? "Deactivate"
@@ -662,7 +621,7 @@ function UsersSection({
                 <tr>
                   <td
                     colSpan={4}
-                    className="p-8 text-center text-muted-foreground"
+                    className="p-8 text-center text-xs text-[#666]"
                   >
                     No users found.
                   </td>
@@ -676,6 +635,71 @@ function UsersSection({
   );
 }
 
+function InviteForm({
+  inviteEmail,
+  setInviteEmail,
+  invitePlan,
+  setInvitePlan,
+  inviteLoading,
+  inviteResult,
+  createInvite,
+}: {
+  inviteEmail: string;
+  setInviteEmail: (value: string) => void;
+  invitePlan: string;
+  setInvitePlan: (value: string) => void;
+  inviteLoading: boolean;
+  inviteResult: string;
+  createInvite: () => void;
+}) {
+  return (
+    <div className="rounded-xl border border-[#272727] bg-[#141414] p-4">
+      <h3 className="text-sm font-semibold">
+        Create Customer Invite
+      </h3>
+
+      <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto_auto]">
+        <input
+          value={inviteEmail}
+          onChange={(event) =>
+            setInviteEmail(event.target.value)
+          }
+          placeholder="customer@email.com"
+          type="email"
+          className="h-10 rounded-lg border border-[#333] bg-[#101010] px-3 text-sm outline-none focus:border-[#00c98b]"
+        />
+
+        <select
+          value={invitePlan}
+          onChange={(event) =>
+            setInvitePlan(event.target.value)
+          }
+          className="h-10 rounded-lg border border-[#333] bg-[#101010] px-3 text-sm"
+        >
+          <option>Basic</option>
+          <option>Premium</option>
+          <option>Gold</option>
+        </select>
+
+        <button
+          type="button"
+          onClick={createInvite}
+          disabled={inviteLoading}
+          className="h-10 rounded-lg bg-[#00c98b] px-4 text-sm font-semibold text-black disabled:opacity-50"
+        >
+          {inviteLoading ? "Creating..." : "Create Invite"}
+        </button>
+      </div>
+
+      {inviteResult && (
+        <p className="mt-3 break-all text-xs text-[#aaa]">
+          {inviteResult}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function LeadsSection({
   leads,
   loading,
@@ -686,30 +710,41 @@ function LeadsSection({
   return (
     <section className="space-y-5">
       <div>
-        <h2 className="text-2xl font-bold">Leads</h2>
+        <h2 className="text-2xl font-semibold">
+          Leads
+        </h2>
 
-        <p className="mt-1 text-muted-foreground">
-          Fresh Demand and Supply leads from the last 72
-          hours.
+        <p className="mt-1 text-sm text-[#777]">
+          Fresh opportunities available to the system.
         </p>
       </div>
 
       {loading && (
-        <p className="text-sm text-muted-foreground">
+        <p className="text-xs text-[#777]">
           Loading leads...
         </p>
       )}
 
-      <div className="rounded-xl border bg-card overflow-hidden">
+      <div className="overflow-hidden rounded-xl border border-[#272727] bg-[#141414]">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="border-b bg-secondary/40">
+            <thead className="border-b border-[#272727] bg-[#101010]">
               <tr>
-                <th className="text-left p-3">Type</th>
-                <th className="text-left p-3">Title</th>
-                <th className="text-left p-3">Skill</th>
-                <th className="text-left p-3">Country</th>
-                <th className="text-left p-3">Source</th>
+                <th className="p-3 text-left text-xs text-[#777]">
+                  Type
+                </th>
+                <th className="p-3 text-left text-xs text-[#777]">
+                  Title
+                </th>
+                <th className="p-3 text-left text-xs text-[#777]">
+                  Skill
+                </th>
+                <th className="p-3 text-left text-xs text-[#777]">
+                  Country
+                </th>
+                <th className="p-3 text-left text-xs text-[#777]">
+                  Source
+                </th>
               </tr>
             </thead>
 
@@ -717,27 +752,27 @@ function LeadsSection({
               {leads.map((lead) => (
                 <tr
                   key={lead.id}
-                  className="border-b last:border-0"
+                  className="border-b border-[#222] last:border-0"
                 >
-                  <td className="p-3">
+                  <td className="p-3 text-xs">
                     {lead.type || "Demand"}
                   </td>
 
-                  <td className="p-3">
+                  <td className="max-w-[260px] truncate p-3 text-xs">
                     {lead.title ||
                       lead.client_name ||
                       "Opportunity"}
                   </td>
 
-                  <td className="p-3">
+                  <td className="p-3 text-xs">
                     {lead.skill_needed || "—"}
                   </td>
 
-                  <td className="p-3">
+                  <td className="p-3 text-xs">
                     {lead.country || "—"}
                   </td>
 
-                  <td className="p-3">
+                  <td className="p-3 text-xs">
                     {lead.source || "—"}
                   </td>
                 </tr>
@@ -747,7 +782,7 @@ function LeadsSection({
                 <tr>
                   <td
                     colSpan={5}
-                    className="p-8 text-center text-muted-foreground"
+                    className="p-8 text-center text-xs text-[#666]"
                   >
                     No fresh leads found.
                   </td>
@@ -783,123 +818,62 @@ function LinksSection({
   return (
     <section className="space-y-5">
       <div>
-        <h2 className="text-2xl font-bold">
+        <h2 className="text-2xl font-semibold">
           Referral Links
         </h2>
 
-        <p className="mt-1 text-muted-foreground">
-          Create unique email-bound customer invites.
+        <p className="mt-1 text-sm text-[#777]">
+          Customer invite codes currently available.
         </p>
       </div>
 
-      <div className="rounded-xl border bg-card p-5">
-        <div className="grid gap-3 sm:grid-cols-[1fr_auto_auto]">
-          <input
-            value={inviteEmail}
-            onChange={(event) =>
-              setInviteEmail(event.target.value)
-            }
-            placeholder="customer@email.com"
-            type="email"
-            className="h-10 rounded-lg border bg-background px-3 text-sm"
-          />
+      <InviteForm
+        inviteEmail={inviteEmail}
+        setInviteEmail={setInviteEmail}
+        invitePlan={invitePlan}
+        setInvitePlan={setInvitePlan}
+        inviteLoading={inviteLoading}
+        inviteResult={inviteResult}
+        createInvite={createInvite}
+      />
 
-          <select
-            value={invitePlan}
-            onChange={(event) =>
-              setInvitePlan(event.target.value)
-            }
-            className="h-10 rounded-lg border bg-background px-3 text-sm"
+      <div className="space-y-2">
+        {users.map((user) => (
+          <div
+            key={user.id}
+            className="rounded-xl border border-[#272727] bg-[#141414] p-4"
           >
-            <option>Basic</option>
-            <option>Premium</option>
-            <option>Gold</option>
-          </select>
+            <p className="text-sm font-medium">
+              {user.email}
+            </p>
 
-          <button
-            type="button"
-            onClick={createInvite}
-            disabled={inviteLoading}
-            className="h-10 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-50"
-          >
-            {inviteLoading
-              ? "Creating..."
-              : "Create Invite"}
-          </button>
-        </div>
+            <p className="mt-1 text-xs text-[#777]">
+              Invite code:{" "}
+              <span className="text-[#00c98b]">
+                {user.invite_code || "Not assigned"}
+              </span>
+            </p>
 
-        {inviteResult && (
-          <p className="mt-3 text-sm">
-            {inviteResult}
-          </p>
+            {user.invite_code && (
+              <p className="mt-2 break-all text-[11px] text-[#666]">
+                {window.location.origin}/register?ref=
+                {user.invite_code}
+              </p>
+            )}
+          </div>
+        ))}
+
+        {users.length === 0 && (
+          <div className="rounded-xl border border-[#272727] bg-[#141414] p-8 text-center text-xs text-[#666]">
+            No referral links found.
+          </div>
         )}
-      </div>
-
-      <div className="rounded-xl border bg-card overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="border-b bg-secondary/40">
-              <tr>
-                <th className="text-left p-3">
-                  Email
-                </th>
-                <th className="text-left p-3">
-                  Invite Code
-                </th>
-                <th className="text-left p-3">
-                  Plan
-                </th>
-                <th className="text-left p-3">
-                  Status
-                </th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {users.map((user) => (
-                <tr
-                  key={user.id}
-                  className="border-b last:border-0"
-                >
-                  <td className="p-3">
-                    {user.email}
-                  </td>
-
-                  <td className="p-3 font-mono text-xs">
-                    {user.invite_code}
-                  </td>
-
-                  <td className="p-3">
-                    {user.plan}
-                  </td>
-
-                  <td className="p-3">
-                    {user.is_active
-                      ? "Active"
-                      : "Inactive"}
-                  </td>
-                </tr>
-              ))}
-
-              {users.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={4}
-                    className="p-8 text-center text-muted-foreground"
-                  >
-                    No referral links yet.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
       </div>
     </section>
   );
 }
 
-function AdminPlaceholder({
+function Placeholder({
   title,
   description,
 }: {
@@ -907,25 +881,14 @@ function AdminPlaceholder({
   description: string;
 }) {
   return (
-    <section className="space-y-5">
-      <div>
-        <h2 className="text-2xl font-bold">{title}</h2>
+    <section className="rounded-xl border border-[#272727] bg-[#141414] p-6">
+      <h2 className="text-xl font-semibold">
+        {title}
+      </h2>
 
-        <p className="mt-1 text-muted-foreground">
-          {description}
-        </p>
-      </div>
-
-      <div className="bg-card border rounded-xl p-8 text-center">
-        <p className="font-medium">
-          {title} management
-        </p>
-
-        <p className="mt-2 text-sm text-muted-foreground">
-          This section will be connected after the core
-          admin controls.
-        </p>
-      </div>
+      <p className="mt-2 text-sm leading-6 text-[#777]">
+        {description}
+      </p>
     </section>
   );
 }
