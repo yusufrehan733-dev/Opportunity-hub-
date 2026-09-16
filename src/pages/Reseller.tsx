@@ -40,151 +40,138 @@ const PRICING = [
   },
 ];
 
+const card =
+  "rounded-xl border border-[#272727] bg-[#141414]";
+
 export default function Reseller() {
   return (
-    <div className="min-h-screen bg-[#0b0b0b] text-white">
-      <div className="max-w-6xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-[#0a0a0a] text-white">
+      <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6">
 
         {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: 15 }}
+        <motion.header
+          initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="text-center mb-10"
+          className="mb-7 text-center"
         >
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-[#00c98b] text-black mb-4">
-            <Users size={28} />
+          <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-[#00c98b] text-black">
+            <Users size={21} />
           </div>
 
-          <h1 className="text-3xl sm:text-4xl font-bold text-white">
-            Opportunity Hub Reseller Program
+          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+            Reseller Program
           </h1>
 
-          <p className="mt-3 text-gray-400 max-w-2xl mx-auto">
-            Earn commission by introducing Opportunity Hub to teachers,
-            coaches, freelancers, and other professionals who need quality
-            opportunities.
+          <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-[#999]">
+            Introduce Opportunity Hub to teachers, coaches, freelancers and
+            professionals — and earn commission from qualifying subscriptions.
           </p>
-        </motion.div>
+        </motion.header>
 
         {/* Commission */}
         <motion.section
-          initial={{ opacity: 0, y: 15 }}
+          initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="rounded-2xl border border-[#292929] bg-[#151515] p-6 sm:p-8 mb-8"
+          className={`${card} mb-5 p-5 sm:p-6`}
         >
-          <div className="flex items-center gap-3 mb-4">
-            <span className="text-[#00c98b] text-2xl font-bold">%</span>
+          <div className="mb-4 flex items-center gap-2.5">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#1d2b27] text-sm font-bold text-[#00c98b]">
+              %
+            </span>
 
-            <h2 className="text-2xl font-bold text-white">
-              Your Commission
+            <h2 className="text-base font-semibold">
+              Commission
             </h2>
           </div>
 
-          <p className="text-gray-300 leading-7">
-            Resellers earn{" "}
-            <strong className="text-white">30% commission</strong> on every
-            active paid subscription generated through their reseller link.
+          <p className="text-sm leading-6 text-[#b5b5b5]">
+            Earn{" "}
+            <strong className="text-white">30%</strong>{" "}
+            on every active paid subscription generated through your reseller
+            link.
           </p>
 
-          <div className="mt-5 rounded-xl bg-[#202020] border border-[#333] p-5">
-            <p className="font-semibold text-white">
-              Every 10th subscription earns{" "}
-              <strong className="text-[#00c98b]">
-                100% commission
-              </strong>
-              .
+          <div className="mt-4 rounded-lg border border-[#292929] bg-[#101010] px-4 py-3">
+            <p className="text-sm font-medium text-white">
+              10th qualifying subscription →{" "}
+              <span className="text-[#00c98b]">100% commission</span>
             </p>
 
-            <p className="text-sm text-gray-400 mt-2">
-              On the first 9 qualifying subscriptions you earn 30%
-              commission. On the 10th qualifying subscription, you earn
-              100%.
+            <p className="mt-1 text-xs leading-5 text-[#777]">
+              Subscriptions 1–9 earn 30%. The 10th earns 100%.
             </p>
           </div>
         </motion.section>
 
-        {/* Pricing */}
+        {/* Plans */}
         <motion.section
-          initial={{ opacity: 0, y: 15 }}
+          initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mb-8"
+          className="mb-5"
         >
-          <div className="flex items-center gap-3 mb-5">
-            <Globe className="text-[#00c98b]" size={26} />
+          <div className="mb-3 flex items-center gap-2.5">
+            <Globe size={19} className="text-[#00c98b]" />
 
-            <h2 className="text-2xl font-bold text-white">
+            <h2 className="text-base font-semibold">
               Subscription Plans
             </h2>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          <div className="grid gap-3 sm:grid-cols-3">
             {PRICING.map((plan) => {
               const Icon = plan.icon;
 
               return (
                 <div
                   key={plan.name}
-                  className={`rounded-2xl border bg-[#151515] p-6 ${
+                  className={`${card} ${
                     plan.highlight
-                      ? "border-[#00c98b] shadow-lg"
-                      : "border-[#292929]"
-                  }`}
+                      ? "border-[#00c98b]/50"
+                      : ""
+                  } p-4`}
                 >
-                  <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-start justify-between">
                     <div>
-                      <h3 className="text-xl font-bold text-white">
+                      <h3 className="text-sm font-semibold">
                         {plan.name}
                       </h3>
 
-                      <p className="text-sm text-gray-400 mt-1">
+                      <p className="mt-0.5 text-xs text-[#777]">
                         {plan.description}
                       </p>
                     </div>
 
                     <Icon
-                      size={24}
+                      size={18}
                       className={
                         plan.highlight
                           ? "text-[#00c98b]"
-                          : "text-gray-300"
+                          : "text-[#777]"
                       }
                     />
                   </div>
 
-                  <div className="border-t border-[#292929] pt-4">
-                    <p className="text-xs uppercase tracking-wide text-gray-500">
+                  <div className="mt-4 border-t border-[#262626] pt-3">
+                    <p className="text-[10px] uppercase tracking-wider text-[#666]">
                       Pakistan
                     </p>
 
-                    <p className="text-2xl font-bold text-white mt-1">
+                    <p className="mt-1 text-lg font-semibold">
                       {plan.pakistan}
-                      <span className="text-sm font-normal text-gray-500">
-                        {" "}
-                        / month
-                      </span>
                     </p>
                   </div>
 
-                  <div className="border-t border-[#292929] pt-4 mt-4">
-                    <p className="text-xs uppercase tracking-wide text-gray-500">
-                      International customers
+                  <div className="mt-3 border-t border-[#262626] pt-3">
+                    <p className="text-[10px] uppercase tracking-wider text-[#666]">
+                      International
                     </p>
 
-                    <p className="text-2xl font-bold text-white mt-1">
+                    <p className="mt-1 text-lg font-semibold">
                       {plan.international}
-                      <span className="text-sm font-normal text-gray-500">
-                        {" "}
-                        / month
-                      </span>
                     </p>
 
-                    <p className="text-sm font-semibold text-gray-300 mt-2">
-                      Charged in local currency
-                    </p>
-
-                    <p className="text-xs text-gray-500 mt-2 leading-5">
-                      Customers may pay in USD, GBP, AED, SAR, QAR, KWD,
-                      BHD, or OMR depending on their country.
+                    <p className="mt-1 text-[11px] text-[#777]">
+                      Local currency / month
                     </p>
                   </div>
                 </div>
@@ -193,158 +180,149 @@ export default function Reseller() {
           </div>
         </motion.section>
 
-        {/* International Pricing */}
+        {/* International */}
         <motion.section
-          initial={{ opacity: 0, y: 15 }}
+          initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="rounded-2xl bg-[#151515] border border-[#292929] p-6 sm:p-8 mb-8"
+          className={`${card} mb-5 p-5 sm:p-6`}
         >
-          <div className="flex items-center gap-3 mb-4">
-            <Globe className="text-[#00c98b]" size={25} />
+          <div className="mb-3 flex items-center gap-2.5">
+            <Globe size={18} className="text-[#00c98b]" />
 
-            <h2 className="text-xl font-bold text-white">
-              🌍 International Pricing & Payment
+            <h2 className="text-base font-semibold">
+              International Pricing
             </h2>
           </div>
 
-          <p className="text-gray-300 leading-7">
-            <strong className="text-white">
-              International plans are 20 / 35 / 70 in the customer's local
-              currency.
-            </strong>
+          <p className="text-sm leading-6 text-[#aaa]">
+            International plans are{" "}
+            <strong className="text-white">20 / 35 / 70</strong>{" "}
+            in the customer's local currency.
           </p>
 
-          <p className="text-gray-400 leading-7 mt-3">
-            The currency depends on the customer's country. For example,
-            customers in the USA may pay in USD, customers in the UK in GBP,
-            and customers in Gulf countries may pay in AED, SAR, QAR, KWD,
-            BHD, or OMR as applicable.
-          </p>
-
-          <p className="text-gray-400 leading-7 mt-3">
-            <strong className="text-white">
-              Payment is completed outside the app using the payment method
-              provided by our team.
-            </strong>
+          <p className="mt-2 text-xs leading-5 text-[#777]">
+            The applicable currency depends on the customer's country.
+            Payment is completed outside the app using the payment method
+            provided by our team.
           </p>
         </motion.section>
 
         {/* Gold Reward */}
         <motion.section
-          initial={{ opacity: 0, y: 15 }}
+          initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="rounded-2xl bg-[#151515] border border-[#292929] p-6 sm:p-8 mb-8"
+          className={`${card} mb-5 p-5 sm:p-6`}
         >
-          <div className="flex items-center gap-3 mb-4">
-            <Crown className="text-[#00c98b]" size={26} />
+          <div className="mb-3 flex items-center gap-2.5">
+            <Crown size={18} className="text-[#00c98b]" />
 
-            <h2 className="text-2xl font-bold text-white">
+            <h2 className="text-base font-semibold">
               Gold Reseller Reward
             </h2>
           </div>
 
-          <p className="text-gray-300 leading-7">
-            Resellers who generate{" "}
+          <p className="text-sm leading-6 text-[#aaa]">
+            Generate{" "}
             <strong className="text-white">
               2 active Gold subscriptions
             </strong>{" "}
-            can qualify for the Gold reseller reward.
+            to qualify for the Gold reseller reward.
           </p>
         </motion.section>
 
         {/* How to Join */}
         <motion.section
-          initial={{ opacity: 0, y: 15 }}
+          initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="rounded-2xl bg-[#151515] border border-[#292929] p-6 sm:p-8 mb-8"
+          className={`${card} mb-5 p-5 sm:p-6`}
         >
-          <h2 className="text-2xl font-bold text-white mb-4">
+          <h2 className="mb-4 text-base font-semibold">
             How to Join
           </h2>
 
-          <ol className="list-decimal pl-5 space-y-3 text-gray-300">
-            <li>
-              Contact our team and request your reseller link.
-            </li>
+          <div className="space-y-3">
+            {[
+              "Request your unique reseller link.",
+              "Share the link with potential customers.",
+              "Customers subscribe through your link.",
+              "Qualifying paid subscriptions count toward commission.",
+              "Contact support for commission and payment details.",
+            ].map((step, index) => (
+              <div
+                key={step}
+                className="flex items-start gap-3"
+              >
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#202020] text-[11px] text-[#00c98b]">
+                  {index + 1}
+                </span>
 
-            <li>
-              Share your unique reseller link with potential customers.
-            </li>
-
-            <li>
-              Customers subscribe through your link.
-            </li>
-
-            <li>
-              Your qualifying paid subscriptions are counted toward your
-              commission.
-            </li>
-
-            <li>
-              Commission status and payment details can be confirmed with
-              support.
-            </li>
-          </ol>
+                <p className="pt-0.5 text-sm leading-5 text-[#aaa]">
+                  {step}
+                </p>
+              </div>
+            ))}
+          </div>
         </motion.section>
 
         {/* Contact */}
         <motion.section
-          initial={{ opacity: 0, y: 15 }}
+          initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="rounded-2xl bg-black border border-[#292929] text-white p-6 sm:p-8"
+          className="rounded-xl border border-[#292929] bg-[#0f0f0f] p-5 sm:p-6"
         >
-          <h2 className="text-2xl font-bold mb-3">
-            Need Help With the Reseller Program?
+          <h2 className="text-base font-semibold">
+            Reseller Support
           </h2>
 
-          <p className="text-gray-400 leading-7 mb-6">
-            Contact us directly for reseller registration, payment
-            instructions, commission questions, or your reseller link.
+          <p className="mt-2 text-sm leading-6 text-[#888]">
+            Contact our team for registration, your reseller link, payment
+            instructions or commission questions.
           </p>
 
-          <div className="space-y-4">
-            <div>
-              <p className="text-sm text-gray-500">
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-lg border border-[#252525] bg-[#151515] p-3">
+              <p className="text-[10px] uppercase tracking-wider text-[#666]">
                 WhatsApp
               </p>
 
-              <p className="font-semibold text-lg text-white">
+              <p className="mt-1 text-sm font-medium">
                 {WHATSAPP_DISPLAY}
               </p>
             </div>
 
-            <div>
-              <p className="text-sm text-gray-500">
+            <div className="rounded-lg border border-[#252525] bg-[#151515] p-3">
+              <p className="text-[10px] uppercase tracking-wider text-[#666]">
                 Email
               </p>
 
-              <p className="font-semibold text-lg text-white break-all">
+              <p className="mt-1 break-all text-sm font-medium">
                 {SUPPORT_EMAIL}
               </p>
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-3 mt-6">
+          <div className="mt-4 flex flex-col gap-2.5 sm:flex-row">
             <a
               href={whatsappLink}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#00c98b] text-black px-5 py-3 font-semibold hover:opacity-90 transition"
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#00c98b] px-4 py-2.5 text-sm font-semibold text-black transition hover:opacity-90"
             >
-              <MessageCircle size={20} />
-              Contact on WhatsApp
+              <MessageCircle size={17} />
+              WhatsApp
             </a>
 
             <a
               href={emailLink}
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#444] bg-[#181818] text-white px-5 py-3 font-semibold hover:bg-[#222] transition"
+              className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#333] bg-[#181818] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#222]"
             >
-              <Mail size={20} />
+              <Mail size={17} />
               Email Support
             </a>
           </div>
         </motion.section>
+
       </div>
     </div>
   );
-                  }
+}
