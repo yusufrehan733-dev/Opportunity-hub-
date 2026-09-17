@@ -261,14 +261,18 @@ export default function Admin() {
         const result =
           await adminRequest("users");
 
-        setUsers(result.users || []);
+        setUsers(
+          result.users || []
+        );
       }
 
       if (section === "leads") {
         const result =
           await adminRequest("leads");
 
-        setLeads(result.leads || []);
+        setLeads(
+          result.leads || []
+        );
       }
 
       if (section === "links") {
@@ -299,7 +303,7 @@ export default function Admin() {
     action: string,
     plan?: string
   ) {
-    setLoading(true);
+        setLoading(true);
     setError("");
 
     try {
@@ -462,7 +466,443 @@ export default function Admin() {
       </main>
     </div>
   );
-      }function LinksSection({
+                  }
+function Overview({
+  data,
+  loading,
+}: {
+  data: OverviewData | null;
+  loading: boolean;
+}) {
+  if (loading && !data) {
+    return (
+      <div className="rounded-xl border border-[#272727] bg-[#141414] p-6 text-sm text-[#888]">
+        Loading overview...
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="rounded-xl border border-[#272727] bg-[#141414] p-6 text-sm text-[#888]">
+        No overview data available.
+      </div>
+    );
+  }
+
+  const cards = [
+    {
+      label: "Users",
+      value: data.users,
+      icon: Users,
+    },
+    {
+      label: "Active Users",
+      value: data.activeUsers,
+      icon: UserPlus,
+    },
+    {
+      label: "Active Leads",
+      value: data.activeLeads,
+      icon: Target,
+    },
+    {
+      label: "Resellers",
+      value: data.resellers,
+      icon: Store,
+    },
+  ];
+
+  return (
+    <section className="space-y-5">
+      <div>
+        <h2 className="text-2xl font-semibold">
+          Overview
+        </h2>
+
+        <p className="mt-1 text-sm text-[#777]">
+          Opportunity Hub administration overview.
+        </p>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {cards.map((card) => {
+          const Icon = card.icon;
+
+          return (
+            <div
+              key={card.label}
+              className="rounded-xl border border-[#272727] bg-[#141414] p-4"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-[#777]">
+                  {card.label}
+                </span>
+
+                <Icon
+                  size={17}
+                  className="text-[#00c98b]"
+                />
+              </div>
+
+              <p className="mt-3 text-2xl font-semibold">
+                {card.value}
+              </p>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="rounded-xl border border-[#272727] bg-[#141414] p-4">
+          <p className="text-xs text-[#777]">
+            Demand Leads
+          </p>
+          <p className="mt-2 text-xl font-semibold">
+            {data.demandLeads ?? 0}
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-[#272727] bg-[#141414] p-4">
+          <p className="text-xs text-[#777]">
+            Supply Leads
+          </p>
+          <p className="mt-2 text-xl font-semibold">
+            {data.supplyLeads ?? 0}
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-[#272727] bg-[#141414] p-4">
+          <p className="text-xs text-[#777]">
+            Subscriptions
+          </p>
+          <p className="mt-2 text-xl font-semibold">
+            {data.subscriptions ?? 0}
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function UsersSection({
+  users,
+  loading,
+  updateUser,
+}: {
+  users: AdminUser[];
+  loading: boolean;
+  updateUser: (
+    user: AdminUser,
+    action: string,
+    plan?: string
+  ) => void;
+}) {
+  return (
+    <section className="space-y-5">
+      <div>
+        <h2 className="text-2xl font-semibold">
+          Users
+        </h2>
+
+        <p className="mt-1 text-sm text-[#777]">
+          Manage trials, subscriptions, plans, and access.
+        </p>
+      </div>
+
+      {users.length === 0 ? (
+        <div className="rounded-xl border border-[#272727] bg-[#141414] p-8 text-center text-sm text-[#666]">
+          No users found.
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {users.map((user) => {
+            const active =
+              isUserActive(user);
+
+            return (
+              <div
+                key={user.id}
+                className="rounded-xl border border-[#272727] bg-[#141414] p-4"
+              >
+                <div className="flex flex-col gap-3">
+                  <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <p className="text-sm font-semibold">
+                        {user.name ||
+                          "Unnamed User"}
+                      </p>
+
+                      <p className="break-all text-xs text-[#777]">
+                        {user.email ||
+                          "No email linked"}
+                      </p>
+                    </div>
+
+                    <span
+                      className={`text-xs font-medium ${getStatusClass(
+                        user
+                      )}`}
+                    >
+                      {getStatus(user)}
+                    </span>
+                  </div>
+
+                  <div className="grid gap-2 text-xs text-[#888] sm:grid-cols-3">
+                    <span>
+                      Plan:{" "}
+                      <strong className="text-white">
+                        {user.plan ||
+                          "Basic"}
+                      </strong>
+                    </span>
+
+                    <span>
+                      Trial ends:{" "}
+                      <strong className="text-white">
+                        {dateText(
+                          user.trial_end
+                        )}
+                      </strong>
+                    </span>
+
+                    <span>
+                      Subscription ends:{" "}
+                      <strong className="text-white">
+                        {dateText(
+                          user.subscription_end
+                        )}
+                      </strong>
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateUser(
+                          user,
+                          "trial"
+                        )
+                      }
+                      disabled={loading}
+                      className="rounded-lg border border-[#333] bg-[#181818] px-3 py-2 text-xs hover:bg-[#222] disabled:opacity-50"
+                    >
+                      Trial
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateUser(
+                          user,
+                          "renew"
+                        )
+                      }
+                      disabled={loading}
+                      className="rounded-lg border border-[#333] bg-[#181818] px-3 py-2 text-xs hover:bg-[#222] disabled:opacity-50"
+                    >
+                      Renew
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateUser(
+                          user,
+                          "upgrade",
+                          "Premium"
+                        )
+                      }
+                      disabled={loading}
+                      className="rounded-lg border border-[#333] bg-[#181818] px-3 py-2 text-xs hover:bg-[#222] disabled:opacity-50"
+                    >
+                      Premium
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateUser(
+                          user,
+                          "upgrade",
+                          "Gold"
+                        )
+                      }
+                      disabled={loading}
+                      className="rounded-lg border border-[#333] bg-[#181818] px-3 py-2 text-xs hover:bg-[#222] disabled:opacity-50"
+                    >
+                      Gold
+                    </button>
+
+                    {active ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateUser(
+                              user,
+                              "cancel"
+                            )
+                          }
+                          disabled={loading}
+                          className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300 hover:bg-red-500/20 disabled:opacity-50"
+                        >
+                          Cancel
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateUser(
+                              user,
+                              "deactivate"
+                            )
+                          }
+                          disabled={loading}
+                          className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-3 py-2 text-xs text-yellow-300 hover:bg-yellow-500/20 disabled:opacity-50"
+                        >
+                          Deactivate
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateUser(
+                            user,
+                            "activate"
+                          )
+                        }
+                        disabled={loading}
+                        className="rounded-lg border border-[#333] bg-[#181818] px-3 py-2 text-xs hover:bg-[#222] disabled:opacity-50"
+                      >
+                        Activate
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function LeadsSection({
+  leads,
+  loading,
+  reload,
+}: {
+  leads: AdminLead[];
+  loading: boolean;
+  reload: () => void;
+}) {
+  return (
+    <section className="space-y-5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-2xl font-semibold">
+            Leads
+          </h2>
+
+          <p className="mt-1 text-sm text-[#777]">
+            Demand and supply lead records.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={reload}
+          disabled={loading}
+          className="inline-flex items-center gap-2 rounded-lg border border-[#333] bg-[#181818] px-3 py-2 text-xs hover:bg-[#222] disabled:opacity-50"
+        >
+          <RefreshCw
+            size={14}
+            className={
+              loading
+                ? "animate-spin"
+                : ""
+            }
+          />
+          Refresh
+        </button>
+      </div>
+
+      {leads.length === 0 ? (
+        <div className="rounded-xl border border-[#272727] bg-[#141414] p-8 text-center text-sm text-[#666]">
+          No leads found.
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {leads.map((lead) => (
+            <div
+              key={lead.id}
+              className="rounded-xl border border-[#272727] bg-[#141414] p-4"
+            >
+              <div className="flex flex-col gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-md bg-[#222] px-2 py-1 text-[10px] uppercase text-[#aaa]">
+                    {lead.type ||
+                      "lead"}
+                  </span>
+
+                  {lead.status && (
+                    <span className="text-[11px] text-[#777]">
+                      {lead.status}
+                    </span>
+                  )}
+                </div>
+
+                <h3 className="text-sm font-semibold">
+                  {lead.title ||
+                    lead.client_name ||
+                    "Opportunity"}
+                </h3>
+
+                {lead.skill_needed && (
+                  <p className="text-xs text-[#aaa]">
+                    Skill:{" "}
+                    {lead.skill_needed}
+                  </p>
+                )}
+
+                <div className="flex flex-wrap gap-3 text-[11px] text-[#666]">
+                  {lead.country && (
+                    <span>
+                      Country:{" "}
+                      {lead.country}
+                    </span>
+                  )}
+
+                  {lead.source && (
+                    <span>
+                      Source:{" "}
+                      {lead.source}
+                    </span>
+                  )}
+
+                  {lead.created_at && (
+                    <span>
+                      Created:{" "}
+                      {dateText(
+                        lead.created_at
+                      )}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function LinksSection({
   invites,
   reload,
 }: {
@@ -730,16 +1170,454 @@ function Placeholder({
       </div>
     </section>
   );
+                  }function Overview({
+  data,
+  loading,
+}: {
+  data: OverviewData | null;
+  loading: boolean;
+}) {
+  if (loading && !data) {
+    return (
+      <div className="rounded-xl border border-[#272727] bg-[#141414] p-6 text-sm text-[#888]">
+        Loading overview...
+      </div>
+    );
+  }
 
-  function LinksSection({
+  if (!data) {
+    return (
+      <div className="rounded-xl border border-[#272727] bg-[#141414] p-6 text-sm text-[#888]">
+        No overview data available.
+      </div>
+    );
+  }
+
+  const cards = [
+    {
+      label: "Users",
+      value: data.users,
+      icon: Users,
+    },
+    {
+      label: "Active Users",
+      value: data.activeUsers,
+      icon: UserPlus,
+    },
+    {
+      label: "Active Leads",
+      value: data.activeLeads,
+      icon: Target,
+    },
+    {
+      label: "Resellers",
+      value: data.resellers,
+      icon: Store,
+    },
+  ];
+
+  return (
+    <section className="space-y-5">
+      <div>
+        <h2 className="text-2xl font-semibold">
+          Overview
+        </h2>
+
+        <p className="mt-1 text-sm text-[#777]">
+          Opportunity Hub administration overview.
+        </p>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {cards.map((card) => {
+          const Icon = card.icon;
+
+          return (
+            <div
+              key={card.label}
+              className="rounded-xl border border-[#272727] bg-[#141414] p-4"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-[#777]">
+                  {card.label}
+                </span>
+
+                <Icon
+                  size={17}
+                  className="text-[#00c98b]"
+                />
+              </div>
+
+              <p className="mt-3 text-2xl font-semibold">
+                {card.value}
+              </p>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="rounded-xl border border-[#272727] bg-[#141414] p-4">
+          <p className="text-xs text-[#777]">
+            Demand Leads
+          </p>
+          <p className="mt-2 text-xl font-semibold">
+            {data.demandLeads ?? 0}
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-[#272727] bg-[#141414] p-4">
+          <p className="text-xs text-[#777]">
+            Supply Leads
+          </p>
+          <p className="mt-2 text-xl font-semibold">
+            {data.supplyLeads ?? 0}
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-[#272727] bg-[#141414] p-4">
+          <p className="text-xs text-[#777]">
+            Subscriptions
+          </p>
+          <p className="mt-2 text-xl font-semibold">
+            {data.subscriptions ?? 0}
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function UsersSection({
+  users,
+  loading,
+  updateUser,
+}: {
+  users: AdminUser[];
+  loading: boolean;
+  updateUser: (
+    user: AdminUser,
+    action: string,
+    plan?: string
+  ) => void;
+}) {
+  return (
+    <section className="space-y-5">
+      <div>
+        <h2 className="text-2xl font-semibold">
+          Users
+        </h2>
+
+        <p className="mt-1 text-sm text-[#777]">
+          Manage trials, subscriptions, plans, and access.
+        </p>
+      </div>
+
+      {users.length === 0 ? (
+        <div className="rounded-xl border border-[#272727] bg-[#141414] p-8 text-center text-sm text-[#666]">
+          No users found.
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {users.map((user) => {
+            const active =
+              isUserActive(user);
+
+            return (
+              <div
+                key={user.id}
+                className="rounded-xl border border-[#272727] bg-[#141414] p-4"
+              >
+                <div className="flex flex-col gap-3">
+                  <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <p className="text-sm font-semibold">
+                        {user.name ||
+                          "Unnamed User"}
+                      </p>
+
+                      <p className="break-all text-xs text-[#777]">
+                        {user.email ||
+                          "No email linked"}
+                      </p>
+                    </div>
+
+                    <span
+                      className={`text-xs font-medium ${getStatusClass(
+                        user
+                      )}`}
+                    >
+                      {getStatus(user)}
+                    </span>
+                  </div>
+
+                  <div className="grid gap-2 text-xs text-[#888] sm:grid-cols-3">
+                    <span>
+                      Plan:{" "}
+                      <strong className="text-white">
+                        {user.plan ||
+                          "Basic"}
+                      </strong>
+                    </span>
+
+                    <span>
+                      Trial ends:{" "}
+                      <strong className="text-white">
+                        {dateText(
+                          user.trial_end
+                        )}
+                      </strong>
+                    </span>
+
+                    <span>
+                      Subscription ends:{" "}
+                      <strong className="text-white">
+                        {dateText(
+                          user.subscription_end
+                        )}
+                      </strong>
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateUser(
+                          user,
+                          "trial"
+                        )
+                      }
+                      disabled={loading}
+                      className="rounded-lg border border-[#333] bg-[#181818] px-3 py-2 text-xs hover:bg-[#222] disabled:opacity-50"
+                    >
+                      Trial
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateUser(
+                          user,
+                          "renew"
+                        )
+                      }
+                      disabled={loading}
+                      className="rounded-lg border border-[#333] bg-[#181818] px-3 py-2 text-xs hover:bg-[#222] disabled:opacity-50"
+                    >
+                      Renew
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateUser(
+                          user,
+                          "upgrade",
+                          "Premium"
+                        )
+                      }
+                      disabled={loading}
+                      className="rounded-lg border border-[#333] bg-[#181818] px-3 py-2 text-xs hover:bg-[#222] disabled:opacity-50"
+                    >
+                      Premium
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateUser(
+                          user,
+                          "upgrade",
+                          "Gold"
+                        )
+                      }
+                      disabled={loading}
+                      className="rounded-lg border border-[#333] bg-[#181818] px-3 py-2 text-xs hover:bg-[#222] disabled:opacity-50"
+                    >
+                      Gold
+                    </button>
+
+                    {active ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateUser(
+                              user,
+                              "cancel"
+                            )
+                          }
+                          disabled={loading}
+                          className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300 hover:bg-red-500/20 disabled:opacity-50"
+                        >
+                          Cancel
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateUser(
+                              user,
+                              "deactivate"
+                            )
+                          }
+                          disabled={loading}
+                          className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-3 py-2 text-xs text-yellow-300 hover:bg-yellow-500/20 disabled:opacity-50"
+                        >
+                          Deactivate
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateUser(
+                            user,
+                            "activate"
+                          )
+                        }
+                        disabled={loading}
+                        className="rounded-lg border border-[#333] bg-[#181818] px-3 py-2 text-xs hover:bg-[#222] disabled:opacity-50"
+                      >
+                        Activate
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function LeadsSection({
+  leads,
+  loading,
+  reload,
+}: {
+  leads: AdminLead[];
+  loading: boolean;
+  reload: () => void;
+}) {
+  return (
+    <section className="space-y-5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-2xl font-semibold">
+            Leads
+          </h2>
+
+          <p className="mt-1 text-sm text-[#777]">
+            Demand and supply lead records.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={reload}
+          disabled={loading}
+          className="inline-flex items-center gap-2 rounded-lg border border-[#333] bg-[#181818] px-3 py-2 text-xs hover:bg-[#222] disabled:opacity-50"
+        >
+          <RefreshCw
+            size={14}
+            className={
+              loading
+                ? "animate-spin"
+                : ""
+            }
+          />
+          Refresh
+        </button>
+      </div>
+
+      {leads.length === 0 ? (
+        <div className="rounded-xl border border-[#272727] bg-[#141414] p-8 text-center text-sm text-[#666]">
+          No leads found.
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {leads.map((lead) => (
+            <div
+              key={lead.id}
+              className="rounded-xl border border-[#272727] bg-[#141414] p-4"
+            >
+              <div className="flex flex-col gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-md bg-[#222] px-2 py-1 text-[10px] uppercase text-[#aaa]">
+                    {lead.type ||
+                      "lead"}
+                  </span>
+
+                  {lead.status && (
+                    <span className="text-[11px] text-[#777]">
+                      {lead.status}
+                    </span>
+                  )}
+                </div>
+
+                <h3 className="text-sm font-semibold">
+                  {lead.title ||
+                    lead.client_name ||
+                    "Opportunity"}
+                </h3>
+
+                {lead.skill_needed && (
+                  <p className="text-xs text-[#aaa]">
+                    Skill:{" "}
+                    {lead.skill_needed}
+                  </p>
+                )}
+
+                <div className="flex flex-wrap gap-3 text-[11px] text-[#666]">
+                  {lead.country && (
+                    <span>
+                      Country:{" "}
+                      {lead.country}
+                    </span>
+                  )}
+
+                  {lead.source && (
+                    <span>
+                      Source:{" "}
+                      {lead.source}
+                    </span>
+                  )}
+
+                  {lead.created_at && (
+                    <span>
+                      Created:{" "}
+                      {dateText(
+                        lead.created_at
+                      )}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function LinksSection({
   invites,
   reload,
 }: {
   invites: Invite[];
   reload: () => void;
 }) {
-  const [email, setEmail] = useState("");
-  const [plan, setPlan] = useState("Basic");
+  const [email, setEmail] =
+    useState("");
+
+  const [plan, setPlan] =
+    useState("Basic");
+
   const [loading, setLoading] =
     useState(false);
 
@@ -994,5 +1872,5 @@ function Placeholder({
         </p>
       </div>
     </section>
-  );
+  )
 }
