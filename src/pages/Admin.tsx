@@ -283,8 +283,7 @@ export default function Admin() {
           result.invites || []
         );
       }
-    } catch (err)
-    {
+    } catch (err) {
       setError(
         err instanceof Error
           ? err.message
@@ -467,7 +466,7 @@ export default function Admin() {
       </main>
     </div>
   );
-      }
+            }
 function Overview({
   data,
   loading,
@@ -1171,4 +1170,4 @@ function Placeholder({
       </div>
     </section>
   );
-                   }
+                }
