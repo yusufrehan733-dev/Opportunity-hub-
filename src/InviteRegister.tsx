@@ -529,8 +529,7 @@ export default function InviteRegister() {
           src={`${import.meta.env.BASE_URL}auth-bg.png`}
           alt="Abstract background"
         />
-      </div>
-          </div>
+            </div>
     </div>
   );
 }
