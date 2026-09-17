@@ -861,7 +861,3 @@ const selectStyle = {
   color: "#fff",
   fontSize: "15px",
 };
-
-After this file: deploy it. Don't change anything else yet.
-
-Then our next check is very specific: does "/api/leads" return actual Gold leads? If it returns "0", we move to the lead-ingestion side—not another frontend rewrite.
