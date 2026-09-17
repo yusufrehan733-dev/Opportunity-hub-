@@ -44,6 +44,44 @@ function getTrialDays(value: any) {
   return Math.min(Math.floor(days), 14);
 }
 
+async function findAuthUserByEmail(
+  supabase: any,
+  email: string
+) {
+  let page = 1;
+
+  while (true) {
+    const {
+      data,
+      error,
+    } = await supabase.auth.admin.listUsers({
+      page,
+      perPage: 1000,
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    const users = data?.users || [];
+
+    const match = users.find(
+      (user: any) =>
+        normalizeEmail(user.email) === email
+    );
+
+    if (match) {
+      return match;
+    }
+
+    if (users.length < 1000) {
+      return null;
+    }
+
+    page++;
+  }
+}
+
 export default async function handler(
   req: any,
   res: any
@@ -104,7 +142,8 @@ export default async function handler(
     if (!email) {
       return res.status(400).json({
         success: false,
-        error: "This invite does not contain a valid email.",
+        error:
+          "This invite does not contain a valid email.",
       });
     }
 
@@ -158,20 +197,28 @@ export default async function handler(
     if (password.length < 6) {
       return res.status(400).json({
         success: false,
-        error: "Password must be at least 6 characters",
+        error:
+          "Password must be at least 6 characters",
       });
   }
         /*
-     * =========================
-     * ONE EMAIL = ONE TRIAL
-     * =========================
+     * ==========================================
+     * CHECK EXISTING TRIAL
+     * ==========================================
+     *
+     * A trial row without a real account can be
+     * an orphan left by an earlier failed attempt.
+     * We clean only that orphan.
      */
+
     const {
       data: existingTrial,
       error: trialCheckError,
     } = await supabase
       .from("trial_identities")
-      .select("email")
+      .select(
+        "email,trial_started_at,trial_ends_at"
+      )
       .eq("email", email)
       .maybeSingle();
 
@@ -183,54 +230,105 @@ export default async function handler(
 
       return res.status(500).json({
         success: false,
-        error: "Could not verify trial eligibility",
+        error:
+          "Could not verify trial eligibility",
       });
     }
 
     if (existingTrial) {
-      console.error(
-        "INVITE BLOCKED: existing trial for email:",
+      let existingAuthUser = null;
+
+      try {
+        existingAuthUser =
+          await findAuthUserByEmail(
+            supabase,
+            email
+          );
+      } catch (error) {
+        console.error(
+          "Auth lookup error:",
+          error
+        );
+
+        return res.status(500).json({
+          success: false,
+          error:
+            "Could not verify account eligibility",
+        });
+      }
+
+      if (existingAuthUser) {
+        console.error(
+          "INVITE BLOCKED: existing account and trial for email:",
+          email
+        );
+
+        return res.status(409).json({
+          success: false,
+          error:
+            `An account already exists for ${email}.`,
+        });
+      }
+
+      /*
+       * No Auth account exists.
+       * Therefore this trial row is orphaned.
+       * Clean it automatically.
+       */
+      console.log(
+        "Cleaning orphan trial for email:",
         email
       );
 
-      return res.status(409).json({
-        success: false,
-        error: `A trial already exists for ${email}.`,
-      });
+      const {
+        error: orphanDeleteError,
+      } = await supabase
+        .from("trial_identities")
+        .delete()
+        .eq("email", email);
+
+      if (orphanDeleteError) {
+        console.error(
+          "Orphan trial cleanup error:",
+          orphanDeleteError
+        );
+
+        return res.status(500).json({
+          success: false,
+          error:
+            "Could not clean up the previous failed registration.",
+        });
+      }
     }
 
     /*
-     * =========================
-     * CHECK AUTH ACCOUNT
-     * =========================
+     * ==========================================
+     * CHECK EXISTING AUTH ACCOUNT
+     * ==========================================
      */
-    const {
-      data: authList,
-      error: authListError,
-    } = await supabase.auth.admin.listUsers({
-      page: 1,
-      perPage: 1000,
-    });
 
-    if (authListError) {
+    let existingAuthUser = null;
+
+    try {
+      existingAuthUser =
+        await findAuthUserByEmail(
+          supabase,
+          email
+        );
+    } catch (error) {
       console.error(
         "Auth user lookup error:",
-        authListError
+        error
       );
 
       return res.status(500).json({
         success: false,
-        error: "Could not verify account eligibility",
+        error:
+          "Could not verify account eligibility",
       });
     }
 
-    const alreadyExists =
-      (authList?.users || []).some(
-        (user: any) =>
-          normalizeEmail(user.email) === email
-      );
-
-    if (alreadyExists) {
+    if (existingAuthUser) {
       console.error(
         "INVITE BLOCKED: existing auth account for email:",
         email
@@ -238,56 +336,17 @@ export default async function handler(
 
       return res.status(409).json({
         success: false,
-        error: `An account already exists for ${email}.`,
+        error:
+          `An account already exists for ${email}.`,
       });
     }
 
     /*
-     * =========================
-     * CREATE AUTH USER
-     * =========================
+     * ==========================================
+     * CREATE TRIAL FIRST
+     * ==========================================
      */
-    const {
-      data: authData,
-      error: authError,
-    } =
-      await supabase.auth.admin.createUser({
-        email,
-        password,
-        email_confirm: true,
-        user_metadata: {
-          full_name: name,
-          phone,
-        },
-      });
 
-    if (authError) {
-      console.error(
-        "Auth account creation error:",
-        authError
-      );
-
-      return res.status(400).json({
-        success: false,
-        error: authError.message,
-      });
-    }
-
-    const userId =
-      authData?.user?.id;
-
-    if (!userId) {
-      return res.status(500).json({
-        success: false,
-        error: "Account could not be created.",
-      });
-    }
-
-    /*
-     * =========================
-     * CREATE TRIAL
-     * =========================
-     */
     const started = new Date();
 
     const ends = new Date(
@@ -317,30 +376,73 @@ export default async function handler(
         trialError
       );
 
-      await supabase.auth.admin.deleteUser(
-        userId
+      return res.status(500).json({
+        success: false,
+        error:
+          "Could not create trial.",
+      });
+    }
+
+    /*
+     * ==========================================
+     * CREATE AUTH ACCOUNT
+     * ==========================================
+     */
+
+    const {
+      data: authData,
+      error: authError,
+    } =
+      await supabase.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+        user_metadata: {
+          full_name: name,
+          phone,
+        },
+      });
+
+    if (authError) {
+      console.error(
+        "Auth account creation error:",
+        authError
       );
+
+      await supabase
+        .from("trial_identities")
+        .delete()
+        .eq("email", email);
+
+      return res.status(400).json({
+        success: false,
+        error: authError.message,
+      });
+    }
+
+    const userId =
+      authData?.user?.id;
+
+    if (!userId) {
+      await supabase
+        .from("trial_identities")
+        .delete()
+        .eq("email", email);
 
       return res.status(500).json({
         success: false,
-        error: "Could not create trial.",
+        error:
+          "Account could not be created.",
       });
-}
-    /*
-     * =========================
+        }
+        /*
+     * ==========================================
      * CREATE APPLICATION USER
-     *
-     * Confirmed public.users columns:
-     * id
-     * name
-     * plan
-     * trial_start
-     * trial_end
-     * subscription_end
-     * active
-     * =========================
+     * ==========================================
      */
+
     const {
+      data: applicationUser,
       error: userError,
     } = await supabase
       .from("users")
@@ -359,9 +461,13 @@ export default async function handler(
         {
           onConflict: "id",
         }
-      );
+      )
+      .select(
+        "id,name,plan,trial_start,trial_end,subscription_end,active"
+      )
+      .single();
 
-    if (userError) {
+    if (userError || !applicationUser) {
       console.error(
         "Application user creation error:",
         userError
@@ -384,10 +490,11 @@ export default async function handler(
     }
 
     /*
-     * =========================
+     * ==========================================
      * MARK INVITE USED
-     * =========================
+     * ==========================================
      */
+
     const {
       data: updatedInvite,
       error: inviteUpdateError,
@@ -410,17 +517,72 @@ export default async function handler(
       );
 
       /*
-       * The account itself is valid.
-       * Do not delete it because of an invite
-       * bookkeeping problem.
+       * Roll everything back because the invite
+       * could not be safely marked as used.
        */
+      await supabase
+        .from("users")
+        .delete()
+        .eq("id", userId);
+
+      await supabase
+        .from("trial_identities")
+        .delete()
+        .eq("email", email);
+
+      await supabase.auth.admin.deleteUser(
+        userId
+      );
+
+      return res.status(500).json({
+        success: false,
+        error:
+          "Could not finalize invite registration.",
+      });
+    }
+
+    if (!updatedInvite) {
+      console.error(
+        "Invite was not marked as used:",
+        invite.id
+      );
+
+      await supabase
+        .from("users")
+        .delete()
+        .eq("id", userId);
+
+      await supabase
+        .from("trial_identities")
+        .delete()
+        .eq("email", email);
+
+      await supabase.auth.admin.deleteUser(
+        userId
+      );
+
+      return res.status(409).json({
+        success: false,
+        error:
+          "This invite was already used. Please request a new invite.",
+      });
     }
 
     /*
-     * =========================
+     * ==========================================
      * SUCCESS
-     * =========================
+     * ==========================================
      */
+
+    console.log(
+      "INVITE REGISTRATION SUCCESS:",
+      {
+        email,
+        userId,
+        plan,
+      }
+    );
+
     return res.status(200).json({
       success: true,
       email,
@@ -431,9 +593,7 @@ export default async function handler(
       trial_end:
         ends.toISOString(),
       user_id: userId,
-      invite_used: Boolean(
-        updatedInvite || inviteUpdateError
-      ),
+      invite_used: true,
     });
   } catch (error: any) {
     console.error(
