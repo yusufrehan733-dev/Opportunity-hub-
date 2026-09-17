@@ -68,8 +68,6 @@ export default function InviteRegister() {
 
         if (cancelled) return;
 
-        // New API returns invite data inside data.invite.
-        // This also supports the older top-level format.
         const invite = data?.invite || data;
 
         setInviteData(invite);
@@ -207,16 +205,6 @@ export default function InviteRegister() {
         );
       }
 
-      /*
-       * Backend has created:
-       * 1. Supabase Auth account
-       * 2. trial_identities record
-       * 3. public.users record
-       * 4. used invite record
-       *
-       * Now sign the new user into Supabase.
-       */
-
       const {
         data: loginData,
         error: loginError,
@@ -242,10 +230,6 @@ export default function InviteRegister() {
         );
       }
 
-      /*
-       * Confirm that Supabase actually sees the session.
-       */
-
       const {
         data: sessionData,
         error: sessionError,
@@ -256,11 +240,6 @@ export default function InviteRegister() {
           "Account was created, but the login session could not be confirmed."
         );
       }
-
-      /*
-       * Registration is completely successful.
-       * Lock the form immediately.
-       */
 
       registrationSucceeded = true;
       setRegistrationComplete(true);
@@ -529,7 +508,7 @@ export default function InviteRegister() {
           src={`${import.meta.env.BASE_URL}auth-bg.png`}
           alt="Abstract background"
         />
-            </div>
+      </div>
     </div>
-  );
+  )
 }
