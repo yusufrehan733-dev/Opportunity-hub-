@@ -730,19 +730,16 @@ function Placeholder({
       </div>
     </section>
   );
-}function LinksSection({
+
+  function LinksSection({
   invites,
   reload,
 }: {
   invites: Invite[];
   reload: () => void;
 }) {
-  const [email, setEmail] =
-    useState("");
-
-  const [plan, setPlan] =
-    useState("Basic");
-
+  const [email, setEmail] = useState("");
+  const [plan, setPlan] = useState("Basic");
   const [loading, setLoading] =
     useState(false);
 
