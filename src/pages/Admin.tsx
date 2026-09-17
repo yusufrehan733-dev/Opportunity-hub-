@@ -9,7 +9,6 @@ import {
   Link2,
   RefreshCw,
   ShieldCheck,
-  CreditCard,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 
@@ -131,9 +130,7 @@ async function adminRequest(
       },
       ...(method === "POST"
         ? {
-            body: JSON.stringify(
-              options?.body || {}
-            ),
+            body: JSON.stringify(options?.body || {}),
           }
         : {}),
     }
@@ -196,12 +193,11 @@ function getStatusClass(user: AdminUser) {
   const status =
     getStatus(user).toLowerCase();
 
-  if (status === "active") {
+  if (
+    status === "active" ||
+    status === "trial"
+  ) {
     return "text-[#00c98b]";
-  }
-
-  if (status === "trial") {
-    return "text-yellow-400";
   }
 
   if (status === "deactivated") {
@@ -303,7 +299,7 @@ export default function Admin() {
     action: string,
     plan?: string
   ) {
-        setLoading(true);
+    setLoading(true);
     setError("");
 
     try {
@@ -466,7 +462,7 @@ export default function Admin() {
       </main>
     </div>
   );
-            }
+  }
 function Overview({
   data,
   loading,
@@ -558,6 +554,7 @@ function Overview({
           <p className="text-xs text-[#777]">
             Demand Leads
           </p>
+
           <p className="mt-2 text-xl font-semibold">
             {data.demandLeads ?? 0}
           </p>
@@ -567,6 +564,7 @@ function Overview({
           <p className="text-xs text-[#777]">
             Supply Leads
           </p>
+
           <p className="mt-2 text-xl font-semibold">
             {data.supplyLeads ?? 0}
           </p>
@@ -576,6 +574,7 @@ function Overview({
           <p className="text-xs text-[#777]">
             Subscriptions
           </p>
+
           <p className="mt-2 text-xl font-semibold">
             {data.subscriptions ?? 0}
           </p>
@@ -686,7 +685,7 @@ function UsersSection({
                         )
                       }
                       disabled={loading}
-                      className="rounded-lg border border-[#333] bg-[#181818] px-3 py-2 text-xs hover:bg-[#222] disabled:opacity-50"
+                      className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-3 py-2 text-xs text-yellow-300 hover:bg-yellow-500/20 disabled:opacity-50"
                     >
                       Trial
                     </button>
@@ -700,9 +699,24 @@ function UsersSection({
                         )
                       }
                       disabled={loading}
-                      className="rounded-lg border border-[#333] bg-[#181818] px-3 py-2 text-xs hover:bg-[#222] disabled:opacity-50"
+                      className="rounded-lg border border-[#00c98b]/30 bg-[#00c98b]/10 px-3 py-2 text-xs text-[#00c98b] hover:bg-[#00c98b]/20 disabled:opacity-50"
                     >
                       Renew
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateUser(
+                          user,
+                          "upgrade",
+                          "Basic"
+                        )
+                      }
+                      disabled={loading}
+                      className="rounded-lg border border-[#333] bg-[#181818] px-3 py-2 text-xs hover:bg-[#222] disabled:opacity-50"
+                    >
+                      Basic
                     </button>
 
                     <button
@@ -760,7 +774,7 @@ function UsersSection({
                             )
                           }
                           disabled={loading}
-                          className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-3 py-2 text-xs text-yellow-300 hover:bg-yellow-500/20 disabled:opacity-50"
+                          className="rounded-lg border border-orange-500/30 bg-orange-500/10 px-3 py-2 text-xs text-orange-300 hover:bg-orange-500/20 disabled:opacity-50"
                         >
                           Deactivate
                         </button>
@@ -775,7 +789,7 @@ function UsersSection({
                           )
                         }
                         disabled={loading}
-                        className="rounded-lg border border-[#333] bg-[#181818] px-3 py-2 text-xs hover:bg-[#222] disabled:opacity-50"
+                        className="rounded-lg border border-[#00c98b]/30 bg-[#00c98b]/10 px-3 py-2 text-xs text-[#00c98b] hover:bg-[#00c98b]/20 disabled:opacity-50"
                       >
                         Activate
                       </button>
@@ -789,8 +803,7 @@ function UsersSection({
       )}
     </section>
   );
-}
-
+              }
 function LeadsSection({
   leads,
   loading,
@@ -845,8 +858,7 @@ function LeadsSection({
               <div className="flex flex-col gap-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="rounded-md bg-[#222] px-2 py-1 text-[10px] uppercase text-[#aaa]">
-                    {lead.type ||
-                      "lead"}
+                    {lead.type || "lead"}
                   </span>
 
                   {lead.status && (
@@ -922,8 +934,7 @@ function LinksSection({
     useState("");
 
   const origin =
-    typeof window !==
-    "undefined"
+    typeof window !== "undefined"
       ? window.location.origin
       : "https://opportunity-hub-umber.vercel.app";
 
@@ -1078,9 +1089,7 @@ function LinksSection({
 
           return (
             <div
-              key={String(
-                invite.id
-              )}
+              key={String(invite.id)}
               className="rounded-xl border border-[#272727] bg-[#141414] p-4"
             >
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -1170,4 +1179,4 @@ function Placeholder({
       </div>
     </section>
   );
-                }
+          }
