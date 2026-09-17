@@ -9,7 +9,7 @@ import {
   CheckCircle,
 } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "./supabase";
+import { supabase } from "./lib/supabase";
 
 export default function InviteRegister() {
   const navigate = useNavigate();
@@ -18,20 +18,34 @@ export default function InviteRegister() {
   const [loading, setLoading] = useState(true);
   const [inviteData, setInviteData] = useState<any>(null);
   const [error, setError] = useState("");
+
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
+
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (!token) {
-      setError("Invalid invite link");
-      setLoading(false);
-      return;
-    }
+    let cancelled = false;
 
-    fetch(`/api/auth/invite/${token}`)
-      .then(async (res) => {
+    async function loadInvite() {
+      if (!token) {
+        setError("Invalid invite link");
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const res = await fetch(
+          `/api/auth/invite/${encodeURIComponent(token)}`,
+          {
+            method: "GET",
+            headers: {
+              Accept: "application/json",
+            },
+          }
+        );
+
         const text = await res.text();
 
         let data: any = {};
@@ -39,35 +53,46 @@ export default function InviteRegister() {
         try {
           data = text ? JSON.parse(text) : {};
         } catch {
-          setError(
+          throw new Error(
             `Server returned an invalid response (${res.status}).`
           );
-          return;
         }
 
-        if (!res.ok || data?.success === false) {
-          setError(
+        if (!res.ok || data?.success !== true) {
+          throw new Error(
             data?.error || "Invalid invite link"
           );
-          return;
         }
+
+        if (cancelled) return;
 
         setInviteData(data);
 
         if (data.name) {
-          setName(data.name);
+          setName(String(data.name));
         }
 
         if (data.phone) {
-          setPhone(data.phone);
+          setPhone(String(data.phone));
         }
-      })
-      .catch(() => {
-        setError("Could not verify invite link");
-      })
-      .finally(() => {
-        setLoading(false);
-      });
+      } catch (err: any) {
+        if (cancelled) return;
+
+        setError(
+          err?.message || "Could not verify invite link"
+        );
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    loadInvite();
+
+    return () => {
+      cancelled = true;
+    };
   }, [token]);
 
   const handleSubmit = async (
@@ -75,50 +100,71 @@ export default function InviteRegister() {
   ) => {
     e.preventDefault();
 
+    if (submitting) return;
+
     if (!token) {
       toast.error("Invalid invite link");
       return;
     }
 
-    if (!name.trim()) {
+    const cleanName = name.trim();
+    const cleanPhone = phone.trim();
+    const cleanPassword = password;
+
+    if (!cleanName) {
       toast.error("Please enter your name");
       return;
     }
 
-    if (password.length < 6) {
+    if (cleanPassword.length < 6) {
       toast.error(
         "Password must be at least 6 characters"
       );
       return;
     }
 
+    const email = String(
+      inviteData?.email || ""
+    )
+      .trim()
+      .toLowerCase();
+
+    if (!email) {
+      toast.error(
+        "The invite email could not be verified."
+      );
+      return;
+    }
+
     setSubmitting(true);
 
-    try {
-      const controller =
-        new AbortController();
+    let controller: AbortController | null = null;
+    let timeoutId: ReturnType<typeof setTimeout> | null =
+      null;
 
-      const timeout = setTimeout(() => {
-        controller.abort();
+    try {
+      controller = new AbortController();
+
+      timeoutId = setTimeout(() => {
+        controller?.abort();
       }, 20000);
 
       const res = await fetch(
-        `/api/auth/invite/${token}`,
+        `/api/auth/invite/${encodeURIComponent(token)}`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            Accept: "application/json",
           },
           body: JSON.stringify({
-            password,
-            name: name.trim(),
-            phone: phone.trim(),
+            name: cleanName,
+            phone: cleanPhone || null,
+            password: cleanPassword,
           }),
           signal: controller.signal,
         }
       );
-
-      clearTimeout(timeout);
 
       const text = await res.text();
 
@@ -132,61 +178,107 @@ export default function InviteRegister() {
         );
       }
 
-      if (
-        !res.ok ||
-        data?.success === false
-      ) {
+      if (!res.ok || data?.success !== true) {
         throw new Error(
           data?.error ||
             `Registration failed (${res.status}).`
         );
       }
 
-      const email =
-        data.email ||
-        inviteData?.email;
+      const createdEmail = String(
+        data.email || email
+      )
+        .trim()
+        .toLowerCase();
 
-      if (!email) {
+      if (!createdEmail) {
         throw new Error(
-          "Account was created, but the invite email is missing."
+          "Account was created, but the email was missing."
         );
-    }
-            const {
+      }
+            /*
+       * The backend has now created:
+       * 1. Supabase Auth account
+       * 2. trial_identities record
+       * 3. public.users record
+       * 4. used invite record
+       *
+       * Now we sign the new user into Supabase.
+       */
+
+      const {
+        data: loginData,
         error: loginError,
-      } =
-        await supabase.auth.signInWithPassword(
-          {
-            email,
-            password,
-          }
-        );
+      } = await supabase.auth.signInWithPassword({
+        email: createdEmail,
+        password: cleanPassword,
+      });
 
       if (loginError) {
-        toast.error(
-          "Account created. Please log in with your new email and password."
+        console.error(
+          "Invite registration login error:",
+          loginError
         );
 
-        navigate("/login");
-        return;
+        throw new Error(
+          "Account was created, but automatic login failed. Please use Login with your new email and password."
+        );
+      }
+
+      if (!loginData?.user || !loginData?.session) {
+        throw new Error(
+          "Account was created, but no login session was returned."
+        );
+      }
+
+      /*
+       * Confirm that Supabase actually sees the session.
+       */
+      const {
+        data: sessionData,
+        error: sessionError,
+      } = await supabase.auth.getSession();
+
+      if (sessionError || !sessionData?.session) {
+        throw new Error(
+          "Account was created, but the login session could not be confirmed."
+        );
       }
 
       toast.success(
-        "Account created! Welcome to Opportunity Hub"
+        "Account created! Welcome to Opportunity Hub."
       );
 
-      navigate("/dashboard");
+      /*
+       * Give React Router a clean navigation after
+       * Supabase has finished storing the session.
+       */
+      setTimeout(() => {
+        navigate("/dashboard", {
+          replace: true,
+        });
+      }, 100);
     } catch (err: any) {
       if (err?.name === "AbortError") {
         toast.error(
-          "Account creation is taking too long. Please try again."
+          "Account creation took too long. Please try again once."
         );
       } else {
+        console.error(
+          "Invite registration error:",
+          err
+        );
+
         toast.error(
           err?.message ||
             "Something went wrong. Please try again."
         );
       }
     } finally {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+
       setSubmitting(false);
     }
   };
@@ -219,14 +311,12 @@ export default function InviteRegister() {
           </p>
 
           <p className="text-sm text-muted-foreground">
-            This invite link may have already
-            been used or expired.
+            This invite link may have already been
+            used or expired.
           </p>
 
           <button
-            onClick={() =>
-              navigate("/login")
-            }
+            onClick={() => navigate("/login")}
             className="mt-4 px-5 py-2 rounded-lg border border-border hover:bg-muted"
           >
             Go to Login
@@ -240,7 +330,7 @@ export default function InviteRegister() {
     <div className="min-h-screen flex bg-background">
       <div className="flex-1 flex flex-col justify-center px-4 sm:px-6 lg:flex-none lg:w-1/2 lg:px-20 xl:px-24 border-r">
         <div className="mx-auto w-full max-w-sm lg:w-96">
-                    <motion.div
+          <motion.div
             initial={{
               opacity: 0,
               y: 20,
@@ -287,13 +377,12 @@ export default function InviteRegister() {
               <span>
                 Plan:{" "}
                 <strong className="capitalize">
-                  {inviteData?.plan || "basic"}
+                  {inviteData?.plan || "Basic"}
                 </strong>
               </span>
             </div>
           </div>
-
-          <motion.div
+                    <motion.div
             initial={{
               opacity: 0,
               y: 20,
@@ -341,6 +430,7 @@ export default function InviteRegister() {
                     setName(e.target.value)
                   }
                   required
+                  disabled={submitting}
                   className="w-full px-3 py-2 rounded-lg border border-border bg-background"
                 />
               </div>
@@ -358,6 +448,7 @@ export default function InviteRegister() {
                   onChange={(e) =>
                     setPhone(e.target.value)
                   }
+                  disabled={submitting}
                   className="w-full px-3 py-2 rounded-lg border border-border bg-background"
                 />
               </div>
@@ -377,6 +468,7 @@ export default function InviteRegister() {
                   }
                   required
                   minLength={6}
+                  disabled={submitting}
                   className="w-full px-3 py-2 rounded-lg border border-border bg-background"
                 />
               </div>
@@ -408,4 +500,4 @@ export default function InviteRegister() {
       </div>
     </div>
   );
-      }
+            }
