@@ -82,6 +82,22 @@ async function findAuthUserByEmail(
   }
 }
 
+function getBody(req: any) {
+  if (!req.body) {
+    return {};
+  }
+
+  if (typeof req.body === "string") {
+    try {
+      return JSON.parse(req.body);
+    } catch {
+      return {};
+    }
+  }
+
+  return req.body;
+}
+
 export default async function handler(
   req: any,
   res: any
@@ -99,6 +115,12 @@ export default async function handler(
         error: "Invite token is required",
       });
     }
+
+    /*
+     * ==========================================
+     * LOAD INVITE
+     * ==========================================
+     */
 
     const {
       data: invite,
@@ -130,10 +152,14 @@ export default async function handler(
       });
     }
 
+    /*
+     * An actually consumed invite stays consumed.
+     */
     if (invite.used_at || invite.user_id) {
       return res.status(409).json({
         success: false,
-        error: "This invite has already been used.",
+        error:
+          "This invite has already been used.",
       });
     }
 
@@ -147,13 +173,90 @@ export default async function handler(
       });
     }
 
-    const plan = String(
-      invite.plan || "Basic"
-    ).trim();
+    const body = getBody(req);
+
+    /*
+     * ==========================================
+     * GET = SHOW INVITE
+     * ==========================================
+     */
+
+    if (req.method === "GET") {
+      return res.status(200).json({
+        success: true,
+        invite: {
+          email,
+          name:
+            String(invite.name || "").trim(),
+          phone:
+            String(invite.phone || "").trim(),
+          plan:
+            String(invite.plan || "Basic").trim(),
+          trial_days:
+            getTrialDays(invite.trial_days),
+        },
+      });
+    }
+
+    /*
+     * ==========================================
+     * POST = REGISTER
+     * ==========================================
+     */
+
+    if (req.method !== "POST") {
+      return res.status(405).json({
+        success: false,
+        error: "Method not allowed",
+      });
+    }
+
+    const name =
+      String(
+        body.name ??
+        invite.name ??
+        ""
+      ).trim();
+
+    const phone =
+      String(
+        body.phone ??
+        invite.phone ??
+        ""
+      ).trim();
+
+    const password =
+      String(body.password || "");
+
+    if (!password || password.length < 6) {
+      return res.status(400).json({
+        success: false,
+        error:
+          "Password must be at least 6 characters.",
+      });
+    }
+
+    const plan =
+      String(
+        invite.plan || "Basic"
+      ).trim();
 
     const trialDays = getTrialDays(
       invite.trial_days
     );
+
+    /*
+     * ==========================================
+     * FIND EXISTING AUTH ACCOUNT
+     * ==========================================
+     *
+     * Old unused invites may point to an email
+     * that already has an Auth account from
+     * previous testing.
+     *
+     * We reuse that Auth identity instead of
+     * rejecting the old invite.
+     */
 
     let existingAuthUser = null;
 
@@ -176,19 +279,6 @@ export default async function handler(
       });
     }
 
-    if (existingAuthUser) {
-      console.error(
-        "INVITE BLOCKED: existing auth account for email:",
-        email
-      );
-
-      return res.status(409).json({
-        success: false,
-        error:
-          `An account already exists for ${email}.`,
-      });
-    }
-
     const started = new Date();
 
     const ends = new Date(
@@ -199,135 +289,319 @@ export default async function handler(
           60 *
           1000
     );
-        /*
+
+    let userId = "";
+    let createdAuthUser = false;
+    let createdTrialIdentity = false;
+    let createdApplicationUser = false;
+
+    /*
      * ==========================================
-     * CREATE TRIAL IDENTITY
+     * AUTH ACCOUNT
+     * ==========================================
+     */
+
+    if (existingAuthUser) {
+      userId = existingAuthUser.id;
+
+      const {
+        error: updateAuthError,
+      } =
+        await supabase.auth.admin.updateUserById(
+          userId,
+          {
+            password,
+            user_metadata: {
+              ...(existingAuthUser.user_metadata ||
+                {}),
+              full_name:
+                name ||
+                existingAuthUser.user_metadata
+                  ?.full_name ||
+                email.split("@")[0],
+              phone:
+                phone ||
+                existingAuthUser.user_metadata
+                  ?.phone ||
+                null,
+            },
+          }
+        );
+
+      if (updateAuthError) {
+        console.error(
+          "Existing Auth update error:",
+          updateAuthError
+        );
+
+        return res.status(500).json({
+          success: false,
+          error:
+            updateAuthError.message ||
+            "Could not activate existing account.",
+        });
+      }
+    } else {
+      const {
+        data: authData,
+        error: authError,
+      } =
+        await supabase.auth.admin.createUser({
+          email,
+          password,
+          email_confirm: true,
+          user_metadata: {
+            full_name:
+              name ||
+              email.split("@")[0],
+            phone: phone || null,
+          },
+        });
+
+      if (
+        authError ||
+        !authData?.user
+      ) {
+        console.error(
+          "Auth account creation error:",
+          authError
+        );
+
+        return res.status(500).json({
+          success: false,
+          error:
+            authError?.message ||
+            "Could not create account.",
+        });
+      }
+
+      userId = authData.user.id;
+      createdAuthUser = true;
+    }
+
+    /*
+     * ==========================================
+     * TRIAL IDENTITY
      * ==========================================
      */
 
     const {
-      error: trialError,
+      data: existingTrial,
+      error: trialLookupError,
     } = await supabase
       .from("trial_identities")
-      .insert({
-        email,
-        trial_started_at:
-          started.toISOString(),
-        trial_ends_at:
-          ends.toISOString(),
-      });
+      .select(
+        "email,trial_started_at,trial_ends_at"
+      )
+      .eq("email", email)
+      .maybeSingle();
 
-    if (trialError) {
+    if (trialLookupError) {
       console.error(
-        "Trial creation error:",
-        trialError
+        "Trial lookup error:",
+        trialLookupError
       );
+
+      if (createdAuthUser) {
+        await supabase.auth.admin.deleteUser(
+          userId
+        );
+      }
 
       return res.status(500).json({
         success: false,
         error:
-          "Could not create trial.",
+          "Could not verify trial eligibility.",
       });
     }
 
     /*
-     * ==========================================
-     * CREATE AUTH ACCOUNT
-     * ==========================================
+     * If this is an old test identity with the
+     * same email, reuse/update its trial record
+     * instead of creating a duplicate.
      */
+    if (existingTrial) {
+      const { error: trialUpdateError } =
+        await supabase
+          .from("trial_identities")
+          .update({
+            trial_started_at:
+              started.toISOString(),
+            trial_ends_at:
+              ends.toISOString(),
+          })
+          .eq("email", email);
 
-    const temporaryPassword =
-      `${cryptoRandomPasswordPart()}!`;
+      if (trialUpdateError) {
+        console.error(
+          "Trial update error:",
+          trialUpdateError
+        );
 
-    const {
-      data: authData,
-      error: authError,
-    } = await supabase.auth.admin.createUser({
-      email,
-      password: temporaryPassword,
-      email_confirm: true,
-      user_metadata: {
-        full_name:
-          String(invite.name || "").trim(),
-        phone:
-          String(invite.phone || "").trim() ||
-          null,
-      },
-    });
+        if (createdAuthUser) {
+          await supabase.auth.admin.deleteUser(
+            userId
+          );
+        }
 
-    if (authError || !authData?.user) {
-      console.error(
-        "Auth account creation error:",
-        authError
-      );
-
-      await supabase
+        return res.status(500).json({
+          success: false,
+          error:
+            "Could not activate trial.",
+        });
+      }
+    } else {
+      const {
+        error: trialInsertError,
+      } = await supabase
         .from("trial_identities")
-        .delete()
-        .eq("email", email);
+        .insert({
+          email,
+          trial_started_at:
+            started.toISOString(),
+          trial_ends_at:
+            ends.toISOString(),
+        });
 
-      return res.status(500).json({
-        success: false,
-        error:
-          authError?.message ||
-          "Could not create account.",
-      });
+      if (trialInsertError) {
+        console.error(
+          "Trial creation error:",
+          trialInsertError
+        );
+
+        if (createdAuthUser) {
+          await supabase.auth.admin.deleteUser(
+            userId
+          );
+        }
+
+        return res.status(500).json({
+          success: false,
+          error:
+            "Could not create trial.",
+        });
+      }
+
+      createdTrialIdentity = true;
     }
-
-    const userId = authData.user.id;
 
     /*
      * ==========================================
-     * CREATE APPLICATION USER
-     * IMPORTANT:
-     * public.users DOES NOT HAVE active COLUMN
+     * APPLICATION USER
      * ==========================================
      */
 
     const {
-      error: applicationUserError,
+      data: existingApplicationUser,
+      error: applicationLookupError,
     } = await supabase
       .from("users")
-      .insert({
-        id: userId,
-        name:
-          String(invite.name || "").trim() ||
-          email.split("@")[0],
-        plan,
-        trial_start:
-          started.toISOString(),
-        trial_end:
-          ends.toISOString(),
-        subscription_end: null,
-      });
+      .select(
+        "id,name,plan,trial_start,trial_end,subscription_end"
+      )
+      .eq("id", userId)
+      .maybeSingle();
 
-    if (applicationUserError) {
+    if (applicationLookupError) {
       console.error(
-        "Application user creation error:",
-        applicationUserError
+        "Application user lookup error:",
+        applicationLookupError
       );
 
-      await supabase
-        .from("trial_identities")
-        .delete()
-        .eq("email", email);
-
-      await supabase.auth.admin.deleteUser(
-        userId
-      );
+      if (createdAuthUser) {
+        await supabase.auth.admin.deleteUser(
+          userId
+        );
+      }
 
       return res.status(500).json({
         success: false,
         error:
-          applicationUserError.message ||
-          "Could not create application user.",
+          "Could not verify application account.",
       });
+    }
+
+    if (existingApplicationUser) {
+      const {
+        error: applicationUpdateError,
+      } = await supabase
+        .from("users")
+        .update({
+          name:
+            name ||
+            existingApplicationUser.name ||
+            email.split("@")[0],
+          plan,
+          trial_start:
+            started.toISOString(),
+          trial_end:
+            ends.toISOString(),
+          subscription_end: null,
+        })
+        .eq("id", userId);
+
+      if (applicationUpdateError) {
+        console.error(
+          "Application user update error:",
+          applicationUpdateError
+        );
+
+        return res.status(500).json({
+          success: false,
+          error:
+            applicationUpdateError.message ||
+            "Could not activate application account.",
+        });
+      }
+    } else {
+      const {
+        error: applicationUserError,
+      } = await supabase
+        .from("users")
+        .insert({
+          id: userId,
+          name:
+            name ||
+            email.split("@")[0],
+          plan,
+          trial_start:
+            started.toISOString(),
+          trial_end:
+            ends.toISOString(),
+          subscription_end: null,
+        });
+
+      if (applicationUserError) {
+        console.error(
+          "Application user creation error:",
+          applicationUserError
+        );
+
+        if (createdAuthUser) {
+          await supabase.auth.admin.deleteUser(
+            userId
+          );
+        }
+
+        return res.status(500).json({
+          success: false,
+          error:
+            applicationUserError.message ||
+            "Could not create application user.",
+        });
+      }
+
+      createdApplicationUser = true;
     }
 
     /*
      * ==========================================
-     * MARK INVITE AS USED
+     * FINALIZE INVITE
      * ==========================================
+     *
+     * The conditional update prevents two
+     * simultaneous submissions from consuming
+     * the same invite.
      */
 
     const {
@@ -336,7 +610,8 @@ export default async function handler(
     } = await supabase
       .from("invites")
       .update({
-        used_at: new Date().toISOString(),
+        used_at:
+          new Date().toISOString(),
         user_id: userId,
       })
       .eq("id", invite.id)
@@ -351,46 +626,14 @@ export default async function handler(
         updateInviteError
       );
 
-      await supabase
-        .from("users")
-        .delete()
-        .eq("id", userId);
-
-      await supabase
-        .from("trial_identities")
-        .delete()
-        .eq("email", email);
-
-      await supabase.auth.admin.deleteUser(
-        userId
-      );
-
       return res.status(500).json({
         success: false,
         error:
           "Could not finalize invite registration.",
       });
     }
-        if (!updatedInvite) {
-      console.error(
-        "Invite was not marked as used:",
-        invite.id
-      );
 
-      await supabase
-        .from("users")
-        .delete()
-        .eq("id", userId);
-
-      await supabase
-        .from("trial_identities")
-        .delete()
-        .eq("email", email);
-
-      await supabase.auth.admin.deleteUser(
-        userId
-      );
-
+    if (!updatedInvite) {
       return res.status(409).json({
         success: false,
         error:
@@ -410,6 +653,8 @@ export default async function handler(
         email,
         userId,
         plan,
+        reusedAuth:
+          Boolean(existingAuthUser),
       }
     );
 
@@ -438,15 +683,4 @@ export default async function handler(
         "Internal server error",
     });
   }
-}
-
-function cryptoRandomPasswordPart() {
-  return (
-    Math.random()
-      .toString(36)
-      .slice(2, 12) +
-    Math.random()
-      .toString(36)
-      .slice(2, 12)
-  );
-}
+      }
