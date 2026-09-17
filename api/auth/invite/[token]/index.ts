@@ -62,9 +62,6 @@ export default async function handler(
       });
     }
 
-    /*
-     * Find the invite.
-     */
     const {
       data: invite,
       error: inviteError,
@@ -95,11 +92,8 @@ export default async function handler(
       });
     }
 
-    /*
-     * Used invites cannot be reused.
-     */
     if (invite.used_at || invite.user_id) {
-      return res.status(400).json({
+      return res.status(409).json({
         success: false,
         error: "This invite has already been used.",
       });
@@ -122,11 +116,6 @@ export default async function handler(
       invite.trial_days
     );
 
-    /*
-     * =========================
-     * GET
-     * =========================
-     */
     if (req.method === "GET") {
       return res.status(200).json({
         success: true,
@@ -138,11 +127,6 @@ export default async function handler(
       });
     }
 
-    /*
-     * =========================
-     * POST
-     * =========================
-     */
     if (req.method !== "POST") {
       return res.status(405).json({
         success: false,
@@ -176,9 +160,8 @@ export default async function handler(
         success: false,
         error: "Password must be at least 6 characters",
       });
-    }
-
-    /*
+  }
+        /*
      * =========================
      * ONE EMAIL = ONE TRIAL
      * =========================
@@ -205,9 +188,14 @@ export default async function handler(
     }
 
     if (existingTrial) {
-      return res.status(400).json({
+      console.error(
+        "INVITE BLOCKED: existing trial for email:",
+        email
+      );
+
+      return res.status(409).json({
         success: false,
-        error: "A trial already exists for this email.",
+        error: `A trial already exists for ${email}.`,
       });
     }
 
@@ -243,9 +231,14 @@ export default async function handler(
       );
 
     if (alreadyExists) {
-      return res.status(400).json({
+      console.error(
+        "INVITE BLOCKED: existing auth account for email:",
+        email
+      );
+
+      return res.status(409).json({
         success: false,
-        error: "An account already exists for this email.",
+        error: `An account already exists for ${email}.`,
       });
     }
 
@@ -332,15 +325,12 @@ export default async function handler(
         success: false,
         error: "Could not create trial.",
       });
-    }
-
+}
     /*
      * =========================
      * CREATE APPLICATION USER
      *
-     * IMPORTANT:
-     * The confirmed users table contains:
-     *
+     * Confirmed public.users columns:
      * id
      * name
      * plan
@@ -348,8 +338,6 @@ export default async function handler(
      * trial_end
      * subscription_end
      * active
-     *
-     * Do NOT insert subscription_status.
      * =========================
      */
     const {
@@ -390,7 +378,8 @@ export default async function handler(
 
       return res.status(500).json({
         success: false,
-        error: "Could not create application profile.",
+        error:
+          "Could not create application profile.",
       });
     }
 
@@ -459,4 +448,4 @@ export default async function handler(
         "Internal server error",
     });
   }
-}
+      }
