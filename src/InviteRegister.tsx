@@ -68,14 +68,18 @@ export default function InviteRegister() {
 
         if (cancelled) return;
 
-        setInviteData(data);
+        // New API returns invite data inside data.invite.
+        // This also supports the older top-level format.
+        const invite = data?.invite || data;
 
-        if (data.name) {
-          setName(String(data.name));
+        setInviteData(invite);
+
+        if (invite?.name) {
+          setName(String(invite.name));
         }
 
-        if (data.phone) {
-          setPhone(String(data.phone));
+        if (invite?.phone) {
+          setPhone(String(invite.phone));
         }
       } catch (err: any) {
         if (cancelled) return;
@@ -201,9 +205,10 @@ export default function InviteRegister() {
         throw new Error(
           "Account was created, but the email was missing."
         );
-    }
-            /*
-       * The backend has now created:
+      }
+
+      /*
+       * Backend has created:
        * 1. Supabase Auth account
        * 2. trial_identities record
        * 3. public.users record
@@ -253,9 +258,8 @@ export default function InviteRegister() {
       }
 
       /*
-       * Registration is now completely successful.
-       * Lock the form immediately so the same invite
-       * cannot submit a second POST request.
+       * Registration is completely successful.
+       * Lock the form immediately.
        */
 
       registrationSucceeded = true;
@@ -291,17 +295,13 @@ export default function InviteRegister() {
         clearTimeout(timeoutId);
       }
 
-      /*
-       * Keep the form locked after successful registration.
-       * Only unlock it when registration actually failed.
-       */
-
       if (!registrationSucceeded) {
         setSubmitting(false);
       }
     }
   };
-    if (loading) {
+
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="w-8 h-8 rounded-full border-4 border-primary/30 border-t-primary animate-spin" />
@@ -428,9 +428,7 @@ export default function InviteRegister() {
                 <input
                   id="email"
                   type="email"
-                  value={
-                    inviteData?.email || ""
-                  }
+                  value={inviteData?.email || ""}
                   disabled
                   className="w-full px-3 py-2 rounded-lg border border-border bg-muted cursor-not-allowed font-medium"
                 />
@@ -534,4 +532,3 @@ export default function InviteRegister() {
       </div>
     </div>
   );
-}
