@@ -32,23 +32,47 @@ export default function InviteRegister() {
 
     fetch(`/api/auth/invite/${token}`)
       .then(async (res) => {
-        const data = await res.json();
+        const text = await res.text();
 
-        if (!res.ok) {
-          setError(data.error || "Invalid invite link");
+        let data: any = {};
+
+        try {
+          data = text ? JSON.parse(text) : {};
+        } catch {
+          setError(
+            `Server returned an invalid response (${res.status}).`
+          );
+          return;
+        }
+
+        if (!res.ok || data?.success === false) {
+          setError(
+            data?.error || "Invalid invite link"
+          );
           return;
         }
 
         setInviteData(data);
 
-        if (data.name) setName(data.name);
-        if (data.phone) setPhone(data.phone);
+        if (data.name) {
+          setName(data.name);
+        }
+
+        if (data.phone) {
+          setPhone(data.phone);
+        }
       })
-      .catch(() => setError("Could not verify invite link"))
-      .finally(() => setLoading(false));
+      .catch(() => {
+        setError("Could not verify invite link");
+      })
+      .finally(() => {
+        setLoading(false);
+      });
   }, [token]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (
+    e: React.FormEvent
+  ) => {
     e.preventDefault();
 
     if (!token) {
@@ -62,56 +86,106 @@ export default function InviteRegister() {
     }
 
     if (password.length < 6) {
-      toast.error("Password must be at least 6 characters");
+      toast.error(
+        "Password must be at least 6 characters"
+      );
       return;
     }
 
     setSubmitting(true);
 
     try {
-      const res = await fetch(`/api/auth/invite/${token}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          password,
-          name: name.trim(),
-          phone: phone.trim(),
-        }),
-      });
+      const controller =
+        new AbortController();
 
-      const data = await res.json();
+      const timeout = setTimeout(() => {
+        controller.abort();
+      }, 20000);
 
-      if (!res.ok) {
-        toast.error(data.error || "Registration failed");
-        return;
+      const res = await fetch(
+        `/api/auth/invite/${token}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            password,
+            name: name.trim(),
+            phone: phone.trim(),
+          }),
+          signal: controller.signal,
+        }
+      );
+
+      clearTimeout(timeout);
+
+      const text = await res.text();
+
+      let data: any = {};
+
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch {
+        throw new Error(
+          `Server returned an invalid response (${res.status}).`
+        );
       }
 
-      const email = inviteData?.email;
+      if (
+        !res.ok ||
+        data?.success === false
+      ) {
+        throw new Error(
+          data?.error ||
+            `Registration failed (${res.status}).`
+        );
+      }
+
+      const email =
+        data.email ||
+        inviteData?.email;
 
       if (!email) {
-        toast.error("Account created, but invite email is missing.");
-        navigate("/login");
-        return;
-      }
-
-      const { error: loginError } =
-        (await supabase?.auth.signInWithPassword({
-          email,
-          password,
-        })) || { error: new Error("Supabase is not configured") };
+        throw new Error(
+          "Account was created, but the invite email is missing."
+        );
+    }
+            const {
+        error: loginError,
+      } =
+        await supabase.auth.signInWithPassword(
+          {
+            email,
+            password,
+          }
+        );
 
       if (loginError) {
         toast.error(
           "Account created. Please log in with your new email and password."
         );
+
         navigate("/login");
         return;
       }
 
-      toast.success("Account created! Welcome to Opportunity Hub");
+      toast.success(
+        "Account created! Welcome to Opportunity Hub"
+      );
+
       navigate("/dashboard");
-    } catch {
-      toast.error("Something went wrong. Please try again.");
+    } catch (err: any) {
+      if (err?.name === "AbortError") {
+        toast.error(
+          "Account creation is taking too long. Please try again."
+        );
+      } else {
+        toast.error(
+          err?.message ||
+            "Something went wrong. Please try again."
+        );
+      }
     } finally {
       setSubmitting(false);
     }
@@ -130,21 +204,29 @@ export default function InviteRegister() {
       <div className="min-h-screen flex items-center justify-center bg-background px-4">
         <div className="max-w-md w-full text-center space-y-4">
           <div className="w-16 h-16 rounded-2xl bg-destructive/10 flex items-center justify-center mx-auto">
-            <Shield size={32} className="text-destructive" />
+            <Shield
+              size={32}
+              className="text-destructive"
+            />
           </div>
 
           <h2 className="text-2xl font-bold text-foreground">
             Invalid Invite
           </h2>
 
-          <p className="text-muted-foreground">{error}</p>
+          <p className="text-muted-foreground">
+            {error}
+          </p>
 
           <p className="text-sm text-muted-foreground">
-            This invite link may have already been used or expired.
+            This invite link may have already
+            been used or expired.
           </p>
 
           <button
-            onClick={() => navigate("/login")}
+            onClick={() =>
+              navigate("/login")
+            }
             className="mt-4 px-5 py-2 rounded-lg border border-border hover:bg-muted"
           >
             Go to Login
@@ -158,15 +240,24 @@ export default function InviteRegister() {
     <div className="min-h-screen flex bg-background">
       <div className="flex-1 flex flex-col justify-center px-4 sm:px-6 lg:flex-none lg:w-1/2 lg:px-20 xl:px-24 border-r">
         <div className="mx-auto w-full max-w-sm lg:w-96">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
+                    <motion.div
+            initial={{
+              opacity: 0,
+              y: 20,
+            }}
+            animate={{
+              opacity: 1,
+              y: 0,
+            }}
+            transition={{
+              duration: 0.5,
+            }}
           >
             <div className="flex items-center gap-2 text-primary font-bold text-2xl mb-8">
               <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-white shadow-lg shadow-primary/30">
                 <Briefcase size={22} />
               </div>
+
               Opportunity Hub
             </div>
 
@@ -175,20 +266,24 @@ export default function InviteRegister() {
             </h2>
 
             <p className="mt-2 text-muted-foreground">
-              Complete your registration to start discovering leads.
+              Complete your registration to start
+              discovering leads.
             </p>
           </motion.div>
 
           <div className="mt-4 p-4 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 space-y-2">
             <div className="flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-400">
               <Clock size={16} />
+
               <span className="font-semibold">
-                {inviteData?.trial_days || 14} days free trial included
+                {inviteData?.trial_days || 14} days
+                free trial included
               </span>
             </div>
 
             <div className="flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-400">
               <CheckCircle size={16} />
+
               <span>
                 Plan:{" "}
                 <strong className="capitalize">
@@ -199,55 +294,87 @@ export default function InviteRegister() {
           </div>
 
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.1 }}
+            initial={{
+              opacity: 0,
+              y: 20,
+            }}
+            animate={{
+              opacity: 1,
+              y: 0,
+            }}
+            transition={{
+              duration: 0.5,
+              delay: 0.1,
+            }}
             className="mt-8"
           >
-            <form onSubmit={handleSubmit} className="space-y-5">
+            <form
+              onSubmit={handleSubmit}
+              className="space-y-5"
+            >
               <div className="space-y-2">
-                <label htmlFor="email">Email address</label>
+                <label htmlFor="email">
+                  Email address
+                </label>
+
                 <input
                   id="email"
                   type="email"
-                  value={inviteData?.email || ""}
+                  value={
+                    inviteData?.email || ""
+                  }
                   disabled
                   className="w-full px-3 py-2 rounded-lg border border-border bg-muted cursor-not-allowed font-medium"
                 />
               </div>
 
               <div className="space-y-2">
-                <label htmlFor="name">Full name</label>
+                <label htmlFor="name">
+                  Full name
+                </label>
+
                 <input
                   id="name"
                   placeholder="Your full name"
                   value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  onChange={(e) =>
+                    setName(e.target.value)
+                  }
                   required
                   className="w-full px-3 py-2 rounded-lg border border-border bg-background"
                 />
               </div>
 
               <div className="space-y-2">
-                <label htmlFor="phone">Phone number</label>
+                <label htmlFor="phone">
+                  Phone number
+                </label>
+
                 <input
                   id="phone"
                   type="tel"
                   placeholder="+92 300 0000000"
                   value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
+                  onChange={(e) =>
+                    setPhone(e.target.value)
+                  }
                   className="w-full px-3 py-2 rounded-lg border border-border bg-background"
                 />
               </div>
 
               <div className="space-y-2">
-                <label htmlFor="password">Create a password</label>
+                <label htmlFor="password">
+                  Create a password
+                </label>
+
                 <input
                   id="password"
                   type="password"
                   placeholder="At least 6 characters"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) =>
+                    setPassword(e.target.value)
+                  }
                   required
                   minLength={6}
                   className="w-full px-3 py-2 rounded-lg border border-border bg-background"
@@ -259,8 +386,13 @@ export default function InviteRegister() {
                 disabled={submitting}
                 className="w-full h-12 mt-4 rounded-lg bg-primary text-primary-foreground font-medium flex items-center justify-center gap-2 disabled:opacity-50"
               >
-                {submitting ? "Creating account..." : "Start Free Trial"}
-                {!submitting && <ArrowRight size={18} />}
+                {submitting
+                  ? "Creating account..."
+                  : "Start Free Trial"}
+
+                {!submitting && (
+                  <ArrowRight size={18} />
+                )}
               </button>
             </form>
           </motion.div>
@@ -275,5 +407,5 @@ export default function InviteRegister() {
         />
       </div>
     </div>
-      );
-}    
+  );
+      }
