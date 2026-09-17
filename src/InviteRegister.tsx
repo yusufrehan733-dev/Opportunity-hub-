@@ -24,6 +24,8 @@ export default function InviteRegister() {
   const [password, setPassword] = useState("");
 
   const [submitting, setSubmitting] = useState(false);
+  const [registrationComplete, setRegistrationComplete] =
+    useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -100,7 +102,9 @@ export default function InviteRegister() {
   ) => {
     e.preventDefault();
 
-    if (submitting) return;
+    if (submitting || registrationComplete) {
+      return;
+    }
 
     if (!token) {
       toast.error("Invalid invite link");
@@ -137,6 +141,8 @@ export default function InviteRegister() {
     }
 
     setSubmitting(true);
+
+    let registrationSucceeded = false;
 
     let controller: AbortController | null = null;
     let timeoutId: ReturnType<typeof setTimeout> | null =
@@ -195,7 +201,7 @@ export default function InviteRegister() {
         throw new Error(
           "Account was created, but the email was missing."
         );
-      }
+    }
             /*
        * The backend has now created:
        * 1. Supabase Auth account
@@ -203,7 +209,7 @@ export default function InviteRegister() {
        * 3. public.users record
        * 4. used invite record
        *
-       * Now we sign the new user into Supabase.
+       * Now sign the new user into Supabase.
        */
 
       const {
@@ -234,6 +240,7 @@ export default function InviteRegister() {
       /*
        * Confirm that Supabase actually sees the session.
        */
+
       const {
         data: sessionData,
         error: sessionError,
@@ -245,14 +252,19 @@ export default function InviteRegister() {
         );
       }
 
+      /*
+       * Registration is now completely successful.
+       * Lock the form immediately so the same invite
+       * cannot submit a second POST request.
+       */
+
+      registrationSucceeded = true;
+      setRegistrationComplete(true);
+
       toast.success(
         "Account created! Welcome to Opportunity Hub."
       );
 
-      /*
-       * Give React Router a clean navigation after
-       * Supabase has finished storing the session.
-       */
       setTimeout(() => {
         navigate("/dashboard", {
           replace: true,
@@ -279,11 +291,17 @@ export default function InviteRegister() {
         clearTimeout(timeoutId);
       }
 
-      setSubmitting(false);
+      /*
+       * Keep the form locked after successful registration.
+       * Only unlock it when registration actually failed.
+       */
+
+      if (!registrationSucceeded) {
+        setSubmitting(false);
+      }
     }
   };
-
-  if (loading) {
+    if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="w-8 h-8 rounded-full border-4 border-primary/30 border-t-primary animate-spin" />
@@ -382,7 +400,8 @@ export default function InviteRegister() {
               </span>
             </div>
           </div>
-                    <motion.div
+
+          <motion.div
             initial={{
               opacity: 0,
               y: 20,
@@ -430,7 +449,10 @@ export default function InviteRegister() {
                     setName(e.target.value)
                   }
                   required
-                  disabled={submitting}
+                  disabled={
+                    submitting ||
+                    registrationComplete
+                  }
                   className="w-full px-3 py-2 rounded-lg border border-border bg-background"
                 />
               </div>
@@ -448,7 +470,10 @@ export default function InviteRegister() {
                   onChange={(e) =>
                     setPhone(e.target.value)
                   }
-                  disabled={submitting}
+                  disabled={
+                    submitting ||
+                    registrationComplete
+                  }
                   className="w-full px-3 py-2 rounded-lg border border-border bg-background"
                 />
               </div>
@@ -468,23 +493,32 @@ export default function InviteRegister() {
                   }
                   required
                   minLength={6}
-                  disabled={submitting}
+                  disabled={
+                    submitting ||
+                    registrationComplete
+                  }
                   className="w-full px-3 py-2 rounded-lg border border-border bg-background"
                 />
               </div>
 
               <button
                 type="submit"
-                disabled={submitting}
+                disabled={
+                  submitting ||
+                  registrationComplete
+                }
                 className="w-full h-12 mt-4 rounded-lg bg-primary text-primary-foreground font-medium flex items-center justify-center gap-2 disabled:opacity-50"
               >
-                {submitting
-                  ? "Creating account..."
-                  : "Start Free Trial"}
+                {registrationComplete
+                  ? "Account Created"
+                  : submitting
+                    ? "Creating account..."
+                    : "Start Free Trial"}
 
-                {!submitting && (
-                  <ArrowRight size={18} />
-                )}
+                {!submitting &&
+                  !registrationComplete && (
+                    <ArrowRight size={18} />
+                  )}
               </button>
             </form>
           </motion.div>
@@ -500,4 +534,4 @@ export default function InviteRegister() {
       </div>
     </div>
   );
-            }
+}
