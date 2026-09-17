@@ -9,7 +9,6 @@ import {
   Link2,
   RefreshCw,
   ShieldCheck,
-  CalendarDays,
   CreditCard,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
@@ -43,7 +42,7 @@ type AdminLead = {
   skill_needed?: string | null;
   country?: string | null;
   source?: string | null;
-  created_at?: string;
+  created_at?: string | null;
   status?: string | null;
 };
 
@@ -55,7 +54,7 @@ type Invite = {
   phone?: string | null;
   plan?: string | null;
   trial_days?: number | null;
-  created_at?: string;
+  created_at?: string | null;
   used_at?: string | null;
   user_id?: string | null;
 };
@@ -132,7 +131,9 @@ async function adminRequest(
       },
       ...(method === "POST"
         ? {
-            body: JSON.stringify(options?.body || {}),
+            body: JSON.stringify(
+              options?.body || {}
+            ),
           }
         : {}),
     }
@@ -143,7 +144,9 @@ async function adminRequest(
   try {
     result = await response.json();
   } catch {
-    throw new Error("Admin API returned an invalid response.");
+    throw new Error(
+      "Admin API returned an invalid response."
+    );
   }
 
   if (!response.ok || !result.success) {
@@ -184,11 +187,14 @@ function getStatus(user: AdminUser) {
     return user.status;
   }
 
-  return isUserActive(user) ? "active" : "inactive";
+  return isUserActive(user)
+    ? "active"
+    : "inactive";
 }
 
 function getStatusClass(user: AdminUser) {
-  const status = getStatus(user).toLowerCase();
+  const status =
+    getStatus(user).toLowerCase();
 
   if (status === "active") {
     return "text-[#00c98b]";
@@ -219,8 +225,11 @@ export default function Admin() {
   const [section, setSection] =
     useState<AdminSection>("overview");
 
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [loading, setLoading] =
+    useState(false);
+
+  const [error, setError] =
+    useState("");
 
   const [overview, setOverview] =
     useState<OverviewData | null>(null);
@@ -234,47 +243,48 @@ export default function Admin() {
   const [invites, setInvites] =
     useState<Invite[]>([]);
 
-  const [inviteEmail, setInviteEmail] =
-    useState("");
-
-  const [invitePlan, setInvitePlan] =
-    useState("Basic");
-
-  const [inviteLoading, setInviteLoading] =
-    useState(false);
-
-  const [inviteResult, setInviteResult] =
-    useState("");
-
   async function loadData() {
     setLoading(true);
     setError("");
 
     try {
       if (section === "overview") {
-        const result = await adminRequest("overview");
+        const result =
+          await adminRequest("overview");
 
-        setOverview(result.overview || null);
+        setOverview(
+          result.overview || null
+        );
       }
 
       if (section === "users") {
-        const result = await adminRequest("users");
+        const result =
+          await adminRequest("users");
 
-        setUsers(result.users || []);
-      }
-
-      if (section === "links") {
-        const result = await adminRequest("invites");
-
-        setInvites(result.invites || []);
+        setUsers(
+          result.users || []
+        );
       }
 
       if (section === "leads") {
-        const result = await adminRequest("leads");
+        const result =
+          await adminRequest("leads");
 
-        setLeads(result.leads || []);
+        setLeads(
+          result.leads || []
+        );
       }
-    } catch (err) {
+
+      if (section === "links") {
+        const result =
+          await adminRequest("invites");
+
+        setInvites(
+          result.invites || []
+        );
+      }
+    } catch (err)
+    {
       setError(
         err instanceof Error
           ? err.message
@@ -289,65 +299,12 @@ export default function Admin() {
     loadData();
   }, [section]);
 
-  async function createInvite() {
-    const email = inviteEmail.trim().toLowerCase();
-
-    if (!email) {
-      setInviteResult("Enter an email address.");
-      return;
-    }
-
-    setInviteLoading(true);
-    setInviteResult("");
-    setError("");
-
-    try {
-      const result = await adminRequest(
-        "create_invite",
-        {
-          method: "POST",
-          body: {
-            email,
-            plan: invitePlan,
-          },
-        }
-      );
-
-      const token = result.invite?.token;
-
-      setInviteEmail("");
-
-      setInviteResult(
-        token
-          ? `Invite ready. Token: ${token}`
-          : "Invite created successfully."
-      );
-
-      if (section === "links") {
-        const refreshed =
-          await adminRequest("invites");
-
-        setInvites(
-          refreshed.invites || []
-        );
-      }
-    } catch (err) {
-      setInviteResult(
-        err instanceof Error
-          ? err.message
-          : "Could not create invite."
-      );
-    } finally {
-      setInviteLoading(false);
-    }
-  }
-
   async function updateUser(
     user: AdminUser,
     action: string,
     plan?: string
   ) {
-    setLoading(true);
+        setLoading(true);
     setError("");
 
     try {
@@ -356,14 +313,18 @@ export default function Admin() {
         body: {
           id: user.id,
           action,
-          ...(plan ? { plan } : {}),
+          ...(plan
+            ? { plan }
+            : {}),
         },
       });
 
       const result =
         await adminRequest("users");
 
-      setUsers(result.users || []);
+      setUsers(
+        result.users || []
+      );
     } catch (err) {
       setError(
         err instanceof Error
@@ -471,21 +432,6 @@ export default function Admin() {
           <UsersSection
             users={users}
             loading={loading}
-            inviteEmail={inviteEmail}
-            setInviteEmail={
-              setInviteEmail
-            }
-            invitePlan={invitePlan}
-            setInvitePlan={
-              setInvitePlan
-            }
-            inviteLoading={
-              inviteLoading
-            }
-            inviteResult={inviteResult}
-            createInvite={
-              createInvite
-            }
             updateUser={updateUser}
           />
         )}
@@ -494,48 +440,34 @@ export default function Admin() {
           <LeadsSection
             leads={leads}
             loading={loading}
+            reload={loadData}
           />
         )}
 
         {section === "links" && (
           <LinksSection
             invites={invites}
-            inviteEmail={inviteEmail}
-            setInviteEmail={
-              setInviteEmail
-            }
-            invitePlan={invitePlan}
-            setInvitePlan={
-              setInvitePlan
-            }
-            inviteLoading={
-              inviteLoading
-            }
-            inviteResult={inviteResult}
-            createInvite={
-              createInvite
-            }
+            reload={loadData}
           />
         )}
 
         {section === "referrals" && (
           <Placeholder
             title="Referrals"
-            description="Referral tracking records are available through the admin system."
+            text="Referral tracking records are available through the admin system."
           />
         )}
 
         {section === "resellers" && (
           <Placeholder
             title="Resellers"
-            description="Reseller commission records are available through the admin system."
+            text="Reseller commission records are available through the admin system."
           />
         )}
       </main>
     </div>
   );
-}
-
+      }
 function Overview({
   data,
   loading,
@@ -543,146 +475,124 @@ function Overview({
   data: OverviewData | null;
   loading: boolean;
 }) {
+  if (loading && !data) {
+    return (
+      <div className="rounded-xl border border-[#272727] bg-[#141414] p-6 text-sm text-[#888]">
+        Loading overview...
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="rounded-xl border border-[#272727] bg-[#141414] p-6 text-sm text-[#888]">
+        No overview data available.
+      </div>
+    );
+  }
+
   const cards = [
-    ["Users", data?.users ?? "—", Users],
-    [
-      "Active Users",
-      data?.activeUsers ?? "—",
-      UserPlus,
-    ],
-    [
-      "Active Leads",
-      data?.activeLeads ?? "—",
-      Target,
-    ],
-    [
-      "Resellers",
-      data?.resellers ?? "—",
-      Store,
-    ],
-  ] as const;
+    {
+      label: "Users",
+      value: data.users,
+      icon: Users,
+    },
+    {
+      label: "Active Users",
+      value: data.activeUsers,
+      icon: UserPlus,
+    },
+    {
+      label: "Active Leads",
+      value: data.activeLeads,
+      icon: Target,
+    },
+    {
+      label: "Resellers",
+      value: data.resellers,
+      icon: Store,
+    },
+  ];
 
   return (
     <section className="space-y-5">
       <div>
         <h2 className="text-2xl font-semibold">
-          Admin Dashboard
+          Overview
         </h2>
 
         <p className="mt-1 text-sm text-[#777]">
-          Core Opportunity Hub controls.
+          Opportunity Hub administration overview.
         </p>
-
-        {loading && (
-          <p className="mt-2 text-xs text-[#777]">
-            Loading...
-          </p>
-        )}
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {cards.map(
-          ([label, value, Icon]) => (
+        {cards.map((card) => {
+          const Icon = card.icon;
+
+          return (
             <div
-              key={label}
+              key={card.label}
               className="rounded-xl border border-[#272727] bg-[#141414] p-4"
             >
               <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-[#777]">
-                    {label}
-                  </p>
+                <span className="text-xs text-[#777]">
+                  {card.label}
+                </span>
 
-                  <p className="mt-2 text-2xl font-semibold">
-                    {value}
-                  </p>
-                </div>
-
-                <div className="rounded-lg bg-[#202020] p-2.5 text-[#00c98b]">
-                  <Icon size={18} />
-                </div>
+                <Icon
+                  size={17}
+                  className="text-[#00c98b]"
+                />
               </div>
+
+              <p className="mt-3 text-2xl font-semibold">
+                {card.value}
+              </p>
             </div>
-          )
-        )}
+          );
+        })}
       </div>
 
-      {data && (
-        <div className="grid gap-3 sm:grid-cols-2">
-          <InfoBox
-            label="Demand Leads"
-            value={
-              data.demandLeads ?? 0
-            }
-          />
-
-          <InfoBox
-            label="Supply Leads"
-            value={
-              data.supplyLeads ?? 0
-            }
-          />
-
-          <InfoBox
-            label="Referral Links"
-            value={
-              data.referralLinks ?? 0
-            }
-          />
-
-          <InfoBox
-            label="Subscriptions"
-            value={
-              data.subscriptions ?? 0
-            }
-          />
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="rounded-xl border border-[#272727] bg-[#141414] p-4">
+          <p className="text-xs text-[#777]">
+            Demand Leads
+          </p>
+          <p className="mt-2 text-xl font-semibold">
+            {data.demandLeads ?? 0}
+          </p>
         </div>
-      )}
+
+        <div className="rounded-xl border border-[#272727] bg-[#141414] p-4">
+          <p className="text-xs text-[#777]">
+            Supply Leads
+          </p>
+          <p className="mt-2 text-xl font-semibold">
+            {data.supplyLeads ?? 0}
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-[#272727] bg-[#141414] p-4">
+          <p className="text-xs text-[#777]">
+            Subscriptions
+          </p>
+          <p className="mt-2 text-xl font-semibold">
+            {data.subscriptions ?? 0}
+          </p>
+        </div>
+      </div>
     </section>
-  );
-}
-
-function InfoBox({
-  label,
-  value,
-}: {
-  label: string;
-  value: number;
-}) {
-  return (
-    <div className="rounded-xl border border-[#272727] bg-[#141414] p-4">
-      <p className="text-xs text-[#777]">
-        {label}
-      </p>
-
-      <p className="mt-2 text-xl font-semibold">
-        {value}
-      </p>
-    </div>
   );
 }
 
 function UsersSection({
   users,
   loading,
-  inviteEmail,
-  setInviteEmail,
-  invitePlan,
-  setInvitePlan,
-  inviteLoading,
-  inviteResult,
-  createInvite,
   updateUser,
 }: {
   users: AdminUser[];
   loading: boolean;
-  inviteEmail: string;
-  setInviteEmail: (v: string) => void;
-  invitePlan: string;
-  setInvitePlan: (v: string) => void;
-  inviteLoading: boolean;
-  inviteResult: string;
-  createInvite: () => void;
   updateUser: (
     user: AdminUser,
     action: string,
@@ -697,617 +607,541 @@ function UsersSection({
         </h2>
 
         <p className="mt-1 text-sm text-[#777]">
-          Manage trials, subscriptions and access.
+          Manage trials, subscriptions, plans, and access.
         </p>
       </div>
 
-      <InviteForm
-        inviteEmail={inviteEmail}
-        setInviteEmail={
-          setInviteEmail
-        }
-        invitePlan={invitePlan}
-        setInvitePlan={
-          setInvitePlan
-        }
-        inviteLoading={
-          inviteLoading
-        }
-        inviteResult={
-          inviteResult
-        }
-        createInvite={
-          createInvite
-        }
-      />
+      {users.length === 0 ? (
+        <div className="rounded-xl border border-[#272727] bg-[#141414] p-8 text-center text-sm text-[#666]">
+          No users found.
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {users.map((user) => {
+            const active =
+              isUserActive(user);
 
-      {loading && (
-        <p className="text-xs text-[#777]">
-          Updating...
-        </p>
+            return (
+              <div
+                key={user.id}
+                className="rounded-xl border border-[#272727] bg-[#141414] p-4"
+              >
+                <div className="flex flex-col gap-3">
+                  <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <p className="text-sm font-semibold">
+                        {user.name ||
+                          "Unnamed User"}
+                      </p>
+
+                      <p className="break-all text-xs text-[#777]">
+                        {user.email ||
+                          "No email linked"}
+                      </p>
+                    </div>
+
+                    <span
+                      className={`text-xs font-medium ${getStatusClass(
+                        user
+                      )}`}
+                    >
+                      {getStatus(user)}
+                    </span>
+                  </div>
+
+                  <div className="grid gap-2 text-xs text-[#888] sm:grid-cols-3">
+                    <span>
+                      Plan:{" "}
+                      <strong className="text-white">
+                        {user.plan ||
+                          "Basic"}
+                      </strong>
+                    </span>
+
+                    <span>
+                      Trial ends:{" "}
+                      <strong className="text-white">
+                        {dateText(
+                          user.trial_end
+                        )}
+                      </strong>
+                    </span>
+
+                    <span>
+                      Subscription ends:{" "}
+                      <strong className="text-white">
+                        {dateText(
+                          user.subscription_end
+                        )}
+                      </strong>
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateUser(
+                          user,
+                          "trial"
+                        )
+                      }
+                      disabled={loading}
+                      className="rounded-lg border border-[#333] bg-[#181818] px-3 py-2 text-xs hover:bg-[#222] disabled:opacity-50"
+                    >
+                      Trial
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateUser(
+                          user,
+                          "renew"
+                        )
+                      }
+                      disabled={loading}
+                      className="rounded-lg border border-[#333] bg-[#181818] px-3 py-2 text-xs hover:bg-[#222] disabled:opacity-50"
+                    >
+                      Renew
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateUser(
+                          user,
+                          "upgrade",
+                          "Premium"
+                        )
+                      }
+                      disabled={loading}
+                      className="rounded-lg border border-[#333] bg-[#181818] px-3 py-2 text-xs hover:bg-[#222] disabled:opacity-50"
+                    >
+                      Premium
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateUser(
+                          user,
+                          "upgrade",
+                          "Gold"
+                        )
+                      }
+                      disabled={loading}
+                      className="rounded-lg border border-[#333] bg-[#181818] px-3 py-2 text-xs hover:bg-[#222] disabled:opacity-50"
+                    >
+                      Gold
+                    </button>
+
+                    {active ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateUser(
+                              user,
+                              "cancel"
+                            )
+                          }
+                          disabled={loading}
+                          className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300 hover:bg-red-500/20 disabled:opacity-50"
+                        >
+                          Cancel
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateUser(
+                              user,
+                              "deactivate"
+                            )
+                          }
+                          disabled={loading}
+                          className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-3 py-2 text-xs text-yellow-300 hover:bg-yellow-500/20 disabled:opacity-50"
+                        >
+                          Deactivate
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateUser(
+                            user,
+                            "activate"
+                          )
+                        }
+                        disabled={loading}
+                        className="rounded-lg border border-[#333] bg-[#181818] px-3 py-2 text-xs hover:bg-[#222] disabled:opacity-50"
+                      >
+                        Activate
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       )}
-
-      <div className="space-y-3">
-        {users.map((user) => (
-          <UserCard
-            key={String(user.id)}
-            user={user}
-            updateUser={
-              updateUser
-            }
-          />
-        ))}
-
-        {users.length === 0 && (
-          <div className="rounded-xl border border-[#272727] bg-[#141414] p-8 text-center text-sm text-[#666]">
-            No users found.
-          </div>
-        )}
-      </div>
     </section>
   );
 }
 
-function UserCard({
-  user,
-  updateUser,
+function LeadsSection({
+  leads,
+  loading,
+  reload,
 }: {
-  user: AdminUser;
-  updateUser: (
-    user: AdminUser,
-    action: string,
-    plan?: string
-  ) => void;
+  leads: AdminLead[];
+  loading: boolean;
+  reload: () => void;
 }) {
-  const active = isUserActive(user);
+  return (
+    <section className="space-y-5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-2xl font-semibold">
+            Leads
+          </h2>
+
+          <p className="mt-1 text-sm text-[#777]">
+            Demand and supply lead records.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={reload}
+          disabled={loading}
+          className="inline-flex items-center gap-2 rounded-lg border border-[#333] bg-[#181818] px-3 py-2 text-xs hover:bg-[#222] disabled:opacity-50"
+        >
+          <RefreshCw
+            size={14}
+            className={
+              loading
+                ? "animate-spin"
+                : ""
+            }
+          />
+          Refresh
+        </button>
+      </div>
+
+      {leads.length === 0 ? (
+        <div className="rounded-xl border border-[#272727] bg-[#141414] p-8 text-center text-sm text-[#666]">
+          No leads found.
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {leads.map((lead) => (
+            <div
+              key={lead.id}
+              className="rounded-xl border border-[#272727] bg-[#141414] p-4"
+            >
+              <div className="flex flex-col gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-md bg-[#222] px-2 py-1 text-[10px] uppercase text-[#aaa]">
+                    {lead.type ||
+                      "lead"}
+                  </span>
+
+                  {lead.status && (
+                    <span className="text-[11px] text-[#777]">
+                      {lead.status}
+                    </span>
+                  )}
+                </div>
+
+                <h3 className="text-sm font-semibold">
+                  {lead.title ||
+                    lead.client_name ||
+                    "Opportunity"}
+                </h3>
+
+                {lead.skill_needed && (
+                  <p className="text-xs text-[#aaa]">
+                    Skill:{" "}
+                    {lead.skill_needed}
+                  </p>
+                )}
+
+                <div className="flex flex-wrap gap-3 text-[11px] text-[#666]">
+                  {lead.country && (
+                    <span>
+                      Country:{" "}
+                      {lead.country}
+                    </span>
+                  )}
+
+                  {lead.source && (
+                    <span>
+                      Source:{" "}
+                      {lead.source}
+                    </span>
+                  )}
+
+                  {lead.created_at && (
+                    <span>
+                      Created:{" "}
+                      {dateText(
+                        lead.created_at
+                      )}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function LinksSection({
+  invites,
+  reload,
+}: {
+  invites: Invite[];
+  reload: () => void;
+}) {
+  const [email, setEmail] =
+    useState("");
+
+  const [plan, setPlan] =
+    useState("Basic");
+
+  const [loading, setLoading] =
+    useState(false);
+
+  const [message, setMessage] =
+    useState("");
+
+  const origin =
+    typeof window !==
+    "undefined"
+      ? window.location.origin
+      : "https://opportunity-hub-umber.vercel.app";
+
+  async function createInvite() {
+    const cleanEmail =
+      email.trim().toLowerCase();
+
+    if (!cleanEmail) {
+      setMessage(
+        "Enter an email address."
+      );
+      return;
+    }
+
+    setLoading(true);
+    setMessage("");
+
+    try {
+      const result =
+        await adminRequest(
+          "create_invite",
+          {
+            method: "POST",
+            body: {
+              email: cleanEmail,
+              plan,
+            },
+          }
+        );
+
+      const token =
+        result.invite?.token;
+
+      const inviteUrl =
+        result.invite_url ||
+        (token
+          ? `${origin}/invite-register/${encodeURIComponent(
+              token
+            )}`
+          : "");
+
+      if (!inviteUrl) {
+        throw new Error(
+          "Invite was created but no link was returned."
+        );
+      }
+
+      try {
+        await navigator.clipboard?.writeText(
+          inviteUrl
+        );
+      } catch {
+        // Clipboard may be unavailable on some mobile browsers.
+      }
+
+      setMessage(
+        `Invite created: ${inviteUrl}`
+      );
+
+      setEmail("");
+
+      reload();
+    } catch (err) {
+      setMessage(
+        err instanceof Error
+          ? err.message
+          : "Could not create invite."
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
-    <div className="rounded-xl border border-[#272727] bg-[#141414] p-4">
-      <div className="flex flex-col gap-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0">
-            <p className="break-all text-sm font-semibold">
-              {user.email || "No email"}
-            </p>
+    <section className="space-y-5">
+      <div>
+        <h2 className="text-2xl font-semibold">
+          Referral Links
+        </h2>
 
-            {user.name && (
-              <p className="mt-1 text-xs text-[#777]">
-                {user.name}
-              </p>
-            )}
+        <p className="mt-1 text-sm text-[#777]">
+          Create email-bound customer invite links.
+        </p>
+      </div>
 
-            <p
-              className={`mt-2 text-xs font-medium capitalize ${getStatusClass(
-                user
-              )}`}
-            >
-              {getStatus(user)}
-            </p>
-          </div>
+      <div className="rounded-xl border border-[#272727] bg-[#141414] p-4">
+        <h3 className="mb-4 text-sm font-semibold">
+          Create Invite
+        </h3>
 
-          <div className="rounded-lg border border-[#292929] bg-[#101010] px-3 py-2">
-            <div className="flex items-center gap-2 text-xs">
-              <CreditCard
-                size={14}
-                className="text-[#00c98b]"
-              />
-
-              <span>
-                Plan:{" "}
-                <strong>
-                  {user.plan || "Basic"}
-                </strong>
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid gap-2 sm:grid-cols-3">
-          <DateBox
-            label="Trial Start"
-            value={user.trial_start}
-          />
-
-          <DateBox
-            label="Trial Expiry"
-            value={user.trial_end}
-          />
-
-          <DateBox
-            label="Subscription Expiry"
-            value={user.subscription_end}
-          />
-        </div>
-
-        <div className="flex flex-wrap gap-2 border-t border-[#252525] pt-3">
-          <select
-            defaultValue={
-              user.plan || "Basic"
-            }
+        <div className="grid gap-3">
+          <input
+            value={email}
             onChange={(event) =>
-              updateUser(
-                user,
-                "upgrade",
+              setEmail(
                 event.target.value
               )
             }
-            className="rounded-lg border border-[#333] bg-[#101010] px-3 py-2 text-xs"
+            placeholder="Customer email"
+            type="email"
+            className="w-full rounded-lg border border-[#333] bg-[#0a0a0a] px-3 py-2.5 text-sm text-white outline-none placeholder:text-[#555] focus:border-[#555]"
+          />
+
+          <select
+            value={plan}
+            onChange={(event) =>
+              setPlan(
+                event.target.value
+              )
+            }
+            className="rounded-lg border border-[#333] bg-[#0a0a0a] px-3 py-2.5 text-sm text-white outline-none"
           >
-            <option>Basic</option>
-            <option>Premium</option>
-            <option>Gold</option>
+            <option value="Basic">
+              Basic
+            </option>
+
+            <option value="Premium">
+              Premium
+            </option>
+
+            <option value="Gold">
+              Gold
+            </option>
           </select>
 
           <button
             type="button"
-            onClick={() =>
-              updateUser(user, "trial")
-            }
-            className="rounded-lg border border-[#333] bg-[#181818] px-3 py-2 text-xs hover:bg-[#222]"
+            onClick={createInvite}
+            disabled={loading}
+            className="rounded-lg bg-[#00c98b] px-4 py-2.5 text-sm font-semibold text-black hover:opacity-90 disabled:cursor-wait disabled:opacity-50"
           >
-            14-Day Trial
+            {loading
+              ? "Creating..."
+              : "Create Invite Link"}
           </button>
 
-          <button
-            type="button"
-            onClick={() =>
-              updateUser(user, "renew")
-            }
-            className="rounded-lg border border-[#333] bg-[#181818] px-3 py-2 text-xs hover:bg-[#222]"
-          >
-            Renew
-          </button>
-
-          <button
-            type="button"
-            onClick={() =>
-              updateUser(
-                user,
-                "upgrade",
-                "Premium"
-              )
-            }
-            className="rounded-lg bg-[#00c98b] px-3 py-2 text-xs font-semibold text-black hover:opacity-90"
-          >
-            Upgrade
-          </button>
-
-          {active ? (
-            <>
-              <button
-                type="button"
-                onClick={() =>
-                  updateUser(
-                    user,
-                    "cancel"
-                  )
-                }
-                className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300 hover:bg-red-500/20"
-              >
-                Cancel
-              </button>
-
-                            <button
-                type="button"
-                onClick={() =>
-                  updateUser(
-                    user,
-                    "deactivate"
-                  )
-                }
-                className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-3 py-2 text-xs text-yellow-300 hover:bg-yellow-500/20"
-              >
-                Deactivate
-              </button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function DateBox({
-  label,
-  value,
-}: {
-  label: string;
-  value?: string | null;
-}) {
-  return (
-    <div
-      style={{
-        background: "#111",
-        border: "1px solid #222",
-        borderRadius: 10,
-        padding: 10,
-      }}
-    >
-      <div
-        style={{
-          fontSize: 11,
-          color: "#777",
-          marginBottom: 4,
-        }}
-      >
-        {label}
-      </div>
-
-      <div
-        style={{
-          fontSize: 13,
-          color: "#ddd",
-        }}
-      >
-        {dateText(value)}
-      </div>
-    </div>
-  );
-}
-
-function InviteForm({
-  onCreated,
-}: {
-  onCreated: () => void;
-}) {
-  const [email, setEmail] = useState("");
-  const [plan, setPlan] = useState("Basic");
-  const [trialDays, setTrialDays] = useState("14");
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
-
-  async function createInvite() {
-    if (!email.trim()) {
-      setMessage("Enter an email.");
-      return;
-    }
-
-    setLoading(true);
-    setMessage("");
-
-    try {
-      const result = await adminRequest("/api/admin", {
-        method: "POST",
-        body: JSON.stringify({
-          action: "create_invite",
-          email: email.trim().toLowerCase(),
-          plan,
-          trial_days: Number(trialDays),
-        }),
-      });
-
-      const token = result.invite?.token;
-
-      if (!token) {
-        throw new Error("Invite was created but no token was returned.");
-      }
-
-      const link = `${window.location.origin}/invite-register/${token}`;
-
-      await navigator.clipboard?.writeText(link);
-
-      setMessage(`Invite created and copied: ${link}`);
-      setEmail("");
-      onCreated();
-    } catch (error) {
-      setMessage(
-        error instanceof Error
-          ? error.message
-          : "Could not create invite."
-      );
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return (
-    <div
-      style={{
-        background: "#111",
-        border: "1px solid #222",
-        borderRadius: 14,
-        padding: 16,
-        marginBottom: 20,
-      }}
-    >
-      <h3
-        style={{
-          marginTop: 0,
-          marginBottom: 14,
-        }}
-      >
-        Create Invite
-      </h3>
-
-      <div
-        style={{
-          display: "grid",
-          gap: 10,
-        }}
-      >
-        <input
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-          placeholder="Customer email"
-          type="email"
-          style={{
-            width: "100%",
-            boxSizing: "border-box",
-            background: "#0a0a0a",
-            color: "#fff",
-            border: "1px solid #333",
-            borderRadius: 9,
-            padding: "11px 12px",
-          }}
-        />
-
-        <select
-          value={plan}
-          onChange={(event) => setPlan(event.target.value)}
-          style={{
-            background: "#0a0a0a",
-            color: "#fff",
-            border: "1px solid #333",
-            borderRadius: 9,
-            padding: "11px 12px",
-          }}
-        >
-          <option value="Basic">Basic</option>
-          <option value="Premium">Premium</option>
-          <option value="Gold">Gold</option>
-        </select>
-
-        <input
-          value={trialDays}
-          onChange={(event) => setTrialDays(event.target.value)}
-          type="number"
-          min="1"
-          placeholder="Trial days"
-          style={{
-            background: "#0a0a0a",
-            color: "#fff",
-            border: "1px solid #333",
-            borderRadius: 9,
-            padding: "11px 12px",
-          }}
-        />
-
-        <button
-          type="button"
-          onClick={createInvite}
-          disabled={loading}
-          style={{
-            background: "#fff",
-            color: "#000",
-            border: 0,
-            borderRadius: 9,
-            padding: "11px 14px",
-            fontWeight: 700,
-            cursor: loading ? "wait" : "pointer",
-          }}
-        >
-          {loading ? "Creating..." : "Create Invite Link"}
-        </button>
-
-        {message && (
-          <div
-            style={{
-              fontSize: 12,
-              color: "#aaa",
-              wordBreak: "break-word",
-            }}
-          >
-            {message}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function LeadsSection() {
-  const [data, setData] = useState<{
-    demand?: number;
-    supply?: number;
-    saas?: number;
-  } | null>(null);
-
-  const [loading, setLoading] = useState(true);
-
-  async function load() {
-    setLoading(true);
-
-    try {
-      const result = await adminRequest("/api/admin?section=leads");
-      setData({
-        demand: result.demand?.length ?? 0,
-        supply: result.supply?.length ?? 0,
-        saas: result.saas?.length ?? 0,
-      });
-    } catch {
-      setData(null);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    load();
-  }, []);
-
-  if (loading) {
-    return (
-      <div
-        style={{
-          padding: 20,
-          color: "#aaa",
-        }}
-      >
-        Loading leads...
-      </div>
-    );
-  }
-
-  return (
-    <div
-      style={{
-        display: "grid",
-        gap: 12,
-      }}
-    >
-      <InfoBox
-        title="Demand Leads"
-        value={String(data?.demand ?? 0)}
-        icon={<Target size={18} />}
-      />
-
-      <InfoBox
-        title="Supply Leads"
-        value={String(data?.supply ?? 0)}
-        icon={<Store size={18} />}
-      />
-
-      <InfoBox
-        title="SaaS Leads"
-        value={String(data?.saas ?? 0)}
-        icon={<Users size={18} />}
-      />
-
-      <button
-        type="button"
-        onClick={load}
-        style={{
-          background: "#151515",
-          color: "#fff",
-          border: "1px solid #333",
-          borderRadius: 9,
-          padding: "10px 14px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 7,
-          cursor: "pointer",
-        }}
-      >
-        <RefreshCw size={15} />
-        Refresh Leads
-      </button>
-    </div>
-  );
-}
-
-function LinksSection() {
-  const [invites, setInvites] = useState<Invite[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  async function load() {
-    setLoading(true);
-
-    try {
-      const result = await adminRequest("/api/admin?section=invites");
-      setInvites(result.invites ?? []);
-    } catch {
-      setInvites([]);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    load();
-  }, []);
-
-  if (loading) {
-    return (
-      <div
-        style={{
-          padding: 20,
-          color: "#aaa",
-        }}
-      >
-        Loading referral links...
-      </div>
-    );
-  }
-
-  return (
-    <div
-      style={{
-        display: "grid",
-        gap: 10,
-      }}
-    >
-      {invites.length === 0 ? (
-        <div
-          style={{
-            background: "#111",
-            border: "1px solid #222",
-            borderRadius: 12,
-            padding: 16,
-            color: "#888",
-          }}
-        >
-          No invite links yet.
+          {message && (
+            <div className="break-all rounded-lg border border-[#292929] bg-[#101010] p-3 text-xs text-[#aaa]">
+              {message}
+            </div>
+          )}
         </div>
-      ) : (
-        invites.map((invite) => (
-          <div
-            key={invite.id}
-            style={{
-              background: "#111",
-              border: "1px solid #222",
-              borderRadius: 12,
-              padding: 14,
-            }}
-          >
-            <div
-              style={{
-                fontWeight: 700,
-                marginBottom: 5,
-              }}
-            >
-              {invite.email}
-            </div>
+      </div>
 
-            <div
-              style={{
-                color: "#999",
-                fontSize: 12,
-                marginBottom: 8,
-              }}
-            >
-              Plan: {invite.plan || "Basic"} · Trial:{" "}
-              {invite.trial_days ?? 14} days
-            </div>
+      <div className="space-y-3">
+        {invites.map((invite) => {
+          const link =
+            `${origin}/invite-register/` +
+            encodeURIComponent(
+              invite.token
+            );
 
+          return (
             <div
-              style={{
-                fontSize: 11,
-                color: invite.used_at ? "#777" : "#aaa",
-                wordBreak: "break-all",
-              }}
+              key={String(
+                invite.id
+              )}
+              className="rounded-xl border border-[#272727] bg-[#141414] p-4"
             >
-              {invite.used_at
-                ? "Used"
-                : `${window.location.origin}/invite-register/${invite.token}`}
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="break-all text-sm font-medium">
+                    {invite.email}
+                  </p>
+
+                  <p className="mt-1 text-xs text-[#777]">
+                    {invite.plan ||
+                      "Basic"}{" "}
+                    • Trial:{" "}
+                    {invite.trial_days ??
+                      14}{" "}
+                    days
+                  </p>
+                </div>
+
+                <span className="text-[11px] text-[#666]">
+                  {dateText(
+                    invite.created_at
+                  )}
+                </span>
+              </div>
+
+              <div className="mt-3 rounded-lg border border-[#252525] bg-[#101010] p-3">
+                <p className="break-all text-xs text-[#aaa]">
+                  {invite.used_at
+                    ? "Used"
+                    : link}
+                </p>
+              </div>
             </div>
+          );
+        })}
+
+        {invites.length === 0 && (
+          <div className="rounded-xl border border-[#272727] bg-[#141414] p-8 text-center text-sm text-[#666]">
+            No invite links found.
           </div>
-        ))
-      )}
+        )}
+      </div>
 
       <button
         type="button"
-        onClick={load}
-        style={{
-          background: "#151515",
-          color: "#fff",
-          border: "1px solid #333",
-          borderRadius: 9,
-          padding: "10px 14px",
-          cursor: "pointer",
-        }}
+        onClick={reload}
+        disabled={loading}
+        className="inline-flex items-center gap-2 rounded-lg border border-[#333] bg-[#181818] px-3 py-2 text-xs hover:bg-[#222] disabled:opacity-50"
       >
+        <RefreshCw
+          size={14}
+          className={
+            loading
+              ? "animate-spin"
+              : ""
+          }
+        />
         Refresh Links
       </button>
-    </div>
+    </section>
   );
 }
 
@@ -1319,482 +1153,24 @@ function Placeholder({
   text: string;
 }) {
   return (
-    <div
-      style={{
-        background: "#111",
-        border: "1px solid #222",
-        borderRadius: 14,
-        padding: 18,
-      }}
-    >
-      <h3
-        style={{
-          marginTop: 0,
-        }}
-      >
-        {title}
-      </h3>
+    <section className="space-y-5">
+      <div>
+        <h2 className="text-2xl font-semibold">
+          {title}
+        </h2>
 
-      <div
-        style={{
-          color: "#888",
-          fontSize: 13,
-          lineHeight: 1.5,
-        }}
-      >
-        {text}
+        <p className="mt-1 text-sm text-[#777]">
+          Opportunity Hub administration.
+        </p>
       </div>
-    </div>
+
+      <div className="rounded-xl border border-[#272727] bg-[#141414] p-6">
+        <p className="text-sm leading-6 text-[#888]">
+          {text}
+        </p>
+      </div>
+    </section>
   );
-          }          >
-            Deactivate
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
+                   }
 
-function DateBox({
-  label,
-  value,
-}: {
-  label: string;
-  value?: string | null;
-}) {
-  return (
-    <div
-      style={{
-        background: "#111",
-        border: "1px solid #222",
-        borderRadius: 10,
-        padding: 10,
-      }}
-    >
-      <div
-        style={{
-          fontSize: 11,
-          color: "#777",
-          marginBottom: 4,
-        }}
-      >
-        {label}
-      </div>
-
-      <div
-        style={{
-          fontSize: 13,
-          color: "#ddd",
-        }}
-      >
-        {dateText(value)}
-      </div>
-    </div>
-  );
-}
-
-function InviteForm({
-  onCreated,
-}: {
-  onCreated: () => void;
-}) {
-  const [email, setEmail] = useState("");
-  const [plan, setPlan] = useState("Basic");
-  const [trialDays, setTrialDays] = useState("14");
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
-
-  async function createInvite() {
-    if (!email.trim()) {
-      setMessage("Enter an email.");
-      return;
-    }
-
-    setLoading(true);
-    setMessage("");
-
-    try {
-      const result = await adminRequest("/api/admin", {
-        method: "POST",
-        body: JSON.stringify({
-          action: "create_invite",
-          email: email.trim().toLowerCase(),
-          plan,
-          trial_days: Number(trialDays),
-        }),
-      });
-
-      const token = result.invite?.token;
-
-      if (!token) {
-        throw new Error("Invite was created but no token was returned.");
-      }
-
-      const link = `${window.location.origin}/invite-register/${token}`;
-
-      await navigator.clipboard?.writeText(link);
-
-      setMessage(`Invite created and copied: ${link}`);
-      setEmail("");
-      onCreated();
-    } catch (error) {
-      setMessage(
-        error instanceof Error
-          ? error.message
-          : "Could not create invite."
-      );
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return (
-    <div
-      style={{
-        background: "#111",
-        border: "1px solid #222",
-        borderRadius: 14,
-        padding: 16,
-        marginBottom: 20,
-      }}
-    >
-      <h3
-        style={{
-          marginTop: 0,
-          marginBottom: 14,
-        }}
-      >
-        Create Invite
-      </h3>
-
-      <div
-        style={{
-          display: "grid",
-          gap: 10,
-        }}
-      >
-        <input
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-          placeholder="Customer email"
-          type="email"
-          style={{
-            width: "100%",
-            boxSizing: "border-box",
-            background: "#0a0a0a",
-            color: "#fff",
-            border: "1px solid #333",
-            borderRadius: 9,
-            padding: "11px 12px",
-          }}
-        />
-
-        <select
-          value={plan}
-          onChange={(event) => setPlan(event.target.value)}
-          style={{
-            background: "#0a0a0a",
-            color: "#fff",
-            border: "1px solid #333",
-            borderRadius: 9,
-            padding: "11px 12px",
-          }}
-        >
-          <option value="Basic">Basic</option>
-          <option value="Premium">Premium</option>
-          <option value="Gold">Gold</option>
-        </select>
-
-        <input
-          value={trialDays}
-          onChange={(event) => setTrialDays(event.target.value)}
-          type="number"
-          min="1"
-          placeholder="Trial days"
-          style={{
-            background: "#0a0a0a",
-            color: "#fff",
-            border: "1px solid #333",
-            borderRadius: 9,
-            padding: "11px 12px",
-          }}
-        />
-
-        <button
-          type="button"
-          onClick={createInvite}
-          disabled={loading}
-          style={{
-            background: "#fff",
-            color: "#000",
-            border: 0,
-            borderRadius: 9,
-            padding: "11px 14px",
-            fontWeight: 700,
-            cursor: loading ? "wait" : "pointer",
-          }}
-        >
-          {loading ? "Creating..." : "Create Invite Link"}
-        </button>
-
-        {message && (
-          <div
-            style={{
-              fontSize: 12,
-              color: "#aaa",
-              wordBreak: "break-word",
-            }}
-          >
-            {message}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function LeadsSection() {
-  const [data, setData] = useState<{
-    demand?: number;
-    supply?: number;
-    saas?: number;
-  } | null>(null);
-
-  const [loading, setLoading] = useState(true);
-
-  async function load() {
-    setLoading(true);
-
-    try {
-      const result = await adminRequest("/api/admin?section=leads");
-      setData({
-        demand: result.demand?.length ?? 0,
-        supply: result.supply?.length ?? 0,
-        saas: result.saas?.length ?? 0,
-      });
-    } catch {
-      setData(null);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    load();
-  }, []);
-
-  if (loading) {
-    return (
-      <div
-        style={{
-          padding: 20,
-          color: "#aaa",
-        }}
-      >
-        Loading leads...
-      </div>
-    );
-  }
-
-  return (
-    <div
-      style={{
-        display: "grid",
-        gap: 12,
-      }}
-    >
-      <InfoBox
-        title="Demand Leads"
-        value={String(data?.demand ?? 0)}
-        icon={<Target size={18} />}
-      />
-
-      <InfoBox
-        title="Supply Leads"
-        value={String(data?.supply ?? 0)}
-        icon={<Store size={18} />}
-      />
-
-      <InfoBox
-        title="SaaS Leads"
-        value={String(data?.saas ?? 0)}
-        icon={<Users size={18} />}
-      />
-
-      <button
-        type="button"
-        onClick={load}
-        style={{
-          background: "#151515",
-          color: "#fff",
-          border: "1px solid #333",
-          borderRadius: 9,
-          padding: "10px 14px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 7,
-          cursor: "pointer",
-        }}
-      >
-        <RefreshCw size={15} />
-        Refresh Leads
-      </button>
-    </div>
-  );
-}
-
-function LinksSection() {
-  const [invites, setInvites] = useState<Invite[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  async function load() {
-    setLoading(true);
-
-    try {
-      const result = await adminRequest("/api/admin?section=invites");
-      setInvites(result.invites ?? []);
-    } catch {
-      setInvites([]);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    load();
-  }, []);
-
-  if (loading) {
-    return (
-      <div
-        style={{
-          padding: 20,
-          color: "#aaa",
-        }}
-      >
-        Loading referral links...
-      </div>
-    );
-  }
-
-  return (
-    <div
-      style={{
-        display: "grid",
-        gap: 10,
-      }}
-    >
-      {invites.length === 0 ? (
-        <div
-          style={{
-            background: "#111",
-            border: "1px solid #222",
-            borderRadius: 12,
-            padding: 16,
-            color: "#888",
-          }}
-        >
-          No invite links yet.
-        </div>
-      ) : (
-        invites.map((invite) => (
-          <div
-            key={invite.id}
-            style={{
-              background: "#111",
-              border: "1px solid #222",
-              borderRadius: 12,
-              padding: 14,
-            }}
-          >
-            <div
-              style={{
-                fontWeight: 700,
-                marginBottom: 5,
-              }}
-            >
-              {invite.email}
-            </div>
-
-            <div
-              style={{
-                color: "#999",
-                fontSize: 12,
-                marginBottom: 8,
-              }}
-            >
-              Plan: {invite.plan || "Basic"} · Trial:{" "}
-              {invite.trial_days ?? 14} days
-            </div>
-
-            <div
-              style={{
-                fontSize: 11,
-                color: invite.used_at ? "#777" : "#aaa",
-                wordBreak: "break-all",
-              }}
-            >
-              {invite.used_at
-                ? "Used"
-                : `${window.location.origin}/invite-register/${invite.token}`}
-            </div>
-          </div>
-        ))
-      )}
-
-      <button
-        type="button"
-        onClick={load}
-        style={{
-          background: "#151515",
-          color: "#fff",
-          border: "1px solid #333",
-          borderRadius: 9,
-          padding: "10px 14px",
-          cursor: "pointer",
-        }}
-      >
-        Refresh Links
-      </button>
-    </div>
-  );
-}
-
-function Placeholder({
-  title,
-  text,
-}: {
-  title: string;
-  text: string;
-}) {
-  return (
-    <div
-      style={{
-        background: "#111",
-        border: "1px solid #222",
-        borderRadius: 14,
-        padding: 18,
-      }}
-    >
-      <h3
-        style={{
-          marginTop: 0,
-        }}
-      >
-        {title}
-      </h3>
-
-      <div
-        style={{
-          color: "#888",
-          fontSize: 13,
-          lineHeight: 1.5,
-        }}
-      >
-        {text}
-      </div>
-    </div>
-  );
-                }
-      
+    
