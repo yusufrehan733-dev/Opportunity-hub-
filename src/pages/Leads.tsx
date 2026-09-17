@@ -76,9 +76,18 @@ export default function Leads() {
 
       const result = await response.json();
 
+      console.log("Leads API response:", result);
+
       if (!response.ok || !result?.success) {
+        const apiError =
+          typeof result?.error === "string"
+            ? result.error
+            : JSON.stringify(
+                result?.error || result
+              );
+
         throw new Error(
-          result?.error || "Unable to load leads."
+          apiError || "Unable to load leads."
         );
       }
 
@@ -182,12 +191,20 @@ export default function Leads() {
 
       setLeads(mapped);
     } catch (error: any) {
-      console.error("Leads API error:", error);
+      console.error(
+        "Leads loading error:",
+        error
+      );
 
       setLeads([]);
 
+      const message =
+        typeof error?.message === "string"
+          ? error.message
+          : JSON.stringify(error);
+
       setErrorMsg(
-        error?.message ||
+        message ||
           "Could not load leads. Please try again."
       );
     } finally {
@@ -195,19 +212,67 @@ export default function Leads() {
     }
   }
 
-  const skills = useMemo(() => {
-    const values = leads
-      .map((lead) => lead.skill?.trim())
-      .filter(
-        (skill): skill is string =>
-          Boolean(skill)
-      );
+  /*
+   * Build categorized skills from the
+   * actual leads returned by the Gold API.
+   *
+   * Example:
+   *
+   * All Skills
+   *
+   * Quran
+   *   Quran Teaching
+   *   Hifz
+   *   Tajweed
+   *
+   * Teaching
+   *   English Teacher
+   *   Math Teacher
+   *
+   * Coaching
+   *   Career Coaching
+   *   Business Coaching
+   */
+  const skillGroups = useMemo(() => {
+    const groups: Record<
+      string,
+      Set<string>
+    > = {};
 
-    return Array.from(
-      new Set(values)
-    ).sort((a, b) =>
-      a.localeCompare(b)
-    );
+    for (const lead of leads) {
+      const skill =
+        lead.skill?.trim();
+
+      if (!skill) continue;
+
+      const category =
+        lead.category?.trim() ||
+        "Other";
+
+      if (!groups[category]) {
+        groups[category] =
+          new Set<string>();
+      }
+
+      groups[category].add(skill);
+    }
+
+    return Object.entries(groups)
+      .map(
+        ([category, skillsSet]) => ({
+          category,
+          skills: Array.from(
+            skillsSet
+          ).sort((a, b) =>
+            a.localeCompare(b)
+          ),
+        })
+      )
+      .sort((a, b) =>
+        a.category.localeCompare(
+          b.category
+        )
+      );
   }, [leads]);
 
   const filteredLeads = useMemo(() => {
@@ -221,14 +286,18 @@ export default function Leads() {
         (lead.country || "")
           .toLowerCase()
           .trim() ===
-          countryFilter.toLowerCase().trim();
+          countryFilter
+            .toLowerCase()
+            .trim();
 
       const skillMatches =
         skillFilter === "All" ||
         (lead.skill || "")
           .toLowerCase()
           .trim() ===
-          skillFilter.toLowerCase().trim();
+          skillFilter
+            .toLowerCase()
+            .trim();
 
       return (
         typeMatches &&
@@ -267,10 +336,11 @@ export default function Leads() {
   function openWhatsApp(phone?: string) {
     if (!phone) return;
 
-    const cleanPhone = phone.replace(
-      /[^\d+]/g,
-      ""
-    );
+    const cleanPhone =
+      phone.replace(
+        /[^\d+]/g,
+        ""
+      );
 
     if (!cleanPhone) return;
 
@@ -287,19 +357,22 @@ export default function Leads() {
   function callPhone(phone?: string) {
     if (!phone) return;
 
-    window.location.href = `tel:${phone}`;
+    window.location.href =
+      `tel:${phone}`;
   }
 
   function sendEmail(email?: string) {
     if (!email) return;
 
-    window.location.href = `mailto:${email}`;
+    window.location.href =
+      `mailto:${email}`;
   }
 
   function formatDate(date?: string) {
     if (!date) return "";
 
-    const parsed = new Date(date);
+    const parsed =
+      new Date(date);
 
     if (
       Number.isNaN(
@@ -342,11 +415,14 @@ export default function Leads() {
           margin: "0 auto",
         }}
       >
+        {/* HEADER */}
         <div
           style={{
             display: "flex",
-            justifyContent: "space-between",
-            alignItems: "flex-start",
+            justifyContent:
+              "space-between",
+            alignItems:
+              "flex-start",
             gap: 12,
             flexWrap: "wrap",
             marginBottom: 6,
@@ -370,8 +446,9 @@ export default function Leads() {
                 marginBottom: 0,
               }}
             >
-              Find real opportunities and
-              contact them directly.
+              Find real opportunities
+              and contact them
+              directly.
             </p>
           </div>
 
@@ -379,15 +456,20 @@ export default function Leads() {
             onClick={loadLeads}
             disabled={loading}
             style={{
-              padding: "9px 14px",
+              padding:
+                "9px 14px",
               borderRadius: 7,
-              border: "1px solid #444",
-              background: "#181818",
+              border:
+                "1px solid #444",
+              background:
+                "#181818",
               color: "#fff",
               cursor: loading
                 ? "not-allowed"
                 : "pointer",
-              opacity: loading ? 0.6 : 1,
+              opacity: loading
+                ? 0.6
+                : 1,
             }}
           >
             {loading
@@ -415,21 +497,28 @@ export default function Leads() {
             <button
               key={type}
               onClick={() =>
-                setTypeFilter(type)
+                setTypeFilter(
+                  type
+                )
               }
               style={{
-                padding: "9px 16px",
+                padding:
+                  "9px 16px",
                 borderRadius: 8,
-                border: "1px solid #333",
+                border:
+                  "1px solid #333",
                 background:
-                  typeFilter === type
+                  typeFilter ===
+                  type
                     ? "#00c98b"
                     : "#181818",
                 color:
-                  typeFilter === type
+                  typeFilter ===
+                  type
                     ? "#000"
                     : "#fff",
-                cursor: "pointer",
+                cursor:
+                  "pointer",
                 fontWeight: 600,
               }}
             >
@@ -448,6 +537,7 @@ export default function Leads() {
             marginBottom: 24,
           }}
         >
+          {/* COUNTRY */}
           <select
             value={countryFilter}
             onChange={(e) =>
@@ -461,16 +551,19 @@ export default function Leads() {
               All Countries
             </option>
 
-            {countries.map((country) => (
-              <option
-                key={country}
-                value={country}
-              >
-                {country}
-              </option>
-            ))}
+            {countries.map(
+              (country) => (
+                <option
+                  key={country}
+                  value={country}
+                >
+                  {country}
+                </option>
+              )
+            )}
           </select>
 
+          {/* CATEGORIZED SKILLS */}
           <select
             value={skillFilter}
             onChange={(e) =>
@@ -484,14 +577,29 @@ export default function Leads() {
               All Skills
             </option>
 
-            {skills.map((skill) => (
-              <option
-                key={skill}
-                value={skill}
-              >
-                {skill}
-              </option>
-            ))}
+            {skillGroups.map(
+              (group) => (
+                <optgroup
+                  key={
+                    group.category
+                  }
+                  label={
+                    group.category
+                  }
+                >
+                  {group.skills.map(
+                    (skill) => (
+                      <option
+                        key={`${group.category}-${skill}`}
+                        value={skill}
+                      >
+                        {skill}
+                      </option>
+                    )
+                  )}
+                </optgroup>
+              )
+            )}
           </select>
         </div>
 
@@ -507,37 +615,59 @@ export default function Leads() {
             : `${filteredLeads.length} leads found`}
         </div>
 
+        {/* ERROR */}
         {errorMsg && (
           <div
             style={{
-              background: "#251313",
-              border: "1px solid #6b2b2b",
-              color: "#ff8d8d",
+              background:
+                "#251313",
+              border:
+                "1px solid #6b2b2b",
+              color:
+                "#ff8d8d",
               padding: 14,
               borderRadius: 8,
               marginBottom: 16,
+              overflowWrap:
+                "anywhere",
+              lineHeight: 1.5,
             }}
           >
-            {errorMsg}
+            <strong>
+              Leads API error:
+            </strong>
+
+            <div
+              style={{
+                marginTop: 6,
+              }}
+            >
+              {errorMsg}
+            </div>
           </div>
         )}
 
         {/* EMPTY STATE */}
         {!loading &&
           !errorMsg &&
-          filteredLeads.length === 0 && (
+          filteredLeads.length ===
+            0 && (
             <div
               style={{
-                background: "#151515",
-                border: "1px solid #292929",
+                background:
+                  "#151515",
+                border:
+                  "1px solid #292929",
                 borderRadius: 10,
                 padding: 30,
-                textAlign: "center",
+                textAlign:
+                  "center",
                 color: "#999",
               }}
             >
-              No Gold-quality leads found
-              for this filter.
+              No Gold-quality
+              leads found for
+              this filter.
             </div>
           )}
 
@@ -548,286 +678,324 @@ export default function Leads() {
             gap: 14,
           }}
         >
-          {filteredLeads.map((lead) => (
-            <div
-              key={`${lead.leadType}-${lead.id}`}
-              style={{
-                background: "#151515",
-                border: "1px solid #292929",
-                borderRadius: 10,
-                padding: 18,
-              }}
-            >
-              {/* HEADER */}
+          {filteredLeads.map(
+            (lead) => (
               <div
+                key={`${lead.leadType}-${lead.id}`}
                 style={{
-                  display: "flex",
-                  justifyContent:
-                    "space-between",
-                  gap: 12,
-                  flexWrap: "wrap",
+                  background:
+                    "#151515",
+                  border:
+                    "1px solid #292929",
+                  borderRadius: 10,
+                  padding: 18,
                 }}
               >
-                <div>
-                  <div
-                    style={{
-                      color: "#00c98b",
-                      fontSize: 12,
-                      fontWeight: 700,
-                      textTransform:
-                        "uppercase",
-                      marginBottom: 6,
-                    }}
-                  >
-                    {lead.leadType}
-                  </div>
-
-                  <h2
-                    style={{
-                      margin: 0,
-                      fontSize: 20,
-                    }}
-                  >
-                    {lead.title ||
-                      "Opportunity"}
-                  </h2>
-                </div>
-
-                {lead.createdAt && (
-                  <div
-                    style={{
-                      color: "#777",
-                      fontSize: 12,
-                    }}
-                  >
-                    {formatDate(
-                      lead.createdAt
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* DETAILS */}
-              <div
-                style={{
-                  marginTop: 14,
-                  display: "flex",
-                  gap: 8,
-                  flexWrap: "wrap",
-                }}
-              >
-                {lead.country && (
-                  <span style={tagStyle}>
-                    🌍 {lead.country}
-                  </span>
-                )}
-
-                {lead.city && (
-                  <span style={tagStyle}>
-                    📍 {lead.city}
-                  </span>
-                )}
-
-                {lead.skill && (
-                  <span style={tagStyle}>
-                    🛠 {lead.skill}
-                  </span>
-                )}
-
-                {lead.category && (
-                  <span style={tagStyle}>
-                    {lead.category}
-                  </span>
-                )}
-
-                {lead.subcategory && (
-                  <span style={tagStyle}>
-                    {lead.subcategory}
-                  </span>
-                )}
-              </div>
-
-              {/* NAME / COMPANY */}
-              {lead.name && (
+                {/* HEADER */}
                 <div
                   style={{
-                    marginTop: 14,
-                    color: "#ddd",
+                    display:
+                      "flex",
+                    justifyContent:
+                      "space-between",
+                    gap: 12,
+                    flexWrap:
+                      "wrap",
                   }}
                 >
-                  <strong>
-                    {lead.leadType ===
-                    "Supply"
-                      ? "Company:"
-                      : "Name:"}
-                  </strong>{" "}
-                  {lead.name}
-                </div>
-              )}
-
-              {/* DESCRIPTION */}
-              {lead.description && (
-                <p
-                  style={{
-                    color: "#bbb",
-                    lineHeight: 1.55,
-                    marginBottom: 0,
-                  }}
-                >
-                  {lead.description}
-                </p>
-              )}
-
-              {/* MONEY */}
-              {(lead.budget ||
-                lead.salary) && (
-                <div
-                  style={{
-                    marginTop: 12,
-                    color: "#00c98b",
-                    fontWeight: 600,
-                  }}
-                >
-                  {lead.budget && (
-                    <div>
-                      Budget:{" "}
-                      {displayMoney(
-                        lead.budget,
-                        lead.currency
-                      )}
-                    </div>
-                  )}
-
-                  {lead.salary && (
-                    <div>
-                      Salary:{" "}
-                      {displayMoney(
-                        lead.salary
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* CONTACT */}
-              {(lead.contactName ||
-                lead.email ||
-                lead.phone ||
-                lead.contact) && (
-                <div
-                  style={{
-                    marginTop: 16,
-                    paddingTop: 14,
-                    borderTop:
-                      "1px solid #292929",
-                  }}
-                >
-                  {lead.contactName && (
+                  <div>
                     <div
                       style={{
-                        color: "#ddd",
-                        marginBottom: 8,
+                        color:
+                          "#00c98b",
+                        fontSize: 12,
+                        fontWeight:
+                          700,
+                        textTransform:
+                          "uppercase",
+                        marginBottom:
+                          6,
                       }}
                     >
-                      Contact:{" "}
-                      {lead.contactName}
+                      {
+                        lead.leadType
+                      }
+                    </div>
+
+                    <h2
+                      style={{
+                        margin: 0,
+                        fontSize:
+                          20,
+                      }}
+                    >
+                      {lead.title ||
+                        "Opportunity"}
+                    </h2>
+                  </div>
+
+                  {lead.createdAt && (
+                    <div
+                      style={{
+                        color:
+                          "#777",
+                        fontSize:
+                          12,
+                      }}
+                    >
+                      {formatDate(
+                        lead.createdAt
+                      )}
                     </div>
                   )}
-
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: 8,
-                      flexWrap: "wrap",
-                    }}
-                  >
-                    {lead.phone && (
-                      <>
-                        <button
-                          onClick={() =>
-                            callPhone(
-                              lead.phone
-                            )
-                          }
-                          style={buttonStyle}
-                        >
-                          📞 Call
-                        </button>
-
-                        <button
-                          onClick={() =>
-                            openWhatsApp(
-                              lead.phone
-                            )
-                          }
-                          style={buttonStyle}
-                        >
-                          WhatsApp
-                        </button>
-                      </>
-                    )}
-
-                    {lead.email && (
-                      <button
-                        onClick={() =>
-                          sendEmail(
-                            lead.email
-                          )
-                        }
-                        style={buttonStyle}
-                      >
-                        ✉ Email
-                      </button>
-                    )}
-
-                    {lead.contact &&
-                      !lead.email &&
-                      !lead.phone && (
-                        <button
-                          onClick={() =>
-                            openLink(
-                              lead.contact
-                            )
-                          }
-                          style={buttonStyle}
-                        >
-                          Contact
-                        </button>
-                      )}
-                  </div>
                 </div>
-              )}
 
-              {/* ACTION */}
-              {lead.openUrl && (
-                <button
-                  onClick={() =>
-                    openLink(
-                      lead.openUrl
-                    )
-                  }
+                {/* DETAILS */}
+                <div
                   style={{
-                    ...buttonStyle,
                     marginTop: 14,
-                    background:
-                      "#00c98b",
-                    color: "#000",
-                    borderColor:
-                      "#00c98b",
-                    fontWeight: 700,
+                    display:
+                      "flex",
+                    gap: 8,
+                    flexWrap:
+                      "wrap",
                   }}
                 >
-                  {lead.leadType ===
-                  "Supply"
-                    ? "Apply / Open Opportunity"
-                    : lead.leadType ===
-                      "SaaS"
-                    ? "Open Contact / Landing Page"
-                    : "Open Source"}
-                </button>
-              )}
-            </div>
-          ))}
+                  {lead.country && (
+                    <span
+                      style={
+                        tagStyle
+                      }
+                    >
+                      🌍{" "}
+                      {
+                        lead.country
+                      }
+                    </span>
+                  )}
+
+                  {lead.city && (
+                    <span
+                      style={
+                        tagStyle
+                      }
+                    >
+                      📍{" "}
+                      {lead.city}
+                    </span>
+                  )}
+
+                  {lead.skill && (
+                    <span
+                      style={
+                        tagStyle
+                      }
+                    >
+                      🛠{" "}
+                      {lead.skill}
+                    </span>
+                  )}
+
+                  {lead.category && (
+                    <span
+                      style={
+                        tagStyle
+                      }
+                    >
+                      {
+                        lead.category
+                      }
+                    </span>
+                  )}
+
+                  {lead.subcategory && (
+                    <span
+                      style={
+                        tagStyle
+                      }
+                    >
+                      {
+                        lead.subcategory
+                      }
+                    </span>
+                  )}
+                </div>
+
+                {/* NAME / COMPANY */}
+                {lead.name && (
+                  <div
+                    style={{
+                      marginTop: 14,
+                      color: "#ddd",
+                    }}
+                  >
+                    <strong>
+                      {lead.leadType ===
+                      "Supply"
+                        ? "Company:"
+                        : "Name:"}
+                    </strong>{" "}
+                    {lead.name}
+                  </div>
+                )}
+
+                {/* DESCRIPTION */}
+                {lead.description && (
+                  <p
+                    style={{
+                      color: "#bbb",
+                      lineHeight:
+                        1.55,
+                      marginBottom:
+                        0,
+                    }}
+                  >
+                    {
+                      lead.description
+                    }
+                  </p>
+                )}
+
+                {/* MONEY */}
+                {(lead.budget ||
+                  lead.salary) && (
+                  <div
+                    style={{
+                      marginTop: 12,
+                      color:
+                        "#00c98b",
+                      fontWeight:
+                        600,
+                    }}
+                  >
+                    {lead.budget && (
+                      <div>
+                        Budget:{" "}
+                        {displayMoney(
+                          lead.budget,
+                          lead.currency
+                        )}
+                      </div>
+                    )}
+
+                    {lead.salary && (
+                      <div>
+                        Salary:{" "}
+                        {displayMoney(
+                          lead.salary
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* CONTACT */}
+                {(lead.contactName ||
+                  lead.email ||
+                  lead.phone ||
+                  lead.contact) && (
+                  <div
+                    style={{
+                      marginTop: 16,
+                      paddingTop:
+                        14,
+                      borderTop:
+                        "1px solid #292929",
+                    }}
+                  >
+                    {lead.contactName && (
+                      <div
+                     {lead.contactName && (
+                      <div
+                        style={{
+                          color: "#ddd",
+                          marginBottom: 8,
+                        }}
+                      >
+                        Contact: {lead.contactName}
+                      </div>
+                    )}
+
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: 8,
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      {lead.phone && (
+                        <>
+                          <button
+                            onClick={() =>
+                              callPhone(lead.phone)
+                            }
+                            style={buttonStyle}
+                          >
+                            📞 Call
+                          </button>
+
+                          <button
+                            onClick={() =>
+                              openWhatsApp(lead.phone)
+                            }
+                            style={buttonStyle}
+                          >
+                            WhatsApp
+                          </button>
+                        </>
+                      )}
+
+                      {lead.email && (
+                        <button
+                          onClick={() =>
+                            sendEmail(lead.email)
+                          }
+                          style={buttonStyle}
+                        >
+                          ✉ Email
+                        </button>
+                      )}
+
+                      {lead.contact &&
+                        !lead.email &&
+                        !lead.phone && (
+                          <button
+                            onClick={() =>
+                              openLink(lead.contact)
+                            }
+                            style={buttonStyle}
+                          >
+                            Contact
+                          </button>
+                        )}
+                    </div>
+                  </div>
+                )}
+
+                {/* ACTION */}
+                {lead.openUrl && (
+                  <button
+                    onClick={() =>
+                      openLink(lead.openUrl)
+                    }
+                    style={{
+                      ...buttonStyle,
+                      marginTop: 14,
+                      background: "#00c98b",
+                      color: "#000",
+                      borderColor: "#00c98b",
+                      fontWeight: 700,
+                    }}
+                  >
+                    {lead.leadType === "Supply"
+                      ? "Apply / Open Opportunity"
+                      : lead.leadType === "SaaS"
+                      ? "Open Contact / Landing Page"
+                      : "Open Source"}
+                  </button>
+                )}
+              </div>
+            ))}
         </div>
       </div>
     </div>
