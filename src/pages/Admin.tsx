@@ -9,6 +9,7 @@ import {
   Link2,
   RefreshCw,
   ShieldCheck,
+  CreditCard,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 
@@ -18,6 +19,7 @@ type AdminSection =
   | "leads"
   | "referrals"
   | "resellers"
+  | "subscription"
   | "links";
 
 type AdminUser = {
@@ -72,19 +74,34 @@ async function adminRequest(
     throw new Error("Admin session not found.");
   }
 
-  const response = await fetch(`/api/admin?action=${action}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${session.access_token}`,
-      ...(options.headers || {}),
-    },
-  });
+  const response = await fetch(
+    `/api/admin?action=${action}`,
+    {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+        ...(options.headers || {}),
+      },
+    }
+  );
 
-  const data = await response.json();
+  const text = await response.text();
+
+  let data: any;
+
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error(
+      `Admin API returned ${response.status} instead of JSON.`
+    );
+  }
 
   if (!response.ok || data?.success === false) {
-    throw new Error(data?.error || "Admin request failed.");
+    throw new Error(
+      data?.error || "Admin request failed."
+    );
   }
 
   return data;
@@ -131,7 +148,10 @@ function getStatus(user: AdminUser) {
 }
 
 function getStatusClass(status: string) {
-  if (status === "active" || status === "trial") {
+  if (
+    status === "active" ||
+    status === "trial"
+  ) {
     return "text-[#00c98b]";
   }
 
@@ -172,27 +192,36 @@ export default function Admin() {
 
     try {
       if (section === "overview") {
-        const data = await adminRequest("overview");
+        const data =
+          await adminRequest("overview");
+
         setOverview(data);
       }
 
       if (section === "users") {
-        const data = await adminRequest("users");
+        const data =
+          await adminRequest("users");
+
         setUsers(data.users || []);
       }
 
       if (section === "leads") {
-        const data = await adminRequest("leads");
+        const data =
+          await adminRequest("leads");
+
         setLeads(data.leads || []);
       }
 
       if (section === "links") {
-        const data = await adminRequest("invites");
+        const data =
+          await adminRequest("invites");
+
         setInvites(data.invites || []);
       }
     } catch (err: any) {
       setError(
-        err?.message || "Could not load admin data."
+        err?.message ||
+          "Could not load admin data."
       );
     } finally {
       setLoading(false);
@@ -224,7 +253,8 @@ export default function Admin() {
       await loadData();
     } catch (err: any) {
       setError(
-        err?.message || "Could not update user."
+        err?.message ||
+          "Could not update user."
       );
       setLoading(false);
     }
@@ -257,6 +287,11 @@ export default function Admin() {
       icon: Store,
     },
     {
+      id: "subscription" as AdminSection,
+      label: "Subscription",
+      icon: CreditCard,
+    },
+    {
       id: "links" as AdminSection,
       label: "Referral Links",
       icon: Link2,
@@ -266,9 +301,12 @@ export default function Admin() {
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white">
       <div className="max-w-6xl mx-auto p-4">
+
         <div className="flex items-center justify-between mb-6">
           <button
-            onClick={() => navigate("/dashboard")}
+            onClick={() =>
+              navigate("/dashboard")
+            }
             className="flex items-center gap-2 text-sm text-[#aaa]"
           >
             <ArrowLeft size={18} />
@@ -295,7 +333,9 @@ export default function Admin() {
             return (
               <button
                 key={item.id}
-                onClick={() => setSection(item.id)}
+                onClick={() =>
+                  setSection(item.id)
+                }
                 className={`flex items-center gap-2 whitespace-nowrap px-3 py-2 rounded-lg text-xs border ${
                   section === item.id
                     ? "bg-white text-black border-white"
@@ -322,7 +362,9 @@ export default function Admin() {
         )}
 
         {section === "overview" && (
-          <Overview overview={overview} />
+          <Overview
+            overview={overview}
+          />
         )}
 
         {section === "users" && (
@@ -333,21 +375,34 @@ export default function Admin() {
         )}
 
         {section === "leads" && (
-          <LeadsSection leads={leads} />
+          <LeadsSection
+            leads={leads}
+          />
+        )}
+
+        {section === "subscription" && (
+          <SubscriptionSection
+            users={users}
+            updateUser={updateUser}
+          />
         )}
 
         {section === "links" && (
-          <LinksSection invites={invites} />
+          <LinksSection
+            invites={invites}
+          />
         )}
 
         {(section === "referrals" ||
           section === "resellers") && (
-          <Placeholder section={section} />
+          <Placeholder
+            section={section}
+          />
         )}
       </div>
     </div>
   );
-}
+         }
 function Overview({
   overview,
 }: {
@@ -501,9 +556,7 @@ function UsersSection({
                     </span>
 
                     <div className="font-semibold mt-1">
-                      {dateText(
-                        user.subscription_end
-                      )}
+                      {dateText(user.subscription_end)}
                     </div>
                   </div>
 
@@ -567,7 +620,7 @@ function UsersSection({
 
                 <div className="mt-3">
                   <p className="text-xs text-[#666] mb-2">
-                    Subscription
+                    Subscription Actions
                   </p>
 
                   <div className="flex flex-wrap gap-2">
@@ -632,7 +685,130 @@ function UsersSection({
       )}
     </div>
   );
-  }
+}
+
+function SubscriptionSection({
+  users,
+  updateUser,
+}: {
+  users: AdminUser[];
+  updateUser: (
+    user: AdminUser,
+    action: string,
+    plan?: string
+  ) => Promise<void>;
+}) {
+  return (
+    <div>
+      <h2 className="text-lg font-semibold mb-2">
+        Subscription
+      </h2>
+
+      <p className="text-xs text-[#777] mb-5">
+        Manage plans and subscription actions for users.
+      </p>
+
+      {users.length === 0 ? (
+        <div className="rounded-xl border border-[#222] bg-[#111] p-5 text-sm text-[#777]">
+          No users available yet.
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {users.map((user) => (
+            <div
+              key={user.id}
+              className="rounded-xl border border-[#222] bg-[#111] p-4"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold">
+                    {user.name || "Unnamed User"}
+                  </p>
+
+                  <p className="text-xs text-[#777] break-all">
+                    {user.email || "No email linked"}
+                  </p>
+                </div>
+
+                <span className="text-xs font-semibold">
+                  {user.plan || "Basic"}
+                </span>
+              </div>
+
+              <div className="flex flex-wrap gap-2 mt-4">
+                <button
+                  onClick={() =>
+                    updateUser(
+                      user,
+                      "upgrade",
+                      "Basic"
+                    )
+                  }
+                  className="px-3 py-2 rounded-lg border border-[#333] bg-[#181818] text-xs"
+                >
+                  Basic
+                </button>
+
+                <button
+                  onClick={() =>
+                    updateUser(
+                      user,
+                      "upgrade",
+                      "Premium"
+                    )
+                  }
+                  className="px-3 py-2 rounded-lg border border-[#333] bg-[#181818] text-xs"
+                >
+                  Premium
+                </button>
+
+                <button
+                  onClick={() =>
+                    updateUser(
+                      user,
+                      "upgrade",
+                      "Gold"
+                    )
+                  }
+                  className="px-3 py-2 rounded-lg border border-[#333] bg-[#181818] text-xs"
+                >
+                  Gold
+                </button>
+
+                <button
+                  onClick={() =>
+                    updateUser(user, "trial")
+                  }
+                  className="px-3 py-2 rounded-lg border border-[#333] bg-[#181818] text-xs"
+                >
+                  Trial
+                </button>
+
+                <button
+                  onClick={() =>
+                    updateUser(user, "renew")
+                  }
+                  className="px-3 py-2 rounded-lg border border-[#333] bg-[#181818] text-xs"
+                >
+                  Renew
+                </button>
+
+                <button
+                  onClick={() =>
+                    updateUser(user, "cancel")
+                  }
+                  className="px-3 py-2 rounded-lg border border-[#333] bg-[#181818] text-xs text-yellow-300"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+    }
 function LeadsSection({
   leads,
 }: {
@@ -724,7 +900,7 @@ function LinksSection({
             >
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-sm font-semibold">
+                  <p className="text-sm font-semibold break-all">
                     {invite.email}
                   </p>
 
@@ -775,11 +951,11 @@ function Placeholder({
 
       <div className="rounded-xl border border-[#222] bg-[#111] p-5">
         <p className="text-sm text-[#888]">
-          This section is connected and ready for
-          the next launch phase.
+          This section is connected and ready
+          for the next launch phase.
         </p>
       </div>
     </div>
   );
-          }
+      }
 
