@@ -53,7 +53,6 @@ type Invite = {
   plan: string;
   token: string;
   used_at?: string | null;
-  created_at?: string;
 };
 
 type OverviewData = {
@@ -143,6 +142,10 @@ function getStatus(user: AdminUser) {
     return "active";
   }
 
+  if (!user.active) {
+    return "inactive";
+  }
+
   return "expired";
 }
 
@@ -194,9 +197,20 @@ export default function Admin() {
         const data =
           await adminRequest("overview");
 
-        setOverview(
-          data.overview || data
-        );
+        const result = data.overview || {};
+
+        setOverview({
+          users: result.users ?? 0,
+          activeUsers:
+            result.activeUsers ?? 0,
+          demand:
+            result.demandLeads ?? 0,
+          supply:
+            result.supplyLeads ?? 0,
+          saas: 0,
+          invites:
+            result.referralLinks ?? 0,
+        });
       }
 
       if (
@@ -206,7 +220,15 @@ export default function Admin() {
         const data =
           await adminRequest("users");
 
-        setUsers(data.users || []);
+        setUsers(
+          (data.users || []).map(
+            (user: any) => ({
+              ...user,
+              active:
+                user.is_active ?? false,
+            })
+          )
+        );
       }
 
       if (section === "leads") {
@@ -254,16 +276,12 @@ export default function Admin() {
         }),
       });
 
-      const data =
-        await adminRequest("users");
-
-      setUsers(data.users || []);
+      await loadData();
     } catch (err: any) {
       setError(
         err?.message ||
           "Could not update user."
       );
-    } finally {
       setLoading(false);
     }
   }
@@ -301,7 +319,7 @@ export default function Admin() {
     },
     {
       id: "links" as AdminSection,
-      label: "Link Generator",
+      label: "Referral Links",
       icon: Link2,
     },
   ];
@@ -370,7 +388,9 @@ export default function Admin() {
         )}
 
         {section === "overview" && (
-          <Overview overview={overview} />
+          <Overview
+            overview={overview}
+          />
         )}
 
         {section === "users" && (
@@ -381,7 +401,9 @@ export default function Admin() {
         )}
 
         {section === "leads" && (
-          <LeadsSection leads={leads} />
+          <LeadsSection
+            leads={leads}
+          />
         )}
 
         {section === "subscription" && (
@@ -400,472 +422,14 @@ export default function Admin() {
 
         {(section === "referrals" ||
           section === "resellers") && (
-          <Placeholder section={section} />
+          <Placeholder
+            section={section}
+          />
         )}
       </div>
     </div>
   );
-    }
-function Overview({
-  overview,
-}: {
-  overview: OverviewData | null;
-}) {
-  const cards = [
-    {
-      label: "Total Users",
-      value: overview?.users ?? 0,
-      icon: Users,
-    },
-    {
-      label: "Active Users",
-      value: overview?.activeUsers ?? 0,
-      icon: ShieldCheck,
-    },
-    {
-      label: "Demand Leads",
-      value: overview?.demand ?? 0,
-      icon: Target,
-    },
-    {
-      label: "Supply Leads",
-      value: overview?.supply ?? 0,
-      icon: Store,
-    },
-    {
-      label: "SaaS Leads",
-      value: overview?.saas ?? 0,
-      icon: UserPlus,
-    },
-    {
-      label: "Invites",
-      value: overview?.invites ?? 0,
-      icon: Link2,
-    },
-  ];
-
-  return (
-    <div>
-      <h2 className="text-lg font-semibold mb-4">
-        Admin Overview
-      </h2>
-
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-        {cards.map((card) => {
-          const Icon = card.icon;
-
-          return (
-            <div
-              key={card.label}
-              className="rounded-xl border border-[#222] bg-[#111] p-4"
-            >
-              <div className="flex items-center justify-between">
-                <Icon
-                  size={18}
-                  className="text-[#aaa]"
-                />
-
-                <span className="text-xl font-bold">
-                  {card.value}
-                </span>
-              </div>
-
-              <p className="mt-2 text-xs text-[#777]">
-                {card.label}
-              </p>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function UsersSection({
-  users,
-  updateUser,
-}: {
-  users: AdminUser[];
-  updateUser: (
-    user: AdminUser,
-    action: string,
-    plan?: string
-  ) => Promise<void>;
-}) {
-  return (
-    <div>
-      <h2 className="text-lg font-semibold mb-4">
-        Users
-      </h2>
-
-      {users.length === 0 ? (
-        <div className="rounded-xl border border-[#222] bg-[#111] p-5 text-sm text-[#777]">
-          No users found.
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {users.map((user) => {
-            const status = getStatus(user);
-
-            return (
-              <div
-                key={user.id}
-                className="rounded-xl border border-[#222] bg-[#111] p-4"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <h3 className="text-sm font-semibold truncate">
-                      {user.name || "Unnamed User"}
-                    </h3>
-
-                    <p className="text-xs text-[#777] break-all">
-                      {user.email || "No email linked"}
-                    </p>
-                  </div>
-
-                  <span
-                    className={`text-xs font-semibold capitalize ${getStatusClass(
-                      status
-                    )}`}
-                  >
-                    {status}
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 mt-3 text-xs">
-                  <div className="rounded-lg bg-[#0a0a0a] p-2">
-                    <span className="text-[#666]">
-                      Plan
-                    </span>
-
-                    <div className="font-semibold mt-1">
-                      {user.plan || "Basic"}
-                    </div>
-                  </div>
-
-                  <div className="rounded-lg bg-[#0a0a0a] p-2">
-                    <span className="text-[#666]">
-                      Trial End
-                    </span>
-
-                    <div className="font-semibold mt-1">
-                      {dateText(user.trial_end)}
-                    </div>
-                  </div>
-
-                  <div className="rounded-lg bg-[#0a0a0a] p-2">
-                    <span className="text-[#666]">
-                      Subscription End
-                    </span>
-
-                    <div className="font-semibold mt-1">
-                      {dateText(user.subscription_end)}
-                    </div>
-                  </div>
-
-                  <div className="rounded-lg bg-[#0a0a0a] p-2">
-                    <span className="text-[#666]">
-                      Active
-                    </span>
-
-                    <div className="font-semibold mt-1">
-                      {user.active ? "Yes" : "No"}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-4">
-                  <p className="text-xs text-[#666] mb-2">
-                    Plan
-                  </p>
-
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      onClick={() =>
-                        updateUser(
-                          user,
-                          "upgrade",
-                          "Basic"
-                        )
-                      }
-                      className="px-3 py-2 rounded-lg border border-[#333] bg-[#181818] text-xs"
-                    >
-                      Basic
-                    </button>
-
-                    <button
-                      onClick={() =>
-                        updateUser(
-                          user,
-                          "upgrade",
-                          "Premium"
-                        )
-                      }
-                      className="px-3 py-2 rounded-lg border border-[#333] bg-[#181818] text-xs"
-                    >
-                      Premium
-                    </button>
-
-                    <button
-                      onClick={() =>
-                        updateUser(
-                          user,
-                          "upgrade",
-                          "Gold"
-                        )
-                      }
-                      className="px-3 py-2 rounded-lg border border-[#333] bg-[#181818] text-xs"
-                    >
-                      Gold
-                    </button>
-                  </div>
-                </div>
-
-                <div className="mt-3">
-                  <p className="text-xs text-[#666] mb-2">
-                    Subscription Actions
-                  </p>
-
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      onClick={() =>
-                        updateUser(user, "trial")
-                      }
-                      className="px-3 py-2 rounded-lg bg-[#181818] border border-[#333] text-xs"
-                    >
-                      Trial
-                    </button>
-
-                    <button
-                      onClick={() =>
-                        updateUser(user, "renew")
-                      }
-                      className="px-3 py-2 rounded-lg bg-[#181818] border border-[#333] text-xs"
-                    >
-                      Renew
-                    </button>
-
-                    <button
-                      onClick={() =>
-                        updateUser(user, "cancel")
-                      }
-                      className="px-3 py-2 rounded-lg bg-[#181818] border border-[#333] text-xs text-yellow-300"
-                    >
-                      Cancel
-                    </button>
-
-                    {user.active ? (
-                      <button
-                        onClick={() =>
-                          updateUser(
-                            user,
-                            "deactivate"
-                          )
-                        }
-                        className="px-3 py-2 rounded-lg bg-[#181818] border border-[#333] text-xs text-red-300"
-                      >
-                        Deactivate
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() =>
-                          updateUser(
-                            user,
-                            "activate"
-                          )
-                        }
-                        className="px-3 py-2 rounded-lg bg-[#181818] border border-[#333] text-xs text-[#00c98b]"
-                      >
-                        Activate
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function SubscriptionSection({
-  users,
-  updateUser,
-}: {
-  users: AdminUser[];
-  updateUser: (
-    user: AdminUser,
-    action: string,
-    plan?: string
-  ) => Promise<void>;
-}) {
-  return (
-    <div>
-      <h2 className="text-lg font-semibold mb-2">
-        Subscription
-      </h2>
-
-      <p className="text-xs text-[#777] mb-5">
-        Manage plans and subscription actions for users.
-      </p>
-
-      {users.length === 0 ? (
-        <div className="rounded-xl border border-[#222] bg-[#111] p-5 text-sm text-[#777]">
-          No users available yet.
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {users.map((user) => (
-            <div
-              key={user.id}
-              className="rounded-xl border border-[#222] bg-[#111] p-4"
-            >
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold">
-                    {user.name || "Unnamed User"}
-                  </p>
-
-                  <p className="text-xs text-[#777] break-all">
-                    {user.email || "No email linked"}
-                  </p>
-                </div>
-
-                <span className="text-xs font-semibold">
-                  {user.plan || "Basic"}
-                </span>
-              </div>
-
-              <div className="flex flex-wrap gap-2 mt-4">
-                <button
-                  onClick={() =>
-                    updateUser(
-                      user,
-                      "upgrade",
-                      "Basic"
-                    )
-                  }
-                  className="px-3 py-2 rounded-lg border border-[#333] bg-[#181818] text-xs"
-                >
-                  Basic
-                </button>
-
-                <button
-                  onClick={() =>
-                    updateUser(
-                      user,
-                      "upgrade",
-                      "Premium"
-                    )
-                  }
-                  className="px-3 py-2 rounded-lg border border-[#333] bg-[#181818] text-xs"
-                >
-                  Premium
-                </button>
-
-                <button
-                  onClick={() =>
-                    updateUser(
-                      user,
-                      "upgrade",
-                      "Gold"
-                    )
-                  }
-                  className="px-3 py-2 rounded-lg border border-[#333] bg-[#181818] text-xs"
-                >
-                  Gold
-                </button>
-
-                <button
-                  onClick={() =>
-                    updateUser(user, "trial")
-                  }
-                  className="px-3 py-2 rounded-lg border border-[#333] bg-[#181818] text-xs"
-                >
-                  Trial
-                </button>
-
-                <button
-                  onClick={() =>
-                    updateUser(user, "renew")
-                  }
-                  className="px-3 py-2 rounded-lg border border-[#333] bg-[#181818] text-xs"
-                >
-                  Renew
-                </button>
-
-                <button
-                  onClick={() =>
-                    updateUser(user, "cancel")
-                  }
-                  className="px-3 py-2 rounded-lg border border-[#333] bg-[#181818] text-xs text-yellow-300"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function LeadsSection({
-  leads,
-}: {
-  leads: AdminLead[];
-}) {
-  return (
-    <div>
-      <h2 className="text-lg font-semibold mb-4">
-        Leads
-      </h2>
-
-      {leads.length === 0 ? (
-        <div className="rounded-xl border border-[#222] bg-[#111] p-5 text-sm text-[#777]">
-          No leads found.
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {leads.map((lead) => (
-            <div
-              key={lead.id}
-              className="rounded-xl border border-[#222] bg-[#111] p-4"
-            >
-              <div className="font-semibold text-sm">
-                {lead.title ||
-                  lead.client_name ||
-                  "Untitled Lead"}
-              </div>
-
-              <div className="text-xs text-[#888] mt-1">
-                {lead.skill_needed || "—"}
-                {lead.country
-                  ? ` · ${lead.country}`
-                  : ""}
-              </div>
-
-              {lead.description && (
-                <p className="text-sm text-[#aaa] mt-3">
-                  {lead.description}
-                </p>
-              )}
-
-              <div className="text-xs text-[#666] mt-3">
-                {lead.source || "Unknown source"}
-                {" · "}
-                {dateText(lead.created_at)}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
+  }
 function Overview({
   overview,
 }: {
@@ -890,6 +454,7 @@ function Overview({
           <div className="text-xs text-[#777]">
             {label}
           </div>
+
           <div className="mt-2 text-2xl font-bold">
             {value}
           </div>
@@ -962,7 +527,9 @@ function UsersSection({
                 <div>
                   Subscription:{" "}
                   <span className="text-white">
-                    {dateText(user.subscription_end)}
+                    {dateText(
+                      user.subscription_end
+                    )}
                   </span>
                 </div>
               </div>
@@ -1036,7 +603,10 @@ function UsersSection({
 
                 <button
                   onClick={() =>
-                    updateUser(user, "deactivate")
+                    updateUser(
+                      user,
+                      "deactivate"
+                    )
                   }
                   className="px-3 py-2 rounded-lg bg-[#1b1b1b] border border-[#333] text-xs text-red-400"
                 >
@@ -1045,7 +615,10 @@ function UsersSection({
 
                 <button
                   onClick={() =>
-                    updateUser(user, "activate")
+                    updateUser(
+                      user,
+                      "activate"
+                    )
                   }
                   className="px-3 py-2 rounded-lg bg-[#1b1b1b] border border-[#333] text-xs text-[#00c98b]"
                 >
@@ -1125,7 +698,6 @@ function LeadsSection({
     </div>
   );
 }
-
 function LinksSection({
   invites,
   reload,
@@ -1215,9 +787,11 @@ function LinksSection({
           <option value="Basic">
             Basic
           </option>
+
           <option value="Premium">
             Premium
           </option>
+
           <option value="Gold">
             Gold
           </option>
@@ -1316,4 +890,4 @@ function Placeholder({
       </div>
     </div>
   );
-  }
+}
