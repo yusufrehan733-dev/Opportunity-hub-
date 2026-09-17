@@ -456,7 +456,6 @@ export default async function handler(
           trial_end:
             ends.toISOString(),
           subscription_end: null,
-          active: true,
         },
         {
           onConflict: "id",
