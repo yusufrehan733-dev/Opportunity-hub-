@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { supabase } from "../lib/supabase";
 
 type Lead = {
   id: string;
@@ -17,9 +16,9 @@ type Lead = {
   country?: string;
   city?: string;
 
-  budget?: string;
+  budget?: string | number;
   currency?: string;
-  salary?: string;
+  salary?: string | number;
 
   contactName?: string;
   email?: string;
@@ -57,6 +56,7 @@ export default function Leads() {
 
   const [typeFilter, setTypeFilter] = useState("All");
   const [countryFilter, setCountryFilter] = useState("All");
+  const [skillFilter, setSkillFilter] = useState("All");
 
   useEffect(() => {
     loadLeads();
@@ -66,129 +66,189 @@ export default function Leads() {
     setLoading(true);
     setErrorMsg("");
 
-    const [demandResult, supplyResult, saasResult] =
-      await Promise.all([
-        supabase.from("demand_lead").select("*"),
-        supabase.from("supply_leads").select("*"),
-        supabase.from("saas_leads").select("*"),
-      ]);
+    try {
+      const response = await fetch("/api/leads", {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+        },
+      });
 
-    const errors = [
-      demandResult.error,
-      supplyResult.error,
-      saasResult.error,
-    ].filter(Boolean);
+      const result = await response.json();
 
-    if (errors.length > 0) {
-      console.error("Lead errors:", errors);
-    }
+      if (!response.ok || !result?.success) {
+        throw new Error(
+          result?.error || "Unable to load leads."
+        );
+      }
 
-    const demand: Lead[] = (demandResult.data || []).map(
-      (row: any) => ({
-        id: row.id,
-        leadType: "Demand",
+      const rows = Array.isArray(result.leads)
+        ? result.leads
+        : [];
 
-        title: row.title || row.skill_needed || "Service Opportunity",
-        name: row.client_name,
+      const mapped: Lead[] = rows.map((row: any) => ({
+        id: String(row.id),
 
-        description: row.description,
-        skill: row.skill_needed,
-        category: row.category,
-        subcategory: row.subcategory,
+        leadType:
+          row.type === "Supply"
+            ? "Supply"
+            : row.type === "SaaS"
+            ? "SaaS"
+            : "Demand",
 
-        country: row.country,
-        city: row.city,
+        title:
+          row.title ||
+          row.name ||
+          "Opportunity",
 
-        budget: row.budget,
-        currency: row.currency,
+        name:
+          row.name ||
+          row.contact_name ||
+          null,
 
-        contactName: row.contact_name,
-        email: row.contact_email,
-        phone: row.contact_phone,
+        company:
+          row.company_name ||
+          row.company ||
+          null,
 
-        source: row.source,
-        openUrl: row.source,
+        description:
+          row.description || "",
 
-        createdAt: row.created_at,
-      })
-    );
+        skill:
+          row.skill ||
+          row.required_skill ||
+          "",
 
-    const supply: Lead[] = (supplyResult.data || []).map(
-      (row: any) => ({
-        id: row.id,
-        leadType: "Supply",
+        category:
+          row.category ||
+          "",
 
-        title: row.job_title || row.position || "Job Opportunity",
-        name: row.company_name,
-        company: row.company_name,
+        subcategory:
+          row.subcategory ||
+          "",
 
-        description: row.description,
-        skill: row.required_skill,
-        category: row.category,
-        subcategory: row.subcategory,
+        country:
+          row.country ||
+          "Global",
 
-        country: row.country,
-        city: row.city,
+        city:
+          row.city ||
+          "",
 
-        salary: row.salary_range,
+        budget:
+          row.budget ||
+          null,
 
-        email: row.contact_email,
-        phone: row.contact_phone,
+        currency:
+          row.currency ||
+          "",
 
-        openUrl: row.apply_url || row.company_website,
-        source: row.company_website,
+        salary:
+          row.salary_range ||
+          null,
 
-        createdAt: row.created_at,
-      })
-    );
+        contactName:
+          row.contact_name ||
+          null,
 
-    const saas: Lead[] = (saasResult.data || []).map(
-      (row: any) => ({
-        id: row.id,
-        leadType: "SaaS",
+        email:
+          row.contact_email ||
+          null,
 
-        title: row.name || "SaaS Opportunity",
-        name: row.name,
-        company: row.platform,
+        phone:
+          row.contact_phone ||
+          null,
 
-        description: row.description,
-        category: row.niche,
+        contact:
+          row.contact ||
+          null,
 
-        contact: row.contact,
-        email: row.content_email,
+        source:
+          row.source ||
+          "",
 
-        openUrl: row.landing_url,
+        openUrl:
+          row.apply_url ||
+          row.landing_url ||
+          row.company_website ||
+          row.source ||
+          row.contact ||
+          null,
 
-        createdAt: row.created_at,
-      })
-    );
+        createdAt:
+          row.created_at ||
+          null,
+      }));
 
-    setLeads([...demand, ...supply, ...saas]);
-    setLoading(false);
+      setLeads(mapped);
+    } catch (error: any) {
+      console.error("Leads API error:", error);
 
-    if (errors.length === 3) {
-      setErrorMsg("Could not load leads. Please check database access.");
+      setLeads([]);
+
+      setErrorMsg(
+        error?.message ||
+          "Could not load leads. Please try again."
+      );
+    } finally {
+      setLoading(false);
     }
   }
+
+  const skills = useMemo(() => {
+    const values = leads
+      .map((lead) => lead.skill?.trim())
+      .filter(
+        (skill): skill is string =>
+          Boolean(skill)
+      );
+
+    return Array.from(
+      new Set(values)
+    ).sort((a, b) =>
+      a.localeCompare(b)
+    );
+  }, [leads]);
 
   const filteredLeads = useMemo(() => {
     return leads.filter((lead) => {
       const typeMatches =
-        typeFilter === "All" || lead.leadType === typeFilter;
+        typeFilter === "All" ||
+        lead.leadType === typeFilter;
 
       const countryMatches =
         countryFilter === "All" ||
-        (lead.country || "").toLowerCase() ===
-          countryFilter.toLowerCase();
+        (lead.country || "")
+          .toLowerCase()
+          .trim() ===
+          countryFilter.toLowerCase().trim();
 
-      return typeMatches && countryMatches;
+      const skillMatches =
+        skillFilter === "All" ||
+        (lead.skill || "")
+          .toLowerCase()
+          .trim() ===
+          skillFilter.toLowerCase().trim();
+
+      return (
+        typeMatches &&
+        countryMatches &&
+        skillMatches
+      );
     });
-  }, [leads, typeFilter, countryFilter]);
+  }, [
+    leads,
+    typeFilter,
+    countryFilter,
+    skillFilter,
+  ]);
 
   function openLink(url?: string) {
     if (!url) return;
 
     let finalUrl = url.trim();
+
+    if (!finalUrl) return;
 
     if (
       !finalUrl.startsWith("http://") &&
@@ -197,16 +257,28 @@ export default function Leads() {
       finalUrl = `https://${finalUrl}`;
     }
 
-    window.open(finalUrl, "_blank", "noopener,noreferrer");
+    window.open(
+      finalUrl,
+      "_blank",
+      "noopener,noreferrer"
+    );
   }
 
   function openWhatsApp(phone?: string) {
     if (!phone) return;
 
-    const cleanPhone = phone.replace(/[^\d+]/g, "");
+    const cleanPhone = phone.replace(
+      /[^\d+]/g,
+      ""
+    );
+
+    if (!cleanPhone) return;
 
     window.open(
-      `https://wa.me/${cleanPhone.replace("+", "")}`,
+      `https://wa.me/${cleanPhone.replace(
+        "+",
+        ""
+      )}`,
       "_blank",
       "noopener,noreferrer"
     );
@@ -214,11 +286,13 @@ export default function Leads() {
 
   function callPhone(phone?: string) {
     if (!phone) return;
+
     window.location.href = `tel:${phone}`;
   }
 
   function sendEmail(email?: string) {
     if (!email) return;
+
     window.location.href = `mailto:${email}`;
   }
 
@@ -227,9 +301,30 @@ export default function Leads() {
 
     const parsed = new Date(date);
 
-    if (Number.isNaN(parsed.getTime())) return "";
+    if (
+      Number.isNaN(
+        parsed.getTime()
+      )
+    ) {
+      return "";
+    }
 
     return parsed.toLocaleDateString();
+  }
+
+  function displayMoney(
+    value?: string | number,
+    currency?: string
+  ) {
+    if (
+      value === undefined ||
+      value === null ||
+      value === ""
+    ) {
+      return "";
+    }
+
+    return `${currency || ""} ${value}`.trim();
   }
 
   return (
@@ -247,47 +342,93 @@ export default function Leads() {
           margin: "0 auto",
         }}
       >
-        <h1
+        <div
           style={{
-            marginTop: 0,
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+            gap: 12,
+            flexWrap: "wrap",
             marginBottom: 6,
-            fontSize: "28px",
           }}
         >
-          Leads
-        </h1>
+          <div>
+            <h1
+              style={{
+                marginTop: 0,
+                marginBottom: 6,
+                fontSize: "28px",
+              }}
+            >
+              Leads
+            </h1>
 
-        <p
-          style={{
-            color: "#999",
-            marginTop: 0,
-            marginBottom: 24,
-          }}
-        >
-          Find real opportunities and contact them directly.
-        </p>
+            <p
+              style={{
+                color: "#999",
+                marginTop: 0,
+                marginBottom: 0,
+              }}
+            >
+              Find real opportunities and
+              contact them directly.
+            </p>
+          </div>
+
+          <button
+            onClick={loadLeads}
+            disabled={loading}
+            style={{
+              padding: "9px 14px",
+              borderRadius: 7,
+              border: "1px solid #444",
+              background: "#181818",
+              color: "#fff",
+              cursor: loading
+                ? "not-allowed"
+                : "pointer",
+              opacity: loading ? 0.6 : 1,
+            }}
+          >
+            {loading
+              ? "Loading..."
+              : "Refresh"}
+          </button>
+        </div>
 
         {/* CATEGORY FILTER */}
         <div
           style={{
+            marginTop: 24,
             display: "flex",
             gap: 8,
             flexWrap: "wrap",
             marginBottom: 14,
           }}
         >
-          {["All", "Demand", "Supply", "SaaS"].map((type) => (
+          {[
+            "All",
+            "Demand",
+            "Supply",
+            "SaaS",
+          ].map((type) => (
             <button
               key={type}
-              onClick={() => setTypeFilter(type)}
+              onClick={() =>
+                setTypeFilter(type)
+              }
               style={{
                 padding: "9px 16px",
                 borderRadius: 8,
                 border: "1px solid #333",
                 background:
-                  typeFilter === type ? "#00c98b" : "#181818",
+                  typeFilter === type
+                    ? "#00c98b"
+                    : "#181818",
                 color:
-                  typeFilter === type ? "#000" : "#fff",
+                  typeFilter === type
+                    ? "#000"
+                    : "#fff",
                 cursor: "pointer",
                 fontWeight: 600,
               }}
@@ -297,27 +438,58 @@ export default function Leads() {
           ))}
         </div>
 
-        {/* COUNTRY FILTER */}
-        <div style={{ marginBottom: 24 }}>
+        {/* FILTERS */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns:
+              "repeat(auto-fit, minmax(220px, 1fr))",
+            gap: 10,
+            marginBottom: 24,
+          }}
+        >
           <select
             value={countryFilter}
-            onChange={(e) => setCountryFilter(e.target.value)}
-            style={{
-              width: "100%",
-              maxWidth: "320px",
-              padding: "11px 12px",
-              borderRadius: 8,
-              border: "1px solid #333",
-              background: "#181818",
-              color: "#fff",
-              fontSize: "15px",
-            }}
+            onChange={(e) =>
+              setCountryFilter(
+                e.target.value
+              )
+            }
+            style={selectStyle}
           >
-            <option value="All">All Countries</option>
+            <option value="All">
+              All Countries
+            </option>
 
             {countries.map((country) => (
-              <option key={country} value={country}>
+              <option
+                key={country}
+                value={country}
+              >
                 {country}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={skillFilter}
+            onChange={(e) =>
+              setSkillFilter(
+                e.target.value
+              )
+            }
+            style={selectStyle}
+          >
+            <option value="All">
+              All Skills
+            </option>
+
+            {skills.map((skill) => (
+              <option
+                key={skill}
+                value={skill}
+              >
+                {skill}
               </option>
             ))}
           </select>
@@ -331,7 +503,7 @@ export default function Leads() {
           }}
         >
           {loading
-            ? "Loading leads..."
+            ? "Loading Gold-quality leads..."
             : `${filteredLeads.length} leads found`}
         </div>
 
@@ -350,22 +522,26 @@ export default function Leads() {
           </div>
         )}
 
-        {/* LEADS */}
-        {!loading && filteredLeads.length === 0 && (
-          <div
-            style={{
-              background: "#151515",
-              border: "1px solid #292929",
-              borderRadius: 10,
-              padding: 30,
-              textAlign: "center",
-              color: "#999",
-            }}
-          >
-            No leads found for this filter.
-          </div>
-        )}
+        {/* EMPTY STATE */}
+        {!loading &&
+          !errorMsg &&
+          filteredLeads.length === 0 && (
+            <div
+              style={{
+                background: "#151515",
+                border: "1px solid #292929",
+                borderRadius: 10,
+                padding: 30,
+                textAlign: "center",
+                color: "#999",
+              }}
+            >
+              No Gold-quality leads found
+              for this filter.
+            </div>
+          )}
 
+        {/* LEADS */}
         <div
           style={{
             display: "grid",
@@ -386,7 +562,8 @@ export default function Leads() {
               <div
                 style={{
                   display: "flex",
-                  justifyContent: "space-between",
+                  justifyContent:
+                    "space-between",
                   gap: 12,
                   flexWrap: "wrap",
                 }}
@@ -397,7 +574,8 @@ export default function Leads() {
                       color: "#00c98b",
                       fontSize: 12,
                       fontWeight: 700,
-                      textTransform: "uppercase",
+                      textTransform:
+                        "uppercase",
                       marginBottom: 6,
                     }}
                   >
@@ -410,7 +588,8 @@ export default function Leads() {
                       fontSize: 20,
                     }}
                   >
-                    {lead.title || "Opportunity"}
+                    {lead.title ||
+                      "Opportunity"}
                   </h2>
                 </div>
 
@@ -421,7 +600,9 @@ export default function Leads() {
                       fontSize: 12,
                     }}
                   >
-                    {formatDate(lead.createdAt)}
+                    {formatDate(
+                      lead.createdAt
+                    )}
                   </div>
                 )}
               </div>
@@ -458,8 +639,15 @@ export default function Leads() {
                     {lead.category}
                   </span>
                 )}
+
+                {lead.subcategory && (
+                  <span style={tagStyle}>
+                    {lead.subcategory}
+                  </span>
+                )}
               </div>
 
+              {/* NAME / COMPANY */}
               {lead.name && (
                 <div
                   style={{
@@ -468,7 +656,8 @@ export default function Leads() {
                   }}
                 >
                   <strong>
-                    {lead.leadType === "Supply"
+                    {lead.leadType ===
+                    "Supply"
                       ? "Company:"
                       : "Name:"}
                   </strong>{" "}
@@ -476,6 +665,7 @@ export default function Leads() {
                 </div>
               )}
 
+              {/* DESCRIPTION */}
               {lead.description && (
                 <p
                   style={{
@@ -489,7 +679,8 @@ export default function Leads() {
               )}
 
               {/* MONEY */}
-              {(lead.budget || lead.salary) && (
+              {(lead.budget ||
+                lead.salary) && (
                 <div
                   style={{
                     marginTop: 12,
@@ -497,13 +688,24 @@ export default function Leads() {
                     fontWeight: 600,
                   }}
                 >
-                  {lead.budget &&
-                    `Budget: ${
-                      lead.currency || ""
-                    } ${lead.budget}`}
+                  {lead.budget && (
+                    <div>
+                      Budget:{" "}
+                      {displayMoney(
+                        lead.budget,
+                        lead.currency
+                      )}
+                    </div>
+                  )}
 
-                  {lead.salary &&
-                    `Salary: ${lead.salary}`}
+                  {lead.salary && (
+                    <div>
+                      Salary:{" "}
+                      {displayMoney(
+                        lead.salary
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -516,7 +718,8 @@ export default function Leads() {
                   style={{
                     marginTop: 16,
                     paddingTop: 14,
-                    borderTop: "1px solid #292929",
+                    borderTop:
+                      "1px solid #292929",
                   }}
                 >
                   {lead.contactName && (
@@ -526,7 +729,8 @@ export default function Leads() {
                         marginBottom: 8,
                       }}
                     >
-                      Contact: {lead.contactName}
+                      Contact:{" "}
+                      {lead.contactName}
                     </div>
                   )}
 
@@ -541,7 +745,9 @@ export default function Leads() {
                       <>
                         <button
                           onClick={() =>
-                            callPhone(lead.phone)
+                            callPhone(
+                              lead.phone
+                            )
                           }
                           style={buttonStyle}
                         >
@@ -550,7 +756,9 @@ export default function Leads() {
 
                         <button
                           onClick={() =>
-                            openWhatsApp(lead.phone)
+                            openWhatsApp(
+                              lead.phone
+                            )
                           }
                           style={buttonStyle}
                         >
@@ -562,7 +770,9 @@ export default function Leads() {
                     {lead.email && (
                       <button
                         onClick={() =>
-                          sendEmail(lead.email)
+                          sendEmail(
+                            lead.email
+                          )
                         }
                         style={buttonStyle}
                       >
@@ -575,7 +785,9 @@ export default function Leads() {
                       !lead.phone && (
                         <button
                           onClick={() =>
-                            openLink(lead.contact)
+                            openLink(
+                              lead.contact
+                            )
                           }
                           style={buttonStyle}
                         >
@@ -586,25 +798,31 @@ export default function Leads() {
                 </div>
               )}
 
-              {/* SOURCE / APPLY */}
+              {/* ACTION */}
               {lead.openUrl && (
                 <button
                   onClick={() =>
-                    openLink(lead.openUrl)
+                    openLink(
+                      lead.openUrl
+                    )
                   }
                   style={{
                     ...buttonStyle,
                     marginTop: 14,
-                    background: "#00c98b",
+                    background:
+                      "#00c98b",
                     color: "#000",
-                    borderColor: "#00c98b",
+                    borderColor:
+                      "#00c98b",
                     fontWeight: 700,
                   }}
                 >
-                  {lead.leadType === "Supply"
+                  {lead.leadType ===
+                  "Supply"
                     ? "Apply / Open Opportunity"
-                    : lead.leadType === "SaaS"
-                    ? "Open Landing Page"
+                    : lead.leadType ===
+                      "SaaS"
+                    ? "Open Contact / Landing Page"
                     : "Open Source"}
                 </button>
               )}
@@ -633,3 +851,17 @@ const buttonStyle = {
   color: "#fff",
   cursor: "pointer",
 };
+
+const selectStyle = {
+  width: "100%",
+  padding: "11px 12px",
+  borderRadius: 8,
+  border: "1px solid #333",
+  background: "#181818",
+  color: "#fff",
+  fontSize: "15px",
+};
+
+After this file: deploy it. Don't change anything else yet.
+
+Then our next check is very specific: does "/api/leads" return actual Gold leads? If it returns "0", we move to the lead-ingestion side—not another frontend rewrite.
