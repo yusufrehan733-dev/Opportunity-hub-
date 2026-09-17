@@ -530,6 +530,7 @@ export default function InviteRegister() {
           alt="Abstract background"
         />
       </div>
+          </div>
     </div>
   );
 }
