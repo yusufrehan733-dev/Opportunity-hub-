@@ -275,5 +275,5 @@ export default function InviteRegister() {
         />
       </div>
     </div>
-  );
-            }
+      );
+}    
