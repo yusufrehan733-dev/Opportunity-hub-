@@ -201,7 +201,7 @@ export default async function handler(
     ) {
       const { data, error } =
         await supabase
-          .from("demand_lead")
+          .from("demand_leads")
           .select(`
             id,
             type,
