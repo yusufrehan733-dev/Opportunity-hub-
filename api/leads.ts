@@ -344,11 +344,11 @@ export default async function handler(
             lead.country || "Global",
           city:
             lead.city || "",
-          contact_email:
-            lead.contact_email ||
+          contact
+            lead.contact ||
             null,
-          contact_phone:
-            lead.contact_phone ||
+          contact:
+            lead.contact ||
             null,
           contact_name:
             lead.company_name ||
