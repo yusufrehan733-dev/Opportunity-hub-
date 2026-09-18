@@ -302,7 +302,7 @@ export default async function handler(
             country,
             city,
             salary_range,
-            contact_email,
+            contact,
             contact_phone,
             created_at,
             job_title,
