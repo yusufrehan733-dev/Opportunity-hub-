@@ -1,10 +1,15 @@
 import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseUrl =
+  process.env.SUPABASE_URL;
+
 const supabaseServiceKey =
   process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-if (!supabaseUrl || !supabaseServiceKey) {
+if (
+  !supabaseUrl ||
+  !supabaseServiceKey
+) {
   throw new Error(
     "Missing Supabase server environment variables"
   );
@@ -15,13 +20,17 @@ const supabase = createClient(
   supabaseServiceKey
 );
 
-function json(data: any, status = 200) {
+function json(
+  data: any,
+  status = 200
+) {
   return new Response(
     JSON.stringify(data),
     {
       status,
       headers: {
-        "Content-Type": "application/json",
+        "Content-Type":
+          "application/json",
       },
     }
   );
@@ -76,7 +85,9 @@ function hasIdentity(
   );
 }
 
-function isGoldDemand(lead: any) {
+function isGoldDemand(
+  lead: any
+) {
   return (
     hasIdentity(
       lead.client_name,
@@ -95,7 +106,9 @@ function isGoldDemand(lead: any) {
   );
 }
 
-function isGoldSupply(lead: any) {
+function isGoldSupply(
+  lead: any
+) {
   return (
     hasIdentity(
       lead.company_name
@@ -115,7 +128,9 @@ function isGoldSupply(lead: any) {
   );
 }
 
-function isGoldSaas(lead: any) {
+function isGoldSaas(
+  lead: any
+) {
   return (
     hasIdentity(lead.name) &&
     (
@@ -129,29 +144,40 @@ function isGoldSaas(lead: any) {
     )
   );
 }
+
 export default async function handler(
-  req: Request
+  req: any
 ) {
   if (req.method !== "GET") {
     return json(
       {
         success: false,
-        error: "Method not allowed",
+        error:
+          "Method not allowed",
       },
       405
     );
   }
 
   try {
+    const protocol =
+      req.headers?.["x-forwarded-proto"] ||
+      "https";
+
+    const host =
+      req.headers?.host ||
+      "localhost";
+
     const url = new URL(
-      req.url,
-      `https://${req.headers.get("host") || "localhost"}`
+      req.url || "/api/leads",
+      `${protocol}://${host}`
     );
 
     const requestedCategory =
       (
-        url.searchParams.get("category") ||
-        "all"
+        url.searchParams.get(
+          "category"
+        ) || "all"
       )
         .trim()
         .toLowerCase();
@@ -165,7 +191,6 @@ export default async function handler(
     let demandLeads: any[] = [];
     let supplyLeads: any[] = [];
     let saasLeads: any[] = [];
-
     /*
      * DEMAND
      */
@@ -231,11 +256,14 @@ export default async function handler(
           city:
             lead.city || "",
           contact_email:
-            lead.contact_email || null,
+            lead.contact_email ||
+            null,
           contact_phone:
-            lead.contact_phone || null,
+            lead.contact_phone ||
+            null,
           contact_name:
-            lead.contact_name || null,
+            lead.contact_name ||
+            null,
           budget:
             lead.budget || null,
           currency:
@@ -317,11 +345,14 @@ export default async function handler(
           city:
             lead.city || "",
           contact_email:
-            lead.contact_email || null,
+            lead.contact_email ||
+            null,
           contact_phone:
-            lead.contact_phone || null,
+            lead.contact_phone ||
+            null,
           contact_name:
-            lead.company_name || null,
+            lead.company_name ||
+            null,
           budget:
             lead.salary_range || null,
           currency: null,
@@ -334,7 +365,8 @@ export default async function handler(
           company_name:
             lead.company_name || "",
           company_website:
-            lead.company_website || null,
+            lead.company_website ||
+            null,
           apply_url:
             lead.apply_url || null,
           salary_min:
@@ -346,7 +378,7 @@ export default async function handler(
           isLocked: false,
           gold_quality: true,
         }));
-    }
+      }
     /*
      * SAAS
      */
@@ -431,7 +463,6 @@ export default async function handler(
           gold_quality: true,
         }));
     }
-
     const leads = [
       ...demandLeads,
       ...supplyLeads,
@@ -461,7 +492,7 @@ export default async function handler(
           saasLeads.length,
       },
     });
-    } catch (error: any) {
+  } catch (error: any) {
     console.error(
       "Leads API error:",
       error
@@ -478,4 +509,5 @@ export default async function handler(
       },
       500
     );
-    }
+  }
+          }
