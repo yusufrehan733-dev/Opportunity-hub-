@@ -434,8 +434,8 @@ export default async function handler(
             lead.niche || "",
           country: "Global",
           city: "",
-          contact_email:
-            lead.content_email || null,
+          contact:
+            lead.content || null,
           contact_phone:
             lead.contact || null,
           contact_name:
