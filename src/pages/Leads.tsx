@@ -4,7 +4,7 @@ type Lead = {
   id: string;
   leadType: "Demand" | "Supply" | "SaaS";
 
-  title?: string;
+  title: string;
   name?: string;
   company?: string;
 
@@ -17,8 +17,8 @@ type Lead = {
   city?: string;
 
   budget?: string | number;
-  currency?: string;
   salary?: string | number;
+  currency?: string;
 
   contactName?: string;
   email?: string;
@@ -68,56 +68,50 @@ export default function Leads() {
   }, []);
 
   async function loadLeads() {
-    setLoading(true);
-    setErrorMsg("");
-
     try {
+      setLoading(true);
+      setErrorMsg("");
+
       const response = await fetch(
-        "/api/leads",
-        {
-          method: "GET",
-          headers: {
-            Accept:
-              "application/json",
-          },
-        }
+        "/api/leads"
       );
 
-      const result =
-        await response.json();
+      const text = await response.text();
 
-      console.log(
-        "Leads API response:",
-        result
-      );
+      let data: any = null;
 
-      if (
-        !response.ok ||
-        !result?.success
-      ) {
-        const apiError =
-          typeof result?.error ===
-          "string"
-            ? result.error
-            : JSON.stringify(
-                result?.error ||
-                  result
-              );
-
+      try {
+        data = JSON.parse(text);
+      } catch {
         throw new Error(
-          apiError ||
-            "Unable to load leads."
+          `API returned invalid response (${response.status})`
         );
       }
 
-      const rows =
-        Array.isArray(result.leads)
-          ? result.leads
-          : [];
+      if (!response.ok) {
+        throw new Error(
+          data?.error ||
+            `Unable to load leads (${response.status})`
+        );
+      }
 
-      const mapped: Lead[] =
-        rows.map((row: any) => ({
-          id: String(row.id),
+      if (!data?.success) {
+        throw new Error(
+          data?.error ||
+            "Unable to load leads"
+        );
+      }
+
+      const rows = Array.isArray(data.leads)
+        ? data.leads
+        : [];
+
+      const mapped: Lead[] = rows.map(
+        (row: any) => ({
+          id: String(
+            row.id ??
+              `${row.type}-${Math.random()}`
+          ),
 
           leadType:
             row.type === "Supply"
@@ -129,99 +123,106 @@ export default function Leads() {
           title:
             row.title ||
             row.name ||
+            row.company_name ||
             "Opportunity",
 
           name:
-            row.name ||
             row.contact_name ||
-            null,
+            row.contactName ||
+            row.name ||
+            "",
 
           company:
             row.company_name ||
-            row.company ||
-            null,
+            "",
 
           description:
-            row.description || "",
+            row.description ||
+            "",
 
           skill:
             row.skill ||
+            row.skill_needed ||
             row.required_skill ||
             "",
 
           category:
-            row.category || "",
+            row.category ||
+            "",
 
           subcategory:
-            row.subcategory || "",
+            row.subcategory ||
+            "",
 
           country:
             row.country ||
             "Global",
 
           city:
-            row.city || "",
+            row.city ||
+            "",
 
           budget:
-            row.budget || null,
-
-          currency:
-            row.currency || "",
+            row.budget ??
+            "",
 
           salary:
-            row.salary_range ||
-            null,
+            row.salary_range ??
+            "",
+
+          currency:
+            row.currency ||
+            "",
 
           contactName:
             row.contact_name ||
-            null,
+            row.contactName ||
+            "",
 
           email:
             row.contact_email ||
-            null,
+            row.email ||
+            "",
 
           phone:
             row.contact_phone ||
-            null,
+            row.phone ||
+            "",
 
           contact:
-            row.contact || null,
+            row.contact ||
+            "",
 
           source:
-            row.source || "",
+            row.source ||
+            row.company_website ||
+            "",
 
           openUrl:
             row.apply_url ||
             row.landing_url ||
             row.company_website ||
-            row.source ||
-            row.contact ||
-            null,
+            "",
 
           createdAt:
             row.created_at ||
-            null,
-        }));
+            "",
+        })
+      );
 
       setLeads(mapped);
     } catch (error: any) {
       console.error(
-        "Leads loading error:",
+        "Leads page error:",
         error
       );
 
-      setLeads([]);
-
-      const message =
-        typeof error?.message ===
-        "string"
-          ? error.message
-          : JSON.stringify(error);
-
       setErrorMsg(
-        message ||
-          "Could not load leads. Please try again."
+        error?.message ||
+          "Unable to load leads"
       );
+
+      setLeads([]);
     } finally {
       setLoading(false);
     }
@@ -233,11 +234,10 @@ export default function Leads() {
       Set<string>
     > = {};
 
-    for (const lead of leads) {
-      const skill =
-        lead.skill?.trim();
+    leads.forEach((lead) => {
+      const skill = lead.skill?.trim();
 
-      if (!skill) continue;
+      if (!skill) return;
 
       const category =
         lead.category?.trim() ||
@@ -249,18 +249,15 @@ export default function Leads() {
       }
 
       groups[category].add(skill);
-    }
+    });
 
     return Object.entries(groups)
       .map(
-        ([category, skillsSet]) => ({
+        ([category, skills]) => ({
           category,
-          skills:
-            Array.from(
-              skillsSet
-            ).sort((a, b) =>
-              a.localeCompare(b)
-            ),
+          skills: Array.from(
+            skills
+          ).sort(),
         })
       )
       .sort((a, b) =>
@@ -270,53 +267,41 @@ export default function Leads() {
       );
   }, [leads]);
 
-  const filteredLeads =
-    useMemo(() => {
-      return leads.filter(
-        (lead) => {
-          const typeMatches =
-            typeFilter === "All" ||
-            lead.leadType ===
-              typeFilter;
+  const filteredLeads = useMemo(() => {
+    return leads.filter((lead) => {
+      const typeMatch =
+        typeFilter === "All" ||
+        lead.leadType === typeFilter;
 
-          const countryMatches =
-            countryFilter ===
-              "All" ||
-            lead.country ===
-              countryFilter;
+      const countryMatch =
+        countryFilter === "All" ||
+        lead.country === countryFilter;
 
-          const skillMatches =
-            skillFilter === "All" ||
-            lead.skill ===
-              skillFilter;
+      const skillMatch =
+        skillFilter === "All" ||
+        lead.skill === skillFilter;
 
-          return (
-            typeMatches &&
-            countryMatches &&
-            skillMatches
-          );
-        }
+      return (
+        typeMatch &&
+        countryMatch &&
+        skillMatch
       );
-    }, [
-      leads,
-      typeFilter,
-      countryFilter,
-      skillFilter,
-    ]);
+    });
+  }, [
+    leads,
+    typeFilter,
+    countryFilter,
+    skillFilter,
+  ]);
 
   function formatDate(
     value?: string
   ) {
     if (!value) return "";
 
-    const date =
-      new Date(value);
+    const date = new Date(value);
 
-    if (
-      Number.isNaN(
-        date.getTime()
-      )
-    ) {
+    if (Number.isNaN(date.getTime())) {
       return "";
     }
 
@@ -324,16 +309,12 @@ export default function Leads() {
   }
 
   function displayMoney(
-    value:
-      | string
-      | number
-      | null
-      | undefined,
+    value?: string | number,
     currency?: string
   ) {
     if (
-      value === null ||
       value === undefined ||
+      value === null ||
       value === ""
     ) {
       return "";
@@ -356,18 +337,21 @@ export default function Leads() {
   ) {
     if (!phone) return;
 
-    const cleaned =
+    const cleanPhone =
       phone.replace(
         /[^\d+]/g,
         ""
       );
 
+    const finalPhone =
+      cleanPhone.startsWith("+")
+        ? cleanPhone.slice(1)
+        : cleanPhone;
+
     window.open(
-      `https://wa.me/${cleaned.replace(
-        "+",
-        ""
-      )}`,
-      "_blank"
+      `https://wa.me/${finalPhone}`,
+      "_blank",
+      "noopener,noreferrer"
     );
   }
 
@@ -395,8 +379,8 @@ export default function Leads() {
       "_blank",
       "noopener,noreferrer"
     );
-  }
-  const tagStyle = {
+}
+const tagStyle = {
     background: "#202020",
     border: "1px solid #333",
     color: "#ccc",
@@ -445,19 +429,17 @@ export default function Leads() {
             display: "flex",
             justifyContent:
               "space-between",
-            alignItems:
-              "flex-start",
+            alignItems: "center",
             gap: 12,
             flexWrap: "wrap",
-            marginBottom: 6,
+            marginBottom: 20,
           }}
         >
           <div>
             <h1
               style={{
-                marginTop: 0,
-                marginBottom: 6,
-                fontSize: "28px",
+                margin: 0,
+                fontSize: 28,
               }}
             >
               Leads
@@ -465,51 +447,31 @@ export default function Leads() {
 
             <p
               style={{
+                margin:
+                  "6px 0 0",
                 color: "#999",
-                marginTop: 0,
-                marginBottom: 0,
               }}
             >
               Find real opportunities
-              and contact them
-              directly.
+              and contact them directly.
             </p>
           </div>
 
           <button
             onClick={loadLeads}
-            disabled={loading}
-            style={{
-              padding:
-                "9px 14px",
-              borderRadius: 7,
-              border:
-                "1px solid #444",
-              background:
-                "#181818",
-              color: "#fff",
-              cursor: loading
-                ? "not-allowed"
-                : "pointer",
-              opacity: loading
-                ? 0.6
-                : 1,
-            }}
+            style={buttonStyle}
           >
-            {loading
-              ? "Loading..."
-              : "Refresh"}
+            Refresh
           </button>
         </div>
 
         {/* CATEGORY FILTER */}
         <div
           style={{
-            marginTop: 24,
             display: "flex",
             gap: 8,
             flexWrap: "wrap",
-            marginBottom: 14,
+            marginBottom: 16,
           }}
         >
           {[
@@ -521,29 +483,18 @@ export default function Leads() {
             <button
               key={type}
               onClick={() =>
-                setTypeFilter(
-                  type
-                )
+                setTypeFilter(type)
               }
               style={{
-                padding:
-                  "9px 16px",
-                borderRadius: 8,
-                border:
-                  "1px solid #333",
+                ...buttonStyle,
                 background:
-                  typeFilter ===
-                  type
-                    ? "#00c98b"
-                    : "#181818",
+                  typeFilter === type
+                    ? "#fff"
+                    : "#222",
                 color:
-                  typeFilter ===
-                  type
+                  typeFilter === type
                     ? "#000"
                     : "#fff",
-                cursor:
-                  "pointer",
-                fontWeight: 600,
               }}
             >
               {type}
@@ -557,8 +508,8 @@ export default function Leads() {
             display: "grid",
             gridTemplateColumns:
               "repeat(auto-fit, minmax(220px, 1fr))",
-            gap: 10,
-            marginBottom: 24,
+            gap: 12,
+            marginBottom: 18,
           }}
         >
           {/* COUNTRY */}
@@ -604,7 +555,9 @@ export default function Leads() {
             {skillGroups.map(
               (group) => (
                 <optgroup
-                  key={group.category}
+                  key={
+                    group.category
+                  }
                   label={
                     group.category
                   }
@@ -629,14 +582,13 @@ export default function Leads() {
         {loading && (
           <div
             style={{
-              padding: 18,
+              padding: 20,
               border:
                 "1px solid #292929",
               borderRadius: 10,
-              background:
-                "#121212",
+              background: "#121212",
               color: "#aaa",
-              marginBottom: 18,
+              marginBottom: 16,
             }}
           >
             Loading Gold-quality
@@ -644,22 +596,22 @@ export default function Leads() {
           </div>
         )}
 
-        {errorMsg && !loading && (
-          <div
-            style={{
-              padding: 18,
-              border:
-                "1px solid #5a2525",
-              borderRadius: 10,
-              background:
-                "#211111",
-              color: "#ff9b9b",
-              marginBottom: 18,
-            }}
-          >
-            {errorMsg}
-          </div>
-        )}
+        {errorMsg &&
+          !loading && (
+            <div
+              style={{
+                padding: 20,
+                border:
+                  "1px solid #5a2424",
+                borderRadius: 10,
+                background: "#211313",
+                color: "#ff9b9b",
+                marginBottom: 16,
+              }}
+            >
+              {errorMsg}
+            </div>
+          )}
 
         {!loading &&
           !errorMsg &&
@@ -667,20 +619,17 @@ export default function Leads() {
             0 && (
             <div
               style={{
-                padding: 24,
+                padding: 20,
                 border:
                   "1px solid #292929",
                 borderRadius: 10,
-                background:
-                  "#121212",
+                background: "#121212",
                 color: "#aaa",
-                textAlign:
-                  "center",
+                marginBottom: 16,
               }}
             >
-              No Gold-quality
-              leads match these
-              filters.
+              No Gold-quality leads
+              match these filters.
             </div>
           )}
 
@@ -689,12 +638,14 @@ export default function Leads() {
             <div
               style={{
                 color: "#888",
-                marginBottom: 14,
-                fontSize: 14,
+                fontSize: 13,
+                marginBottom: 12,
               }}
             >
               Showing{" "}
-              {filteredLeads.length}{" "}
+              {
+                filteredLeads.length
+              }{" "}
               Gold-quality leads
             </div>
           )}
@@ -728,44 +679,29 @@ export default function Leads() {
                     alignItems:
                       "flex-start",
                     gap: 12,
-                    flexWrap:
-                      "wrap",
+                    flexWrap: "wrap",
                   }}
                 >
                   <div>
                     <div
                       style={{
-                        display:
-                          "flex",
+                        display: "flex",
                         gap: 8,
                         alignItems:
                           "center",
-                        flexWrap:
-                          "wrap",
+                        flexWrap: "wrap",
                       }}
                     >
                       <span
                         style={{
-                          display:
-                            "inline-block",
                           padding:
                             "4px 8px",
-                          borderRadius:
-                            6,
+                          borderRadius: 6,
                           background:
-                            lead.leadType ===
-                            "Demand"
-                              ? "#182c24"
-                              : lead.leadType ===
-                                "Supply"
-                              ? "#222438"
-                              : "#30251a",
-                          color:
-                            "#fff",
-                          fontSize:
-                            12,
-                          fontWeight:
-                            700,
+                            "#222",
+                          color: "#fff",
+                          fontSize: 12,
+                          fontWeight: 700,
                         }}
                       >
                         {lead.leadType}
@@ -773,20 +709,14 @@ export default function Leads() {
 
                       <span
                         style={{
-                          display:
-                            "inline-block",
                           padding:
                             "4px 8px",
-                          borderRadius:
-                            6,
+                          borderRadius: 6,
                           background:
                             "#183326",
-                          color:
-                            "#00c98b",
-                          fontSize:
-                            12,
-                          fontWeight:
-                            700,
+                          color: "#00c98b",
+                          fontSize: 12,
+                          fontWeight: 700,
                         }}
                       >
                         GOLD
@@ -797,39 +727,31 @@ export default function Leads() {
                       style={{
                         margin:
                           "10px 0 5px",
-                        fontSize:
-                          "20px",
-                        color:
-                          "#fff",
+                        fontSize: 20,
+                        color: "#fff",
                       }}
                     >
                       {lead.title ||
                         "Opportunity"}
                     </h2>
 
-                    {lead.company &&
-                      lead.leadType !==
-                        "Supply" && (
-                        <div
-                          style={{
-                            color:
-                              "#bbb",
-                            fontSize:
-                              14,
-                          }}
-                        >
-                          {lead.company}
-                        </div>
-                      )}
+                    {lead.company && (
+                      <div
+                        style={{
+                          color: "#bbb",
+                          fontSize: 14,
+                        }}
+                      >
+                        {lead.company}
+                      </div>
+                    )}
                   </div>
 
                   {lead.createdAt && (
                     <div
                       style={{
-                        color:
-                          "#777",
-                        fontSize:
-                          12,
+                        color: "#777",
+                        fontSize: 12,
                       }}
                     >
                       {formatDate(
@@ -843,420 +765,38 @@ export default function Leads() {
                 <div
                   style={{
                     marginTop: 14,
-                    display:
-                      "flex",
-                    gap: 8,
-                    flexWrap:
-                      "wrap",
-                  }}
-                >
-                  {lead.country && (
-                    <span
-                      style={
-                        tagStyle
-                      }
-                    >
-                      🌍{" "}
-                      {lead.country}
-                    </span>
-                  )}
-
-                  {lead.city && (
-                    <span
-                      style={
-                        tagStyle
-                      }
-                    >
-                      📍{" "}
-                      {lead.city}
-                    </span>
-                  )}
-
-                  {lead.skill && (
-                    <span
-                      style={
-                        tagStyle
-                      }
-                    >
-                      🛠{" "}
-                      {lead.skill}
-                    </span>
-                  )}
-
-                  {lead.category && (
-                    <span
-                      style={
-                        tagStyle
-                      }
-                    >
-                      {lead.category}
-                    </span>
-                  )}
-
-                  {lead.subcategory && (
-                    <span
-                      style={
-                        tagStyle
-                      }
-                    >
-                      {lead.subcategory}
-                    </span>
-                  )}
-                </div>
-
-                {/* NAME / COMPANY */}
-                {(lead.name ||
-                  lead.company) && (
-                  <div
-                    style={{
-                      marginTop: 14,
-                      color: "#ddd",
-                    }}
-                  >
-                    <strong>
-                      {lead.leadType ===
-                      "Supply"
-                        ? "Company:"
-                        : "Name:"}
-                    </strong>{" "}
-                    {lead.name ||
-                      lead.company}
-                  </div>
-                )}
-
-                {/* DESCRIPTION */}
-                {lead.description && (
-                  <p
-                    style={{
-                      color: "#bbb",
-                      lineHeight:
-                        1.55,
-                      marginBottom:
-                        0,
-                    }}
-                  >
-                    {lead.description}
-                  </p>
-                )}
-
-                {/* MONEY */}
-                {(lead.budget ||
-                  lead.salary) && (
-                  <div
-                    style={{
-                      marginTop: 12,
-                      color:
-                        "#00c98b",
-                      fontWeight:
-                        600,
-                    }}
-                  >
-                    {lead.budget && (
-                      <div>
-                        Budget:{" "}
-                        {displayMoney(
-                          lead.budget,
-                          lead.currency
-                        )}
-                      </div>
-                    )}
-
-                    {lead.salary && (
-                      <div>
-                        Salary:{" "}
-                        {displayMoney(
-                          lead.salary,
-                          lead.currency
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* CONTACT */}
-                {(lead.contactName ||
-                  lead.email ||
-                  lead.phone ||
-                  lead.contact) && (
-                  <div
-                    style={{
-                      marginTop: 16,
-                      paddingTop: 14,
-                      borderTop:
-                        "1px solid #292929",
-                    }}
-                  >
-                    {lead.contactName && (
-                      <div
-                        style={{
-                          color:
-                            "#ddd",
-                          marginBottom:
-                            8,
-                        }}
-                      >
-                        Contact:{" "}
-                        {
-                          lead.contactName
-                        }
-                      </div>
-                    )}
-
-                    <div
-                      style={{
-                        display:
-                          "flex",
-                        gap: 8,
-                        flexWrap:
-                          "wrap",
-                      }}
-                    >
-                      {lead.phone && (
-                        <>
-                          <button
-                            onClick={() =>
-                              callPhone(
-                                lead.phone
-                              )
-                            }
-                            style={
-                              buttonStyle
-                            }
-                          >
-                            📞 Call
-                          </button>
-
-                          <button
-                            onClick={() =>
-                              openWhatsApp(
-                                lead.phone
-                              )
-                            }
-                            style={
-                              buttonStyle
-                            }
-                          >
-                            WhatsApp
-                          </button>
-                        </>
-                      )}
-
-                      {lead.email && (
-                        <button
-                          onClick={() =>
-                            sendEmail(
-                              lead.email
-                            )
-                          }
-                          style={
-                            buttonStyle
-                          }
-                        >
-                          ✉ Email
-                        </button>
-                      )}
-
-                      {lead.contact &&
-                        !lead.email &&
-                        !lead.phone && (
-                          <button
-                            onClick={() =>
-                              openLink(
-                                lead.contact
-                              )
-                            }
-                            style={
-                              buttonStyle
-                            }
-                          >
-                            Contact
-                          </button>
-                        )}
-                    </div>
-                  </div>
-                )}
-             {filteredLeads.map(
-            (lead) => (
-              <div
-                key={lead.id}
-                style={{
-                  border:
-                    "1px solid #292929",
-                  borderRadius: 12,
-                  background:
-                    "#121212",
-                  padding: 18,
-                }}
-              >
-                {/* TOP */}
-                <div
-                  style={{
                     display: "flex",
-                    justifyContent:
-                      "space-between",
-                    alignItems:
-                      "flex-start",
-                    gap: 12,
-                    flexWrap:
-                      "wrap",
-                  }}
-                >
-                  <div>
-                    <div
-                      style={{
-                        display:
-                          "flex",
-                        gap: 8,
-                        alignItems:
-                          "center",
-                        flexWrap:
-                          "wrap",
-                      }}
-                    >
-                      <span
-                        style={{
-                          display:
-                            "inline-block",
-                          padding:
-                            "4px 8px",
-                          borderRadius:
-                            6,
-                          background:
-                            lead.leadType ===
-                            "Demand"
-                              ? "#182c24"
-                              : lead.leadType ===
-                                "Supply"
-                              ? "#222438"
-                              : "#30251a",
-                          color:
-                            "#fff",
-                          fontSize:
-                            12,
-                          fontWeight:
-                            700,
-                        }}
-                      >
-                        {lead.leadType}
-                      </span>
-
-                      <span
-                        style={{
-                          display:
-                            "inline-block",
-                          padding:
-                            "4px 8px",
-                          borderRadius:
-                            6,
-                          background:
-                            "#183326",
-                          color:
-                            "#00c98b",
-                          fontSize:
-                            12,
-                          fontWeight:
-                            700,
-                        }}
-                      >
-                        GOLD
-                      </span>
-                    </div>
-
-                    <h2
-                      style={{
-                        margin:
-                          "10px 0 5px",
-                        fontSize:
-                          "20px",
-                        color:
-                          "#fff",
-                      }}
-                    >
-                      {lead.title ||
-                        "Opportunity"}
-                    </h2>
-
-                    {lead.company &&
-                      lead.leadType !==
-                        "Supply" && (
-                        <div
-                          style={{
-                            color:
-                              "#bbb",
-                            fontSize:
-                              14,
-                          }}
-                        >
-                          {lead.company}
-                        </div>
-                      )}
-                  </div>
-
-                  {lead.createdAt && (
-                    <div
-                      style={{
-                        color:
-                          "#777",
-                        fontSize:
-                          12,
-                      }}
-                    >
-                      {formatDate(
-                        lead.createdAt
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {/* DETAILS */}
-                <div
-                  style={{
-                    marginTop: 14,
-                    display:
-                      "flex",
                     gap: 8,
-                    flexWrap:
-                      "wrap",
+                    flexWrap: "wrap",
                   }}
                 >
                   {lead.country && (
                     <span
-                      style={
-                        tagStyle
-                      }
+                      style={tagStyle}
                     >
-                      🌍{" "}
-                      {lead.country}
+                      🌍 {lead.country}
                     </span>
                   )}
 
                   {lead.city && (
                     <span
-                      style={
-                        tagStyle
-                      }
+                      style={tagStyle}
                     >
-                      📍{" "}
-                      {lead.city}
+                      📍 {lead.city}
                     </span>
                   )}
 
                   {lead.skill && (
                     <span
-                      style={
-                        tagStyle
-                      }
+                      style={tagStyle}
                     >
-                      🛠{" "}
-                      {lead.skill}
+                      🛠 {lead.skill}
                     </span>
                   )}
 
                   {lead.category && (
                     <span
-                      style={
-                        tagStyle
-                      }
+                      style={tagStyle}
                     >
                       {lead.category}
                     </span>
@@ -1264,9 +804,7 @@ export default function Leads() {
 
                   {lead.subcategory && (
                     <span
-                      style={
-                        tagStyle
-                      }
+                      style={tagStyle}
                     >
                       {lead.subcategory}
                     </span>
@@ -1298,10 +836,8 @@ export default function Leads() {
                   <p
                     style={{
                       color: "#bbb",
-                      lineHeight:
-                        1.55,
-                      marginBottom:
-                        0,
+                      lineHeight: 1.55,
+                      marginBottom: 0,
                     }}
                   >
                     {lead.description}
@@ -1314,10 +850,8 @@ export default function Leads() {
                   <div
                     style={{
                       marginTop: 12,
-                      color:
-                        "#00c98b",
-                      fontWeight:
-                        600,
+                      color: "#00c98b",
+                      fontWeight: 600,
                     }}
                   >
                     {lead.budget && (
@@ -1358,26 +892,20 @@ export default function Leads() {
                     {lead.contactName && (
                       <div
                         style={{
-                          color:
-                            "#ddd",
-                          marginBottom:
-                            8,
+                          color: "#ddd",
+                          marginBottom: 8,
                         }}
                       >
                         Contact:{" "}
-                        {
-                          lead.contactName
-                        }
+                        {lead.contactName}
                       </div>
                     )}
 
                     <div
                       style={{
-                        display:
-                          "flex",
+                        display: "flex",
                         gap: 8,
-                        flexWrap:
-                          "wrap",
+                        flexWrap: "wrap",
                       }}
                     >
                       {lead.phone && (
@@ -1444,7 +972,8 @@ export default function Leads() {
                     </div>
                   </div>
                 )}
-               {/* APPLY / SOURCE */}
+
+                {/* APPLY / SOURCE */}
                 {(lead.openUrl ||
                   lead.source) && (
                   <div
@@ -1464,8 +993,7 @@ export default function Leads() {
                         }
                         style={{
                           ...buttonStyle,
-                          background:
-                            "#fff",
+                          background: "#fff",
                           color: "#000",
                           border:
                             "1px solid #fff",
@@ -1500,6 +1028,5 @@ export default function Leads() {
       </div>
     </div>
   );
-} 
-          
-          
+                }
+                
