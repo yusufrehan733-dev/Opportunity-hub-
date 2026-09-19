@@ -202,7 +202,7 @@ export default function Leads() {
         error: countryError,
       } = await supabase
         .from("users")
-        .select("country")
+        .select("country, skill_preference")
         .eq("id", user.id)
         .maybeSingle();
 
