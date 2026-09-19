@@ -16,6 +16,7 @@ export default function Skills() {
   const [planName, setPlanName] = useState("Basic");
 
   const [country, setCountry] = useState("");
+  const [typedSkill, setTypedSkill] = useState("");
   const [savingPreferences, setSavingPreferences] = useState(false);
   const [preferencesMessage, setPreferencesMessage] = useState("");
 
@@ -121,9 +122,8 @@ export default function Skills() {
     }
 
     setCountry(data?.country || "");
-  }
-
-  async function savePreferences() {
+}
+    async function savePreferences() {
     if (!user) {
       alert("Please log in first.");
       return;
@@ -139,11 +139,21 @@ export default function Skills() {
       return;
     }
 
+    if (
+      Number.isFinite(skillLimit) &&
+      mySkills.length > skillLimit
+    ) {
+      setPreferencesMessage(
+        `${planName} plan allows a maximum of ${skillLimit} skills. Please remove extra skills before saving.`
+      );
+      return;
+    }
+
     setSavingPreferences(true);
     setPreferencesMessage("");
 
     const { error } = await supabase
-      .from("Users")
+      .from("users")
       .update({
         country: country,
       })
@@ -176,28 +186,23 @@ export default function Skills() {
       return;
     }
 
-    if (subscription.skill_limit !== null) {
-      setSkillLimit(subscription.skill_limit);
-    }
-
     const { data: plan } = await supabase
       .from("plans")
       .select("name")
       .eq("id", subscription.plan_id)
       .maybeSingle();
 
-    if (plan?.name) {
-      setPlanName(plan.name);
+    const name = plan?.name?.toLowerCase() || "basic";
 
-      const name = plan.name.toLowerCase();
-
-      if (name === "gold") {
-        setSkillLimit(Infinity);
-      } else if (name === "premium") {
-        setSkillLimit(5);
-      } else {
-        setSkillLimit(2);
-      }
+    if (name === "gold") {
+      setPlanName("Gold");
+      setSkillLimit(Infinity);
+    } else if (name === "premium") {
+      setPlanName("Premium");
+      setSkillLimit(5);
+    } else {
+      setPlanName("Basic");
+      setSkillLimit(2);
     }
   }
 
@@ -207,9 +212,17 @@ export default function Skills() {
       return;
     }
 
+    const cleanSkill = skill.trim();
+
+    if (!cleanSkill) {
+      alert("Please enter a skill.");
+      return;
+    }
+
     const exists = mySkills.some(
       (s) =>
-        String(s.skill).toLowerCase() === skill.toLowerCase()
+        String(s.skill).trim().toLowerCase() ===
+        cleanSkill.toLowerCase()
     );
 
     if (exists) {
@@ -222,7 +235,7 @@ export default function Skills() {
       mySkills.length >= skillLimit
     ) {
       alert(
-        `${planName} plan allows up to ${skillLimit} skills. Upgrade your plan to add more.`
+        `${planName} plan allows a maximum of ${skillLimit} skills. Upgrade your plan to add more.`
       );
       return;
     }
@@ -231,7 +244,7 @@ export default function Skills() {
       .from("user_skills")
       .insert({
         user_id: user.id,
-        skill,
+        skill: cleanSkill,
       });
 
     if (error) {
@@ -241,6 +254,18 @@ export default function Skills() {
 
     await fetchUserSkills(user.id);
     setPreferencesMessage("");
+  }
+
+  async function addTypedSkill() {
+    const cleanSkill = typedSkill.trim();
+
+    if (!cleanSkill) {
+      alert("Please type a skill.");
+      return;
+    }
+
+    await addSkill(cleanSkill);
+    setTypedSkill("");
   }
 
   async function removeSkill(id: string) {
@@ -259,9 +284,8 @@ export default function Skills() {
     );
 
     setPreferencesMessage("");
-  }
-
-  const mainCategories = [
+        }
+    const mainCategories = [
     ...new Set(
       data
         .map((item) => item.name)
@@ -295,6 +319,10 @@ export default function Skills() {
           ),
         ]
       : [];
+
+  const skillLimitReached =
+    Number.isFinite(skillLimit) &&
+    mySkills.length >= skillLimit;
 
   return (
     <div
@@ -424,9 +452,7 @@ export default function Skills() {
               <div
                 style={{
                   marginTop: 12,
-                  color: preferencesMessage.includes(
-                    "saved"
-                  )
+                  color: preferencesMessage.includes("saved")
                     ? "#00ffae"
                     : "#ff9999",
                 }}
@@ -446,6 +472,18 @@ export default function Skills() {
               ? skillLimit
               : "Unlimited"}
           </p>
+
+          {skillLimitReached && (
+            <p
+              style={{
+                color: "#ffcc66",
+                marginTop: 8,
+              }}
+            >
+              You have reached your {planName} skill limit.
+              Upgrade your plan to add more skills.
+            </p>
+          )}
 
           {mySkills.length === 0 ? (
             <div
@@ -496,8 +534,7 @@ export default function Skills() {
             </div>
           )}
         </section>
-
-        {skillsError && (
+                {skillsError && (
           <div
             style={{
               background: "#211010",
@@ -520,6 +557,73 @@ export default function Skills() {
           </div>
         ) : (
           <>
+            <section style={{ marginBottom: 35 }}>
+              <h2>Add Your Own Skill</h2>
+
+              <p style={{ color: "#999" }}>
+                Can't find your skill in the categories? Type it below.
+              </p>
+
+              <div
+                style={{
+                  display: "flex",
+                  gap: 10,
+                  flexWrap: "wrap",
+                  maxWidth: 650,
+                }}
+              >
+                <input
+                  type="text"
+                  value={typedSkill}
+                  onChange={(e) => {
+                    setTypedSkill(e.target.value);
+                    setPreferencesMessage("");
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      addTypedSkill();
+                    }
+                  }}
+                  placeholder="Type your skill"
+                  disabled={skillLimitReached}
+                  style={{
+                    flex: "1 1 300px",
+                    padding: 12,
+                    background: skillLimitReached
+                      ? "#171717"
+                      : "#222",
+                    color: "#fff",
+                    border: "1px solid #444",
+                    borderRadius: 8,
+                    boxSizing: "border-box",
+                  }}
+                />
+
+                <button
+                  type="button"
+                  onClick={addTypedSkill}
+                  disabled={skillLimitReached}
+                  style={{
+                    padding: "12px 18px",
+                    borderRadius: 8,
+                    border: "1px solid #00ffae",
+                    background: skillLimitReached
+                      ? "#333"
+                      : "#00ffae",
+                    color: skillLimitReached
+                      ? "#777"
+                      : "#000",
+                    cursor: skillLimitReached
+                      ? "not-allowed"
+                      : "pointer",
+                    fontWeight: 700,
+                  }}
+                >
+                  Add Skill
+                </button>
+              </div>
+            </section>
+
             <section style={{ marginBottom: 35 }}>
               <h2>Main Categories</h2>
 
@@ -626,13 +730,20 @@ export default function Skills() {
                     <button
                       key={item}
                       onClick={() => addSkill(item)}
+                      disabled={skillLimitReached}
                       style={{
                         padding: "11px 17px",
                         borderRadius: 8,
                         border: "1px solid #444",
-                        background: "#151515",
-                        color: "#fff",
-                        cursor: "pointer",
+                        background: skillLimitReached
+                          ? "#111"
+                          : "#151515",
+                        color: skillLimitReached
+                          ? "#555"
+                          : "#fff",
+                        cursor: skillLimitReached
+                          ? "not-allowed"
+                          : "pointer",
                       }}
                     >
                       + {item}
@@ -646,4 +757,4 @@ export default function Skills() {
       </div>
     </div>
   );
-    }
+ }
