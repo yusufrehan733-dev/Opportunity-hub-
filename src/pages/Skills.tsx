@@ -780,6 +780,3 @@ export default function Skills() {
               )}
             </div>
           )}
-          
-  
-  
