@@ -4,138 +4,66 @@ import { supabase } from "../lib/supabase";
 type Lead = {
   id: string;
   leadType: "Demand" | "Supply" | "SaaS";
+
   title: string;
   name?: string;
   company?: string;
+
   description?: string;
   skill?: string;
   category?: string;
   subcategory?: string;
+
   country?: string;
   city?: string;
+
   budget?: string | number;
   salary?: string | number;
   currency?: string;
+
   contactName?: string;
   email?: string;
   phone?: string;
   contact?: string;
+
   source?: string;
   openUrl?: string;
   createdAt?: string;
 };
 
-function normalizeText(value?: string) {
-  return (value || "")
-    .toLowerCase()
+function normalizeCountry(value: string) {
+  return String(value || "")
     .trim()
+    .toLowerCase()
     .replace(/\s+/g, " ");
 }
 
-function normalizeCountry(value?: string) {
-  const country = normalizeText(value);
-
-  const aliases: Record<string, string> = {
-    usa: "usa",
-    us: "usa",
-    "united states": "usa",
-    "united states of america": "usa",
-
-    uk: "uk",
-    "united kingdom": "uk",
-    "great britain": "uk",
-    england: "uk",
-
-    uae: "uae",
-    "united arab emirates": "uae",
-
-    qatar: "qatar",
-    "saudi arabia": "saudi arabia",
-    kuwait: "kuwait",
-    oman: "oman",
-    bahrain: "bahrain",
-
-    canada: "canada",
-    australia: "australia",
-
-    pakistan: "pakistan",
-    india: "india",
-    bangladesh: "bangladesh",
-
-    norway: "norway",
-    finland: "finland",
-    sweden: "sweden",
-    denmark: "denmark",
-    iceland: "iceland",
-
-    germany: "germany",
-    france: "france",
-    netherlands: "netherlands",
-  };
-
-  return aliases[country] || country;
+function normalizeSkill(value: string) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
 }
 
 function skillMatches(
   preferredSkill: string,
-  leadSkill?: string
+  leadSkill: string
 ) {
-  const preferred = normalizeText(preferredSkill);
-  const lead = normalizeText(leadSkill);
+  const preferred = normalizeSkill(preferredSkill);
+  const lead = normalizeSkill(leadSkill);
 
-  if (!preferred || !lead) return false;
-
-  if (preferred === lead) return true;
-
-  const leadParts = lead
-    .split(/[,/|&•]+/)
-    .map((part) => normalizeText(part))
-    .filter(Boolean);
-
-  if (leadParts.includes(preferred)) {
-    return true;
+  if (!preferred || !lead) {
+    return false;
   }
 
-  return lead.includes(preferred);
-}
-
-function formatDate(value?: string) {
-  if (!value) return "";
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return "";
-  }
-
-  return date.toLocaleDateString();
-}
-
-function callPhone(phone?: string) {
-  if (!phone) return;
-
-  window.location.href = `tel:${phone}`;
-}
-
-function openWhatsApp(phone?: string) {
-  if (!phone) return;
-
-  const cleaned = phone.replace(/[^\d+]/g, "");
-
-  window.open(
-    `https://wa.me/${cleaned.replace("+", "")}`,
-    "_blank",
-    "noopener,noreferrer"
+  return (
+    preferred === lead ||
+    preferred.includes(lead) ||
+    lead.includes(preferred)
   );
 }
 
-function sendEmail(email?: string) {
-  if (!email) return;
-
-  window.location.href = `mailto:${email}`;
-}
-
-function openLink(url?: string) {
+function openLink(url: string) {
   if (!url) return;
 
   let finalUrl = url.trim();
@@ -152,6 +80,38 @@ function openLink(url?: string) {
     "_blank",
     "noopener,noreferrer"
   );
+}
+
+function sendEmail(email: string) {
+  if (!email) return;
+
+  window.location.href = `mailto:${email}`;
+}
+
+function callPhone(phone: string) {
+  if (!phone) return;
+
+  const cleanPhone = phone
+    .replace(/[^\d+]/g, "");
+
+  if (cleanPhone) {
+    window.location.href = `https://wa.me/${cleanPhone.replace(
+      /^\+/,
+      ""
+    )}`;
+  }
+}
+
+function formatDate(value: string) {
+  if (!value) return "";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleDateString();
 }
 
 export default function Leads() {
@@ -196,7 +156,7 @@ export default function Leads() {
         throw new Error(
           "Please log in before viewing your leads."
         );
-    }
+      }
             const {
         data: userData,
         error: countryError,
@@ -213,7 +173,7 @@ export default function Leads() {
       }
 
       const savedCountry =
-        userData?.country?.trim() || "";
+        String(userData?.country || "").trim();
 
       const {
         data: skillRows,
@@ -229,13 +189,66 @@ export default function Leads() {
         );
       }
 
-      const savedSkills = Array.isArray(skillRows)
+      const currentSkills = Array.isArray(skillRows)
         ? skillRows
             .map((row: any) =>
               String(row.skill || "").trim()
             )
             .filter(Boolean)
         : [];
+
+      let oldSkills: string[] = [];
+
+      const oldPreference =
+        userData?.skill_preference;
+
+      if (Array.isArray(oldPreference)) {
+        oldSkills = oldPreference
+          .map((skill: any) =>
+            String(skill || "").trim()
+          )
+          .filter(Boolean);
+      } else if (
+        typeof oldPreference === "string"
+      ) {
+        const cleaned = oldPreference.trim();
+
+        if (cleaned) {
+          try {
+            const parsed = JSON.parse(cleaned);
+
+            if (Array.isArray(parsed)) {
+              oldSkills = parsed
+                .map((skill: any) =>
+                  String(skill || "").trim()
+                )
+                .filter(Boolean);
+            } else {
+              oldSkills = cleaned
+                .split(",")
+                .map((skill) => skill.trim())
+                .filter(Boolean);
+            }
+          } catch {
+            oldSkills = cleaned
+              .split(",")
+              .map((skill) => skill.trim())
+              .filter(Boolean);
+          }
+        }
+      }
+
+      const savedSkills = [
+        ...currentSkills,
+        ...oldSkills,
+      ].filter(
+        (skill, index, array) =>
+          array.findIndex(
+            (item) =>
+              item.toLowerCase() ===
+              skill.toLowerCase()
+          ) === index
+      );
 
       setPreferredCountry(savedCountry);
       setPreferredSkills(savedSkills);
@@ -377,6 +390,7 @@ export default function Leads() {
       }));
 
       setLeads(mapped);
+            setLeads(mapped);
     } catch (error: any) {
       console.error(
         "Leads page error:",
@@ -402,8 +416,9 @@ export default function Leads() {
       setLoading(false);
       setPreferencesLoading(false);
     }
-        }
-    const filteredLeads = useMemo(() => {
+  }
+
+  const filteredLeads = useMemo(() => {
     if (!preferredCountry) {
       return [];
     }
@@ -427,23 +442,17 @@ export default function Leads() {
       const leadCountry =
         normalizeCountry(lead.country);
 
-      const countryMatch =
-        leadCountry === selectedCountry;
-
-      if (!countryMatch) {
+      if (leadCountry !== selectedCountry) {
         return false;
       }
 
-      const skillMatch =
-        preferredSkills.some(
-          (preferredSkill) =>
-            skillMatches(
-              preferredSkill,
-              lead.skill
-            )
-        );
-
-      return skillMatch;
+      return preferredSkills.some(
+        (preferredSkill) =>
+          skillMatches(
+            preferredSkill,
+            lead.skill
+          )
+      );
     });
   }, [
     leads,
@@ -683,8 +692,7 @@ export default function Leads() {
                 : `${typeFilter} leads`}
               .
             </div>
-
-            {filteredLeads.length === 0 ? (
+                        {filteredLeads.length === 0 ? (
               <div
                 style={{
                   background: "#181818",
@@ -742,8 +750,7 @@ export default function Leads() {
                         padding: "5px 8px",
                         borderRadius: 5,
                         background: "#292929",
-                        color:
-                          "#fff",
+                        color: "#fff",
                         fontSize: 12,
                         marginBottom: 10,
                       }}
@@ -760,7 +767,8 @@ export default function Leads() {
                     >
                       {lead.title}
                     </h2>
-                                        {lead.company && (
+
+                    {lead.company && (
                       <div
                         style={{
                           color: "#ccc",
@@ -822,224 +830,142 @@ export default function Leads() {
                           : ""}
                         {lead.country}
                       </div>
-                    )}
+                               {filteredLeads.length === 0 ? (
+              <div
+                style={{
+                  background: "#181818",
+                  border: "1px solid #292929",
+                  borderRadius: 10,
+                  padding: 30,
+                  textAlign: "center",
+                }}
+              >
+                <h3
+                  style={{
+                    marginTop: 0,
+                  }}
+                >
+                  No matching leads yet
+                </h3>
 
-                    {lead.description && (
+                <p
+                  style={{
+                    color: "#aaa",
+                    marginBottom: 0,
+                    lineHeight: 1.5,
+                  }}
+                >
+                  There are currently no{" "}
+                  {typeFilter === "All"
+                    ? ""
+                    : typeFilter.toLowerCase()}{" "}
+                  leads matching your selected
+                  skills and country.
+                </p>
+              </div>
+            ) : (
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns:
+                    "repeat(auto-fit, minmax(280px, 1fr))",
+                  gap: 16,
+                }}
+              >
+                {filteredLeads.map((lead) => (
+                  <div
+                    key={lead.id}
+                    style={{
+                      background: "#181818",
+                      border: "1px solid #292929",
+                      borderRadius: 10,
+                      padding: 18,
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "inline-block",
+                        padding: "5px 8px",
+                        borderRadius: 5,
+                        background: "#292929",
+                        color: "#fff",
+                        fontSize: 12,
+                        marginBottom: 10,
+                      }}
+                    >
+                      {lead.leadType}
+                    </div>
+
+                    <h2
+                      style={{
+                        fontSize: 20,
+                        marginTop: 0,
+                        marginBottom: 8,
+                      }}
+                    >
+                      {lead.title}
+                    </h2>
+
+                    {lead.company && (
                       <div
                         style={{
                           color: "#ccc",
-                          lineHeight: 1.5,
-                          marginTop: 12,
+                          marginBottom: 6,
                         }}
                       >
-                        {lead.description}
+                        Company: {lead.company}
                       </div>
                     )}
 
-                    {(lead.budget !== "" ||
-                      lead.salary !== "") && (
-                      <div
-                        style={{
-                          marginTop: 12,
-                          color: "#ddd",
-                        }}
-                      >
-                        {lead.budget !== "" &&
-                          lead.budget !== undefined && (
-                            <div>
-                              Budget:{" "}
-                              {lead.currency
-                                ? `${lead.currency} `
-                                : ""}
-                              {lead.budget}
-                            </div>
-                          )}
-
-                        {lead.salary !== "" &&
-                          lead.salary !== undefined && (
-                            <div>
-                              Salary:{" "}
-                              {lead.currency
-                                ? `${lead.currency} `
-                                : ""}
-                              {lead.salary}
-                            </div>
-                          )}
-                      </div>
-                    )}
-
-                    {(lead.contactName ||
-                      lead.email ||
-                      lead.phone ||
-                      lead.contact) && (
-                      <div
-                        style={{
-                          marginTop: 16,
-                          paddingTop: 14,
-                          borderTop:
-                            "1px solid #292929",
-                        }}
-                      >
-                        {lead.contactName && (
-                          <div
-                            style={{
-                              color: "#ddd",
-                              marginBottom: 8,
-                            }}
-                          >
-                            Contact:{" "}
-                            {lead.contactName}
-                          </div>
-                        )}
-
+                    {lead.name &&
+                      lead.name !== lead.title && (
                         <div
                           style={{
-                            display: "flex",
-                            gap: 8,
-                            flexWrap: "wrap",
+                            color: "#ccc",
+                            marginBottom: 6,
                           }}
                         >
-                          {lead.phone && (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  callPhone(
-                                    lead.phone
-                                  )
-                                }
-                                style={
-                                  buttonStyle
-                                }
-                              >
-                                📞 Call
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  openWhatsApp(
-                                    lead.phone
-                                  )
-                                }
-                                style={
-                                  buttonStyle
-                                }
-                              >
-                                WhatsApp
-                              </button>
-                            </>
-                          )}
-
-                          {lead.email && (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                sendEmail(
-                                  lead.email
-                                )
-                              }
-                              style={
-                                buttonStyle
-                              }
-                            >
-                              ✉ Email
-                            </button>
-                          )}
-
-                          {lead.contact &&
-                            !lead.email &&
-                            !lead.phone && (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  openLink(
-                                    lead.contact
-                                  )
-                                }
-                                style={
-                                  buttonStyle
-                                }
-                              >
-                                Contact
-                              </button>
-                            )}
+                          Name: {lead.name}
                         </div>
-                      </div>
-                    )}
+                      )}
 
-                    {(lead.openUrl ||
-                      lead.source) && (
+                    {lead.skill && (
                       <div
                         style={{
-                          marginTop: 14,
-                          display: "flex",
-                          gap: 8,
-                          flexWrap: "wrap",
+                          color: "#ddd",
+                          marginBottom: 6,
                         }}
                       >
-                        {lead.openUrl && (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              openLink(
-                                lead.openUrl
-                              )
-                            }
-                            style={{
-                              ...buttonStyle,
-                              background: "#fff",
-                              color: "#000",
-                              border:
-                                "1px solid #fff",
-                            }}
-                          >
-                            View / Apply
-                          </button>
-                        )}
-
-                        {lead.source &&
-                          lead.source !==
-                            lead.openUrl && (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                openLink(
-                                  lead.source
-                                )
-                              }
-                              style={
-                                buttonStyle
-                              }
-                            >
-                              Open Source
-                            </button>
-                          )}
+                        Skill: {lead.skill}
                       </div>
                     )}
 
-                    {lead.createdAt && (
+                    {(lead.category ||
+                      lead.subcategory) && (
                       <div
                         style={{
-                          marginTop: 14,
-                          color: "#777",
-                          fontSize: 12,
+                          color: "#aaa",
+                          marginBottom: 6,
                         }}
                       >
-                        Added:{" "}
-                        {formatDate(
-                          lead.createdAt
-                        )}
+                        {lead.category}
+                        {lead.subcategory
+                          ? ` · ${lead.subcategory}`
+                          : ""}
                       </div>
                     )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </>
-        )}
-      </div>
-    </div>
-    );
-}
-                      
+
+                    {(lead.country ||
+                      lead.city) && (
+                      <div
+                        style={{
+                          color: "#aaa",
+                          marginBottom: 10,
+                        }}
+                      >
+                        {lead.city
+                          ? `${lead.city}, `
+                          : ""}
+                        {lead.country}
+                      </div>
+                   
