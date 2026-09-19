@@ -512,10 +512,6 @@ export default function Leads() {
   const needsPreferences =
     !preferredCountry ||
     preferredSkills.length === 0;
-    const needsPreferences =
-    !preferredCountry ||
-    preferredSkills.length === 0;
-
   return (
     <div
       style={{
