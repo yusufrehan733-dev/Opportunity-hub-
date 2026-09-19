@@ -13,8 +13,7 @@ export default function Register() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [message, setMessage] = useState("");
 
-  async function handleRegister(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
+  async function handleRegister() {
     setMessage("");
 
     if (!name.trim()) {
@@ -59,7 +58,9 @@ export default function Register() {
         return;
       }
 
-      setMessage("Account created successfully. Opening your dashboard...");
+      setMessage(
+        "Account created successfully. Opening your dashboard..."
+      );
 
       setTimeout(() => {
         navigate("/dashboard", { replace: true });
@@ -68,7 +69,8 @@ export default function Register() {
       console.error("Registration error:", error);
 
       setMessage(
-        error?.message || "Registration failed. Please try again."
+        error?.message ||
+          "Registration failed. Please try again."
       );
     }
   }
@@ -95,97 +97,100 @@ export default function Register() {
           boxSizing: "border-box",
         }}
       >
-        <h1 style={{ marginTop: 0 }}>Create Account</h1>
+        <h1 style={{ marginTop: 0 }}>
+          Create Account
+        </h1>
 
         <p style={{ color: "#666" }}>
           Start your 14-day Opportunity Hub trial.
         </p>
 
-        <form onSubmit={handleRegister}>
-          <input
-            type="text"
-            placeholder="Full name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            autoComplete="name"
-            style={{
-              width: "100%",
-              padding: 12,
-              marginBottom: 10,
-              boxSizing: "border-box",
-            }}
-          />
+        <input
+          type="text"
+          placeholder="Full name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          autoComplete="name"
+          style={{
+            width: "100%",
+            padding: 12,
+            marginBottom: 10,
+            boxSizing: "border-box",
+          }}
+        />
 
-          <input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            autoComplete="email"
-            style={{
-              width: "100%",
-              padding: 12,
-              marginBottom: 10,
-              boxSizing: "border-box",
-            }}
-          />
+        <input
+          type="email"
+          placeholder="Email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          autoComplete="email"
+          style={{
+            width: "100%",
+            padding: 12,
+            marginBottom: 10,
+            boxSizing: "border-box",
+          }}
+        />
 
-          <input
-            type="tel"
-            placeholder="Phone (optional)"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            autoComplete="tel"
-            style={{
-              width: "100%",
-              padding: 12,
-              marginBottom: 10,
-              boxSizing: "border-box",
-            }}
-          />
+        <input
+          type="tel"
+          placeholder="Phone (optional)"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          autoComplete="tel"
+          style={{
+            width: "100%",
+            padding: 12,
+            marginBottom: 10,
+            boxSizing: "border-box",
+          }}
+        />
 
-          <input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete="new-password"
-            style={{
-              width: "100%",
-              padding: 12,
-              marginBottom: 10,
-              boxSizing: "border-box",
-            }}
-          />
+        <input
+          type="password"
+          placeholder="Password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          autoComplete="new-password"
+          style={{
+            width: "100%",
+            padding: 12,
+            marginBottom: 10,
+            boxSizing: "border-box",
+          }}
+        />
 
-          <input
-            type="password"
-            placeholder="Confirm password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            autoComplete="new-password"
-            style={{
-              width: "100%",
-              padding: 12,
-              marginBottom: 15,
-              boxSizing: "border-box",
-            }}
-          />
+        <input
+          type="password"
+          placeholder="Confirm password"
+          value={confirmPassword}
+          onChange={(e) => setConfirmPassword(e.target.value)}
+          autoComplete="new-password"
+          style={{
+            width: "100%",
+            padding: 12,
+            marginBottom: 15,
+            boxSizing: "border-box",
+          }}
+        />
 
-          <button
-            type="submit"
-            disabled={registerMutation.isPending}
-            style={{
-              width: "100%",
-              padding: 12,
-              cursor: registerMutation.isPending ? "wait" : "pointer",
-            }}
-          >
-            {registerMutation.isPending
-              ? "Creating account..."
-              : "Create Account"}
-          </button>
-        </form>
+        <button
+          type="button"
+          onClick={handleRegister}
+          disabled={registerMutation.isPending}
+          style={{
+            width: "100%",
+            padding: 12,
+            cursor: registerMutation.isPending
+              ? "wait"
+              : "pointer",
+          }}
+        >
+          {registerMutation.isPending
+            ? "Creating account..."
+            : "Create Account"}
+        </button>
 
         {message && (
           <p
@@ -209,4 +214,4 @@ export default function Register() {
       </div>
     </div>
   );
-}
+                   }
