@@ -91,8 +91,7 @@ function sendEmail(email: string) {
 function callPhone(phone: string) {
   if (!phone) return;
 
-  const cleanPhone = phone
-    .replace(/[^\d+]/g, "");
+  const cleanPhone = phone.replace(/[^\d+]/g, "");
 
   if (cleanPhone) {
     window.location.href = `https://wa.me/${cleanPhone.replace(
@@ -135,8 +134,7 @@ export default function Leads() {
   useEffect(() => {
     loadLeads();
   }, []);
-
-  async function loadLeads() {
+    async function loadLeads() {
     try {
       setLoading(true);
       setPreferencesLoading(true);
@@ -156,19 +154,20 @@ export default function Leads() {
         throw new Error(
           "Please log in before viewing your leads."
         );
-}
-            const {
+      }
+
+      const {
         data: userData,
-        error: countryError,
+        error: userError2,
       } = await supabase
         .from("users")
         .select("country, skill_preference")
         .eq("id", user.id)
         .maybeSingle();
 
-      if (countryError) {
+      if (userError2) {
         throw new Error(
-          `Unable to load your country preference: ${countryError.message}`
+          `Unable to load your preferences: ${userError2.message}`
         );
       }
 
@@ -181,18 +180,21 @@ export default function Leads() {
       } = await supabase
         .from("user_skills")
         .select("skill")
-        .eq("user_id", user.id);
+        .eq("user_id", user.id)
+        .order("created_at", {
+          ascending: true,
+        });
 
       if (skillsError) {
         throw new Error(
-          `Unable to load your skill preferences: ${skillsError.message}`
+          `Unable to load your skills: ${skillsError.message}`
         );
       }
 
       const currentSkills = Array.isArray(skillRows)
         ? skillRows
             .map((row: any) =>
-              String(row.skill || "").trim()
+              String(row?.skill || "").trim()
             )
             .filter(Boolean)
         : [];
@@ -245,8 +247,8 @@ export default function Leads() {
         (skill, index, array) =>
           array.findIndex(
             (item) =>
-              item.toLowerCase() ===
-              skill.toLowerCase()
+              normalizeSkill(item) ===
+              normalizeSkill(skill)
           ) === index
       );
 
@@ -256,13 +258,12 @@ export default function Leads() {
       setPreferencesLoading(false);
 
       const response = await fetch("/api/leads");
+      const responseText = await response.text();
 
-      const text = await response.text();
-
-      let data: any = null;
+      let apiData: any = null;
 
       try {
-        data = JSON.parse(text);
+        apiData = JSON.parse(responseText);
       } catch {
         throw new Error(
           `API returned invalid response (${response.status})`
@@ -271,25 +272,25 @@ export default function Leads() {
 
       if (!response.ok) {
         throw new Error(
-          data?.error ||
+          apiData?.error ||
             `Unable to load leads (${response.status})`
         );
       }
 
-      if (!data?.success) {
+      if (!apiData?.success) {
         throw new Error(
-          data?.error || "Unable to load leads"
+          apiData?.error || "Unable to load leads."
         );
       }
 
-      const rows = Array.isArray(data.leads)
-        ? data.leads
+      const rows = Array.isArray(apiData.leads)
+        ? apiData.leads
         : [];
 
       const mapped: Lead[] = rows.map((row: any) => ({
         id: String(
           row.id ??
-            `${row.type || "lead"}-${row.created_at || row.title || Math.random()}`
+            `${row.type || "lead"}-${row.created_at || row.title || "unknown"}`
         ),
 
         leadType:
@@ -317,8 +318,7 @@ export default function Leads() {
           "",
 
         description:
-          row.description ||
-          "",
+          row.description || "",
 
         skill:
           row.skill ||
@@ -327,20 +327,16 @@ export default function Leads() {
           "",
 
         category:
-          row.category ||
-          "",
+          row.category || "",
 
         subcategory:
-          row.subcategory ||
-          "",
+          row.subcategory || "",
 
         country:
-          row.country ||
-          "",
+          row.country || "",
 
         city:
-          row.city ||
-          "",
+          row.city || "",
 
         budget:
           row.budget ?? "",
@@ -351,8 +347,7 @@ export default function Leads() {
           "",
 
         currency:
-          row.currency ||
-          "",
+          row.currency || "",
 
         contactName:
           row.contact_name ||
@@ -370,8 +365,7 @@ export default function Leads() {
           "",
 
         contact:
-          row.contact ||
-          "",
+          row.contact || "",
 
         source:
           row.source ||
@@ -385,13 +379,11 @@ export default function Leads() {
           "",
 
         createdAt:
-          row.created_at ||
-          "",
+          row.created_at || "",
       }));
 
       setLeads(mapped);
-            setLeads(mapped);
-    } catch (error: any) {
+          } catch (error: any) {
       console.error(
         "Leads page error:",
         error
@@ -404,9 +396,9 @@ export default function Leads() {
       setErrorMsg(message);
 
       if (
-        message.includes("preference") ||
-        message.includes("country") ||
-        message.includes("skill")
+        message.toLowerCase().includes("preference") ||
+        message.toLowerCase().includes("country") ||
+        message.toLowerCase().includes("skill")
       ) {
         setPreferencesError(message);
       }
@@ -450,7 +442,7 @@ export default function Leads() {
         (preferredSkill) =>
           skillMatches(
             preferredSkill,
-            lead.skill
+            lead.skill || ""
           )
       );
     });
@@ -498,11 +490,7 @@ export default function Leads() {
           margin: "0 auto",
         }}
       >
-        <div
-          style={{
-            marginBottom: 20,
-          }}
-        >
+        <div style={{ marginBottom: 20 }}>
           <h1
             style={{
               margin: 0,
@@ -573,11 +561,7 @@ export default function Leads() {
           </div>
 
           {preferencesLoading ? (
-            <div
-              style={{
-                color: "#aaa",
-              }}
-            >
+            <div style={{ color: "#aaa" }}>
               Loading your preferences...
             </div>
           ) : needsPreferences ? (
@@ -603,11 +587,7 @@ export default function Leads() {
                 {preferredCountry}
               </div>
 
-              <div
-                style={{
-                  color: "#ddd",
-                }}
-              >
+              <div style={{ color: "#ddd" }}>
                 <strong>Skills:</strong>{" "}
                 {preferredSkills.join(", ")}
               </div>
@@ -679,11 +659,7 @@ export default function Leads() {
               }}
             >
               Showing{" "}
-              <strong
-                style={{
-                  color: "#fff",
-                }}
-              >
+              <strong style={{ color: "#fff" }}>
                 {filteredLeads.length}
               </strong>{" "}
               matching{" "}
@@ -702,11 +678,7 @@ export default function Leads() {
                   textAlign: "center",
                 }}
               >
-                <h3
-                  style={{
-                    marginTop: 0,
-                  }}
-                >
+                <h3 style={{ marginTop: 0 }}>
                   No matching leads yet
                 </h3>
 
@@ -758,38 +730,14 @@ export default function Leads() {
                       {lead.leadType}
                     </div>
 
-                    <h2
+                    <h3
                       style={{
-                        fontSize: 20,
                         marginTop: 0,
-                        marginBottom: 8,
+                        marginBottom: 10,
                       }}
                     >
                       {lead.title}
-                    </h2>
-
-                    {lead.company && (
-                      <div
-                        style={{
-                          color: "#ccc",
-                          marginBottom: 6,
-                        }}
-                      >
-                        Company: {lead.company}
-                      </div>
-                    )}
-
-                    {lead.name &&
-                      lead.name !== lead.title && (
-                        <div
-                          style={{
-                            color: "#ccc",
-                            marginBottom: 6,
-                          }}
-                        >
-                          Name: {lead.name}
-                        </div>
-                      )}
+                    </h3>
 
                     {lead.skill && (
                       <div
@@ -911,9 +859,7 @@ export default function Leads() {
                             <button
                               type="button"
                               onClick={() =>
-                                callPhone(
-                                  lead.phone!
-                                )
+                                callPhone(lead.phone!)
                               }
                               style={buttonStyle}
                             >
@@ -925,9 +871,7 @@ export default function Leads() {
                             <button
                               type="button"
                               onClick={() =>
-                                sendEmail(
-                                  lead.email!
-                                )
+                                sendEmail(lead.email!)
                               }
                               style={buttonStyle}
                             >
@@ -1025,4 +969,5 @@ export default function Leads() {
       </div>
     </div>
   );
-              }
+  }
+      
