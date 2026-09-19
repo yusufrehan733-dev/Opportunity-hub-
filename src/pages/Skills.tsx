@@ -15,8 +15,37 @@ export default function Skills() {
   const [skillLimit, setSkillLimit] = useState<number>(2);
   const [planName, setPlanName] = useState("Basic");
 
+  const [country, setCountry] = useState("");
+  const [savingPreferences, setSavingPreferences] = useState(false);
+  const [preferencesMessage, setPreferencesMessage] = useState("");
+
   const [loading, setLoading] = useState(true);
   const [skillsError, setSkillsError] = useState("");
+
+  const countries = [
+    "Pakistan",
+    "India",
+    "Bangladesh",
+    "United Kingdom",
+    "United States",
+    "Canada",
+    "Australia",
+    "United Arab Emirates",
+    "Qatar",
+    "Saudi Arabia",
+    "Kuwait",
+    "Oman",
+    "Bahrain",
+    "Sweden",
+    "Norway",
+    "Denmark",
+    "Finland",
+    "Iceland",
+    "Germany",
+    "France",
+    "Netherlands",
+    "Other",
+  ];
 
   useEffect(() => {
     initialize();
@@ -25,6 +54,7 @@ export default function Skills() {
   async function initialize() {
     setLoading(true);
     setSkillsError("");
+    setPreferencesMessage("");
 
     await fetchSkills();
 
@@ -41,6 +71,7 @@ export default function Skills() {
 
     await fetchUserSkills(user.id);
     await fetchUserPlan(user.id);
+    await fetchUserCountry(user.id);
 
     setLoading(false);
   }
@@ -60,8 +91,6 @@ export default function Skills() {
       return;
     }
 
-    console.log("Skills loaded:", data);
-
     setData(data || []);
   }
 
@@ -74,7 +103,63 @@ export default function Skills() {
 
     if (!error) {
       setMySkills(data || []);
+    } else {
+      console.error("User skills error:", error);
     }
+  }
+
+  async function fetchUserCountry(userId: string) {
+    const { data, error } = await supabase
+      .from("Users")
+      .select("country")
+      .eq("id", userId)
+      .maybeSingle();
+
+    if (error) {
+      console.error("User country error:", error);
+      return;
+    }
+
+    setCountry(data?.country || "");
+  }
+
+  async function savePreferences() {
+    if (!user) {
+      alert("Please log in first.");
+      return;
+    }
+
+    if (!country) {
+      setPreferencesMessage("Please select your country.");
+      return;
+    }
+
+    if (mySkills.length === 0) {
+      setPreferencesMessage("Please select at least one skill.");
+      return;
+    }
+
+    setSavingPreferences(true);
+    setPreferencesMessage("");
+
+    const { error } = await supabase
+      .from("Users")
+      .update({
+        country: country,
+      })
+      .eq("id", user.id);
+
+    setSavingPreferences(false);
+
+    if (error) {
+      console.error("Save preferences error:", error);
+      setPreferencesMessage(error.message);
+      return;
+    }
+
+    setPreferencesMessage(
+      "Preferences saved. Your Demand, Supply and SaaS leads will now use these preferences."
+    );
   }
 
   async function fetchUserPlan(userId: string) {
@@ -155,6 +240,7 @@ export default function Skills() {
     }
 
     await fetchUserSkills(user.id);
+    setPreferencesMessage("");
   }
 
   async function removeSkill(id: string) {
@@ -171,6 +257,8 @@ export default function Skills() {
     setMySkills((prev) =>
       prev.filter((skill) => skill.id !== id)
     );
+
+    setPreferencesMessage("");
   }
 
   const mainCategories = [
@@ -247,7 +335,7 @@ export default function Skills() {
             <ArrowLeft size={20} />
           </button>
 
-          <h1 style={{ margin: 0 }}>Skills</h1>
+          <h1 style={{ margin: 0 }}>My Skills</h1>
         </div>
       </div>
 
@@ -258,6 +346,97 @@ export default function Skills() {
           padding: "30px 20px",
         }}
       >
+        <section style={{ marginBottom: 35 }}>
+          <h2>My Preferences</h2>
+
+          <p style={{ color: "#999" }}>
+            Select your skills and country. These preferences will
+            control the leads shown to you in Demand, Supply and SaaS.
+          </p>
+
+          <div
+            style={{
+              background: "#151515",
+              border: "1px solid #2d2d2d",
+              borderRadius: 10,
+              padding: 18,
+              marginTop: 18,
+            }}
+          >
+            <label
+              style={{
+                display: "block",
+                marginBottom: 8,
+                fontWeight: 600,
+              }}
+            >
+              Country
+            </label>
+
+            <select
+              value={country}
+              onChange={(e) => {
+                setCountry(e.target.value);
+                setPreferencesMessage("");
+              }}
+              style={{
+                width: "100%",
+                maxWidth: 500,
+                padding: 12,
+                background: "#222",
+                color: "#fff",
+                border: "1px solid #444",
+                borderRadius: 8,
+                boxSizing: "border-box",
+              }}
+            >
+              <option value="">Select your country</option>
+
+              {countries.map((item) => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
+            </select>
+
+            <button
+              onClick={savePreferences}
+              disabled={savingPreferences}
+              style={{
+                marginTop: 15,
+                padding: "12px 18px",
+                borderRadius: 8,
+                border: "1px solid #00ffae",
+                background: "#00ffae",
+                color: "#000",
+                cursor: savingPreferences
+                  ? "wait"
+                  : "pointer",
+                fontWeight: 700,
+              }}
+            >
+              {savingPreferences
+                ? "Saving..."
+                : "Save Preferences"}
+            </button>
+
+            {preferencesMessage && (
+              <div
+                style={{
+                  marginTop: 12,
+                  color: preferencesMessage.includes(
+                    "saved"
+                  )
+                    ? "#00ffae"
+                    : "#ff9999",
+                }}
+              >
+                {preferencesMessage}
+              </div>
+            )}
+          </div>
+        </section>
+
         <section style={{ marginBottom: 40 }}>
           <h2>My Skills ({mySkills.length})</h2>
 
@@ -281,7 +460,13 @@ export default function Skills() {
               No skills selected yet.
             </div>
           ) : (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 10,
+              }}
+            >
               {mySkills.map((skill) => (
                 <div
                   key={skill.id}
@@ -373,11 +558,17 @@ export default function Skills() {
                 ))}
               </div>
 
-              {mainCategories.length === 0 && !skillsError && (
-                <div style={{ color: "#999", marginTop: 15 }}>
-                  No categories returned from the skills table.
-                </div>
-              )}
+              {mainCategories.length === 0 &&
+                !skillsError && (
+                  <div
+                    style={{
+                      color: "#999",
+                      marginTop: 15,
+                    }}
+                  >
+                    No categories returned from the skills table.
+                  </div>
+                )}
             </section>
 
             {selectedMain && (
@@ -394,7 +585,9 @@ export default function Skills() {
                   {categories.map((item) => (
                     <button
                       key={item}
-                      onClick={() => setSelectedCategory(item)}
+                      onClick={() =>
+                        setSelectedCategory(item)
+                      }
                       style={{
                         padding: "11px 17px",
                         borderRadius: 8,
@@ -453,4 +646,4 @@ export default function Skills() {
       </div>
     </div>
   );
-}
+    }
