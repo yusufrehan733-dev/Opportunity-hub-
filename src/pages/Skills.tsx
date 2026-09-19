@@ -1,14 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 
-type SkillItem = {
-  id?: string;
-  name?: string;
-  skill?: string;
-  category?: string;
-  subcategory?: string;
-};
-
 const COUNTRIES = [
   "United States",
   "Canada",
@@ -32,21 +24,22 @@ const COUNTRIES = [
 export default function Skills() {
   const [data, setData] = useState<any[]>([]);
   const [selectedMain, setSelectedMain] = useState<string | null>(null);
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(
-    null
-  );
+  const [selectedCategory, setSelectedCategory] =
+    useState<string | null>(null);
 
   const [user, setUser] = useState<any>(null);
   const [mySkills, setMySkills] = useState<any[]>([]);
 
-  const [skillLimit, setSkillLimit] = useState<number>(2);
+  const [skillLimit, setSkillLimit] = useState(2);
   const [planName, setPlanName] = useState("Basic");
 
   const [country, setCountry] = useState("");
   const [typedSkill, setTypedSkill] = useState("");
 
-  const [savingPreferences, setSavingPreferences] = useState(false);
-  const [preferencesMessage, setPreferencesMessage] = useState("");
+  const [savingPreferences, setSavingPreferences] =
+    useState(false);
+  const [preferencesMessage, setPreferencesMessage] =
+    useState("");
 
   const [loading, setLoading] = useState(true);
   const [skillsError, setSkillsError] = useState("");
@@ -102,7 +95,9 @@ export default function Skills() {
       .from("user_skills")
       .select("*")
       .eq("user_id", userId)
-      .order("created_at", { ascending: false });
+      .order("created_at", {
+        ascending: false,
+      });
 
     if (error) {
       console.error("User skills error:", error);
@@ -126,8 +121,7 @@ export default function Skills() {
 
     setCountry(data?.country || "");
   }
-
-  async function fetchUserPlan(userId: string) {
+    async function fetchUserPlan(userId: string) {
     const {
       data: subscription,
       error,
@@ -150,7 +144,9 @@ export default function Skills() {
       .eq("id", subscription.plan_id)
       .maybeSingle();
 
-    const name = plan?.name?.toLowerCase() || "basic";
+    const name = String(
+      plan?.name || "basic"
+    ).toLowerCase();
 
     if (name === "gold") {
       setPlanName("Gold");
@@ -161,129 +157,6 @@ export default function Skills() {
     } else {
       setPlanName("Basic");
       setSkillLimit(2);
-    }
-    }
-    async function savePreferences() {
-    if (!user) {
-      alert("Please log in first.");
-      return;
-    }
-
-    if (!country) {
-      setPreferencesMessage("Please select your country.");
-      return;
-    }
-
-    if (mySkills.length === 0) {
-      setPreferencesMessage("Please select at least one skill.");
-      return;
-    }
-
-    if (
-      Number.isFinite(skillLimit) &&
-      mySkills.length > skillLimit
-    ) {
-      setPreferencesMessage(
-        `${planName} plan allows a maximum of ${skillLimit} skills.`
-      );
-      return;
-    }
-
-    setSavingPreferences(true);
-    setPreferencesMessage("");
-
-    try {
-      const cleanCountry = country.trim();
-
-      console.log("SAVING PREFERENCES:", {
-        userId: user.id,
-        country: cleanCountry,
-        skills: mySkills.map((item) => item.skill),
-      });
-
-      const { data: updatedUser, error: updateError } =
-        await supabase
-          .from("users")
-          .update({
-            country: cleanCountry,
-          })
-          .eq("id", user.id)
-          .select("id, country")
-          .maybeSingle();
-
-      if (updateError) {
-        console.error("Save country error:", updateError);
-        setPreferencesMessage(
-          `Save failed: ${updateError.message}`
-        );
-        return;
-      }
-
-      if (!updatedUser) {
-        console.error(
-          "Save country returned no updated row.",
-          {
-            userId: user.id,
-            country: cleanCountry,
-          }
-        );
-
-        setPreferencesMessage(
-          "Save failed: Supabase did not update your user profile."
-        );
-        return;
-      }
-
-      console.log("UPDATED USER:", updatedUser);
-
-      const { data: verifiedUser, error: verifyError } =
-        await supabase
-          .from("users")
-          .select("id, country")
-          .eq("id", user.id)
-          .maybeSingle();
-
-      if (verifyError) {
-        console.error(
-          "Preference verification error:",
-          verifyError
-        );
-
-        setPreferencesMessage(
-          `Saved, but verification failed: ${verifyError.message}`
-        );
-        return;
-      }
-
-      if (!verifiedUser) {
-        setPreferencesMessage(
-          "Save failed: the updated profile could not be verified."
-        );
-        return;
-      }
-
-      if (
-        String(verifiedUser.country || "").trim().toLowerCase() !==
-        cleanCountry.toLowerCase()
-      ) {
-        console.error("COUNTRY VERIFICATION FAILED:", {
-          expected: cleanCountry,
-          received: verifiedUser.country,
-        });
-
-        setPreferencesMessage(
-          "Save failed: Supabase did not keep the selected country."
-        );
-        return;
-      }
-
-      setCountry(verifiedUser.country || "");
-
-      setPreferencesMessage(
-        "Preferences saved. Your Demand, Supply and SaaS leads will now use these preferences."
-      );
-    } finally {
-      setSavingPreferences(false);
     }
   }
 
@@ -302,7 +175,7 @@ export default function Skills() {
 
     const exists = mySkills.some(
       (item) =>
-        String(item.skill || "")
+        String(item?.skill || "")
           .trim()
           .toLowerCase() === cleanSkill.toLowerCase()
     );
@@ -336,7 +209,6 @@ export default function Skills() {
     }
 
     await fetchUserSkills(user.id);
-
     setPreferencesMessage("");
 
     return true;
@@ -375,10 +247,129 @@ export default function Skills() {
     await fetchUserSkills(user.id);
   }
 
-  const mainCategories = Array.from(
+  async function savePreferences() {
+    if (!user) {
+      alert("Please log in first.");
+      return;
+    }
+
+    if (!country) {
+      setPreferencesMessage(
+        "Please select your country."
+      );
+      return;
+    }
+
+    if (mySkills.length === 0) {
+      setPreferencesMessage(
+        "Please select at least one skill."
+      );
+      return;
+    }
+
+    if (
+      Number.isFinite(skillLimit) &&
+      mySkills.length > skillLimit
+    ) {
+      setPreferencesMessage(
+        `${planName} plan allows a maximum of ${skillLimit} skills.`
+      );
+      return;
+    }
+
+    setSavingPreferences(true);
+    setPreferencesMessage("");
+
+    try {
+      const cleanCountry = country.trim();
+
+      const { data: updatedUser, error } =
+        await supabase
+          .from("users")
+          .update({
+            country: cleanCountry,
+          })
+          .eq("id", user.id)
+          .select("id, country")
+          .maybeSingle();
+
+      if (error) {
+        console.error(
+          "Save country error:",
+          error
+        );
+
+        setPreferencesMessage(
+          `Save failed: ${error.message}`
+        );
+        return;
+      }
+
+      if (!updatedUser) {
+        console.error(
+          "No user row was updated.",
+          user.id
+        );
+
+        setPreferencesMessage(
+          "Save failed: Supabase did not update your user profile."
+        );
+        return;
+      }
+
+      const { data: verifiedUser, error: verifyError } =
+        await supabase
+          .from("users")
+          .select("id, country")
+          .eq("id", user.id)
+          .maybeSingle();
+
+      if (verifyError) {
+        console.error(
+          "Verification error:",
+          verifyError
+        );
+
+        setPreferencesMessage(
+          `Save verification failed: ${verifyError.message}`
+        );
+        return;
+      }
+
+      if (!verifiedUser) {
+        setPreferencesMessage(
+          "Save failed: your profile could not be verified."
+        );
+        return;
+      }
+
+      if (
+        String(verifiedUser.country || "")
+          .trim()
+          .toLowerCase() !==
+        cleanCountry.toLowerCase()
+      ) {
+        setPreferencesMessage(
+          "Save failed: Supabase did not keep the selected country."
+        );
+        return;
+      }
+
+      setCountry(verifiedUser.country || "");
+
+      setPreferencesMessage(
+        "Preferences saved. Your Demand, Supply and SaaS leads will now use these preferences."
+      );
+    } finally {
+      setSavingPreferences(false);
+    }
+        }
+    const mainCategories = Array.from(
     new Set(
       data
-        .map((item) => String(item?.name || "").trim())
+        .map((item) =>
+          String(item?.name || "").trim()
+        )
         .filter(Boolean)
     )
   );
@@ -389,7 +380,8 @@ export default function Skills() {
           data
             .filter(
               (item) =>
-                String(item?.name || "").trim() === selectedMain
+                String(item?.name || "").trim() ===
+                selectedMain
             )
             .map((item) =>
               String(item?.category || "").trim()
@@ -422,6 +414,7 @@ export default function Skills() {
         style={{
           minHeight: "100vh",
           padding: 24,
+          background: "#f5f5f5",
         }}
       >
         <h2>My Skills</h2>
@@ -436,24 +429,31 @@ export default function Skills() {
         style={{
           minHeight: "100vh",
           padding: 24,
+          background: "#f5f5f5",
         }}
       >
         <h2>My Skills</h2>
-        <p style={{ color: "#b00020" }}>{skillsError}</p>
+
+        <p style={{ color: "#b00020" }}>
+          {skillsError}
+        </p>
       </div>
     );
-                 }
-    return (
+  }
+
+  return (
     <div
       style={{
         minHeight: "100vh",
         padding: 24,
         background: "#f5f5f5",
         color: "#111",
+        boxSizing: "border-box",
       }}
     >
       <div
         style={{
+          width: "100%",
           maxWidth: 900,
           margin: "0 auto",
         }}
@@ -498,12 +498,15 @@ export default function Skills() {
                 display: "flex",
                 flexWrap: "wrap",
                 gap: 8,
-                marginBottom: 16,
+                marginBottom: 18,
               }}
             >
               {mySkills.map((item) => (
                 <div
-                  key={item.id || item.skill}
+                  key={
+                    item.id ||
+                    String(item.skill)
+                  }
                   style={{
                     display: "flex",
                     alignItems: "center",
@@ -514,13 +517,17 @@ export default function Skills() {
                     background: "#fafafa",
                   }}
                 >
-                  <span>{item.skill}</span>
+                  <span>
+                    {item.skill}
+                  </span>
 
                   {item.id && (
                     <button
                       type="button"
                       onClick={() =>
-                        removeSkill(String(item.id))
+                        removeSkill(
+                          String(item.id)
+                        )
                       }
                       style={{
                         border: "none",
@@ -528,6 +535,7 @@ export default function Skills() {
                         cursor: "pointer",
                         fontWeight: "bold",
                         padding: 0,
+                        fontSize: 18,
                       }}
                       aria-label={`Remove ${item.skill}`}
                     >
@@ -584,8 +592,7 @@ export default function Skills() {
               Add Skill
             </button>
           </div>
-
-          <div
+                    <div
             style={{
               borderTop: "1px solid #eee",
               paddingTop: 20,
@@ -601,9 +608,9 @@ export default function Skills() {
                 fontSize: 14,
               }}
             >
-              Choose your country and saved skills. These
-              preferences will control your Demand, Supply
-              and SaaS leads.
+              Choose your country and save your skills.
+              These preferences control your Demand,
+              Supply and SaaS leads.
             </p>
 
             <label
@@ -637,7 +644,10 @@ export default function Skills() {
               </option>
 
               {COUNTRIES.map((item) => (
-                <option key={item} value={item}>
+                <option
+                  key={item}
+                  value={item}
+                >
                   {item}
                 </option>
               ))}
@@ -780,3 +790,47 @@ export default function Skills() {
               )}
             </div>
           )}
+
+          {selectedCategory && (
+            <div style={{ marginTop: 24 }}>
+              <h3>Skills</h3>
+
+              {subcategories.length === 0 ? (
+                <p style={{ color: "#666" }}>
+                  No skills available.
+                </p>
+              ) : (
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: 10,
+                  }}
+                >
+                  {subcategories.map((item) => (
+                    <button
+                      key={item}
+                      type="button"
+                      onClick={() =>
+                        addSkill(item)
+                      }
+                      style={{
+                        padding: "10px 14px",
+                        borderRadius: 6,
+                        border: "1px solid #ccc",
+                        background: "#fff",
+                        cursor: "pointer",
+                      }}
+                    >
+                      {item}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+   }
