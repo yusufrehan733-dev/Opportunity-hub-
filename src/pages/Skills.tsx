@@ -60,7 +60,7 @@ export default function Skills() {
 
     const {
       data: { user },
-    } = await supabase.auth.getuser();
+    } = await supabase.auth.getUser();
 
     if (!user) {
       setLoading(false);
