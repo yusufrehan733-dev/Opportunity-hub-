@@ -1,15 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl =
-  process.env.SUPABASE_URL;
-
+const supabaseUrl = process.env.SUPABASE_URL || "";
 const supabaseServiceKey =
-  process.env.SUPABASE_SERVICE_ROLE_KEY;
+  process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
-if (
-  !supabaseUrl ||
-  !supabaseServiceKey
-) {
+if (!supabaseUrl || !supabaseServiceKey) {
   throw new Error(
     "Missing Supabase server environment variables"
   );
@@ -20,20 +15,13 @@ const supabase = createClient(
   supabaseServiceKey
 );
 
-function json(
-  data: any,
-  status = 200
-) {
-  return new Response(
-    JSON.stringify(data),
-    {
-      status,
-      headers: {
-        "Content-Type":
-          "application/json",
-      },
-    }
-  );
+function json(data: any, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
 }
 
 function clean(value: any) {
@@ -42,15 +30,19 @@ function clean(value: any) {
     : "";
 }
 
+function hasIdentity(...values: any[]) {
+  return values.some(
+    (value) => clean(value).length >= 2
+  );
+}
+
 function hasActionableContact(
   ...values: any[]
 ) {
   return values.some((value) => {
     const text = clean(value);
 
-    if (!text) {
-      return false;
-    }
+    if (!text) return false;
 
     if (
       text.includes("@") &&
@@ -76,18 +68,7 @@ function hasActionableContact(
   });
 }
 
-function hasIdentity(
-  ...values: any[]
-) {
-  return values.some(
-    (value) =>
-      clean(value).length >= 2
-  );
-}
-
-function isGoldDemand(
-  lead: any
-) {
+function isGoldDemand(lead: any) {
   return (
     hasIdentity(
       lead.client_name,
@@ -101,18 +82,14 @@ function isGoldDemand(
     hasActionableContact(
       lead.contact_email,
       lead.contact_phone,
-      lead.source
+      lead.contact_url
     )
   );
 }
 
-function isGoldSupply(
-  lead: any
-) {
+function isGoldSupply(lead: any) {
   return (
-    hasIdentity(
-      lead.company_name
-    ) &&
+    hasIdentity(lead.company_name) &&
     (
       clean(lead.job_title) ||
       clean(lead.position) ||
@@ -122,15 +99,12 @@ function isGoldSupply(
     hasActionableContact(
       lead.contact_email,
       lead.contact_phone,
-      lead.apply_url,
-      lead.company_website
+      lead.contact_url
     )
   );
 }
 
-function isGoldSaas(
-  lead: any
-) {
+function isGoldSaas(lead: any) {
   return (
     hasIdentity(lead.name) &&
     (
@@ -138,9 +112,8 @@ function isGoldSaas(
       clean(lead.description)
     ) &&
     hasActionableContact(
-      lead.contact,
-      lead.content_email,
-      lead.landing_url
+      lead.contect,
+      lead.contact_url
     )
   );
 }
@@ -152,8 +125,7 @@ export default async function handler(
     return json(
       {
         success: false,
-        error:
-          "Method not allowed",
+        error: "Method not allowed",
       },
       405
     );
@@ -175,9 +147,8 @@ export default async function handler(
 
     const requestedCategory =
       (
-        url.searchParams.get(
-          "category"
-        ) || "all"
+        url.searchParams.get("category") ||
+        "all"
       )
         .trim()
         .toLowerCase();
@@ -191,9 +162,10 @@ export default async function handler(
     let demandLeads: any[] = [];
     let supplyLeads: any[] = [];
     let saasLeads: any[] = [];
-    /*
-     * DEMAND
-     */
+
+    // =========================
+    // DEMAND
+    // =========================
 
     if (
       requestedCategory === "all" ||
@@ -206,11 +178,13 @@ export default async function handler(
             id,
             type,
             source,
+            source_url,
             client_name,
             skill_needed,
             description,
             contact_email,
             contact_phone,
+            contact_url,
             created_at,
             status,
             title,
@@ -249,6 +223,8 @@ export default async function handler(
             lead.description || "",
           source:
             lead.source || "",
+          source_url:
+            lead.source_url || null,
           skill:
             lead.skill_needed || "",
           country:
@@ -256,22 +232,22 @@ export default async function handler(
           city:
             lead.city || "",
           contact_email:
-            lead.contact_email ||
-            null,
+            lead.contact_email || null,
           contact_phone:
-            lead.contact_phone ||
-            null,
+            lead.contact_phone || null,
+          contact_url:
+            lead.contact_url || null,
           contact_name:
-            lead.contact_name ||
-            null,
+            lead.contact_name || null,
           budget:
             lead.budget || null,
           currency:
             lead.currency || null,
-          category:
-            lead.category || "",
+          category: "Demand",
           subcategory:
-            lead.subcategory || "",
+            lead.subcategory ||
+            lead.skill_needed ||
+            "",
           status:
             lead.status || "new",
           created_at:
@@ -281,9 +257,9 @@ export default async function handler(
         }));
     }
 
-    /*
-     * SUPPLY
-     */
+    // =========================
+    // SUPPLY
+    // =========================
 
     if (
       requestedCategory === "all" ||
@@ -302,8 +278,9 @@ export default async function handler(
             country,
             city,
             salary_range,
-            contact,
+            contact_email,
             contact_phone,
+            contact_url,
             created_at,
             job_title,
             salary_min,
@@ -338,35 +315,40 @@ export default async function handler(
             lead.description || "",
           source:
             lead.company_website || "",
+          source_url:
+            lead.company_website || null,
           skill:
             lead.required_skill || "",
           country:
             lead.country || "Global",
           city:
             lead.city || "",
-          contact
-            lead.contact ||
-            null,
-          contact:
-            lead.contact ||
-            null,
+          contact_email:
+            lead.contact_email || null,
+          contact_phone:
+            lead.contact_phone || null,
+          contact_url:
+            lead.contact_url || null,
           contact_name:
-            lead.company_name ||
-            null,
+            lead.company_name || null,
           budget:
-            lead.salary_range || null,
+            lead.salary_range ||
+            lead.salary_max ||
+            lead.salary_min ||
+            null,
           currency: null,
-          category:
-            lead.category || "",
-          subcategory: "",
+          category: "Supply",
+          subcategory:
+            lead.category ||
+            lead.required_skill ||
+            "",
           status: "new",
           created_at:
             lead.created_at,
           company_name:
             lead.company_name || "",
           company_website:
-            lead.company_website ||
-            null,
+            lead.company_website || null,
           apply_url:
             lead.apply_url || null,
           salary_min:
@@ -378,10 +360,11 @@ export default async function handler(
           isLocked: false,
           gold_quality: true,
         }));
-      }
-    /*
-     * SAAS
-     */
+    }
+
+    // =========================
+    // SAAS
+    // =========================
 
     if (
       requestedCategory === "all" ||
@@ -395,14 +378,15 @@ export default async function handler(
             name,
             platform,
             niche,
-            contact,
-            content_email,
+            contect,
             status,
             created_at,
             description,
             commission,
             trial_days,
-            landing_url
+            landing_url,
+            source_url,
+            contact_url
           `)
           .gte(
             "created_at",
@@ -430,14 +414,16 @@ export default async function handler(
             lead.description || "",
           source:
             lead.platform || "",
+          source_url:
+            lead.source_url || null,
           skill:
             lead.niche || "",
           country: "Global",
           city: "",
           contact:
-            lead.content || null,
-          contact_phone:
-            lead.contact || null,
+            lead.contect || null,
+          contact_url:
+            lead.contact_url || null,
           contact_name:
             lead.name || null,
           budget: null,
@@ -451,8 +437,6 @@ export default async function handler(
             lead.created_at,
           platform:
             lead.platform || "",
-          contact:
-            lead.contact || "",
           commission:
             lead.commission || null,
           trial_days:
@@ -463,6 +447,7 @@ export default async function handler(
           gold_quality: true,
         }));
     }
+
     const leads = [
       ...demandLeads,
       ...supplyLeads,
@@ -510,4 +495,4 @@ export default async function handler(
       500
     );
   }
-          }
+            }
