@@ -143,7 +143,7 @@ function isGoldSaas(
       clean(lead.description)
     ) &&
     hasActionableContact(
-      lead.contect,
+      lead.contact,
       lead.contact_url,
       lead.landing_url,
       lead.source_url
@@ -419,15 +419,11 @@ function mapSaas(
     ),
 
     contact: clean(
-      lead.contect
-    ),
-
-    contect: clean(
-      lead.contect
+      lead.contact
     ),
 
     contact_email: clean(
-      lead.contect
+      lead.contact
     ),
 
     source_url: clean(
@@ -496,23 +492,13 @@ async function handler(
         .trim()
         .toLowerCase();
 
-    const seventyTwoHoursAgo =
-      new Date(
-        Date.now() -
-          72 *
-            60 *
-            60 *
-            1000
-      ).toISOString();
-
     let demandLeads: any[] = [];
     let supplyLeads: any[] = [];
     let saasLeads: any[] = [];
 
     if (
       requestedCategory === "all" ||
-      requestedCategory ===
-        "demand"
+      requestedCategory === "demand"
     ) {
       const {
         data,
@@ -541,10 +527,6 @@ async function handler(
           currency,
           contact_name
         `)
-        .gte(
-          "created_at",
-          seventyTwoHoursAgo
-        )
         .order(
           "created_at",
           {
@@ -566,8 +548,7 @@ async function handler(
 
     if (
       requestedCategory === "all" ||
-      requestedCategory ===
-        "supply"
+      requestedCategory === "supply"
     ) {
       const {
         data,
@@ -595,10 +576,6 @@ async function handler(
           source_url,
           contact_url
         `)
-        .gte(
-          "created_at",
-          seventyTwoHoursAgo
-        )
         .order(
           "created_at",
           {
@@ -620,8 +597,7 @@ async function handler(
 
     if (
       requestedCategory === "all" ||
-      requestedCategory ===
-        "saas"
+      requestedCategory === "saas"
     ) {
       const {
         data,
@@ -633,7 +609,7 @@ async function handler(
           name,
           platform,
           niche,
-          contect,
+          contact,
           status,
           created_at,
           description,
@@ -643,10 +619,6 @@ async function handler(
           source_url,
           contact_url
         `)
-        .gte(
-          "created_at",
-          seventyTwoHoursAgo
-        )
         .order(
           "created_at",
           {
