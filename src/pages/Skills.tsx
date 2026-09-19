@@ -60,7 +60,7 @@ export default function Skills() {
 
     const {
       data: { user },
-    } = await supabase.auth.getUser();
+    } = await supabase.auth.getuser();
 
     if (!user) {
       setLoading(false);
@@ -104,13 +104,13 @@ export default function Skills() {
     if (!error) {
       setMySkills(data || []);
     } else {
-      console.error("User skills error:", error);
+      console.error("user skills error:", error);
     }
   }
 
   async function fetchUserCountry(userId: string) {
     const { data, error } = await supabase
-      .from("Users")
+      .from("users")
       .select("country")
       .eq("id", userId)
       .maybeSingle();
