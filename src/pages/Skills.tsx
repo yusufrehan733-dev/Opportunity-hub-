@@ -255,5 +255,810 @@ export default function Skills() {
         ]);
       }
     }
+                }
+    async function loadUserPlan(
+    userId: string
+  ) {
+    const {
+      data: row,
+      error,
+    } = await supabase
+      .from("users")
+      .select("plan, plan_name, subscription_status")
+      .eq("id", userId)
+      .maybeSingle();
+
+    if (error) {
+      console.error(
+        "User plan error:",
+        error
+      );
+      return;
+    }
+
+    const rawPlan =
+      row?.plan_name ||
+      row?.plan ||
+      "Basic";
+
+    const normalizedPlan =
+      String(rawPlan)
+        .trim()
+        .toLowerCase();
+
+    if (normalizedPlan === "gold") {
+      setPlanName("Gold");
+      setSkillLimit(999999);
+    } else if (
+      normalizedPlan === "premium"
+    ) {
+      setPlanName("Premium");
+      setSkillLimit(5);
+    } else {
+      setPlanName("Basic");
+      setSkillLimit(2);
+    }
   }
-  
+
+  const mainCategories =
+    useMemo(() => {
+      const values =
+        data
+          .map(getMainCategory)
+          .filter(Boolean);
+
+      return Array.from(
+        new Set(values)
+      ).sort();
+    }, [data]);
+
+  const categories =
+    useMemo(() => {
+      if (!selectedMain) {
+        return [];
+      }
+
+      const values =
+        data
+          .filter(
+            (row) =>
+              getMainCategory(row) ===
+              selectedMain
+          )
+          .map(getCategory)
+          .filter(Boolean);
+
+      return Array.from(
+        new Set(values)
+      ).sort();
+    }, [
+      data,
+      selectedMain,
+    ]);
+
+  const subcategories =
+    useMemo(() => {
+      if (
+        !selectedMain ||
+        !selectedCategory
+      ) {
+        return [];
+      }
+
+      const values =
+        data
+          .filter(
+            (row) =>
+              getMainCategory(row) ===
+                selectedMain &&
+              getCategory(row) ===
+                selectedCategory
+          )
+          .map(getSubcategory)
+          .filter(Boolean);
+
+      return Array.from(
+        new Set(values)
+      ).sort();
+    }, [
+      data,
+      selectedMain,
+      selectedCategory,
+    ]);
+
+  const matchingSkills =
+    useMemo(() => {
+      if (
+        !selectedMain ||
+        !selectedCategory
+      ) {
+        return [];
+      }
+
+      return data.filter(
+        (row) => {
+          if (
+            getMainCategory(row) !==
+              selectedMain ||
+            getCategory(row) !==
+              selectedCategory
+          ) {
+            return false;
+          }
+
+          if (
+            subcategories.length > 0 &&
+            !subcategories.includes(
+              getSubcategory(row)
+            )
+          ) {
+            return false;
+          }
+
+          return Boolean(
+            getSkillName(row)
+          );
+        }
+      );
+    }, [
+      data,
+      selectedMain,
+      selectedCategory,
+      subcategories,
+    ]);
+
+  function getStoredSkillName(
+    row: any
+  ) {
+    return cleanValue(
+      row?.skill ??
+        row?.skill_name ??
+        row?.name ??
+        row?.title
+    );
+  }
+
+  function isSkillSelected(
+    skillName: string
+  ) {
+    return mySkills.some(
+      (row) =>
+        getStoredSkillName(row)
+          .toLowerCase() ===
+        skillName.toLowerCase()
+    );
+  }
+
+  function selectMainCategory(
+    value: string
+  ) {
+    setSelectedMain(value);
+    setSelectedCategory(null);
+  }
+
+  function selectCategory(
+    value: string
+  ) {
+    setSelectedCategory(value);
+}
+    async function saveCountry() {
+    if (!user) {
+      return;
+    }
+
+    setSavingPreferences(true);
+    setPreferencesMessage("");
+
+    try {
+      const {
+        error,
+      } = await supabase
+        .from("users")
+        .update({
+          country:
+            country.trim(),
+        })
+        .eq("id", user.id);
+
+      if (error) {
+        throw error;
+      }
+
+      setPreferencesMessage(
+        "Country saved successfully."
+      );
+    } catch (error: any) {
+      console.error(
+        "Save country error:",
+        error
+      );
+
+      setPreferencesMessage(
+        error?.message ||
+          "Could not save country."
+      );
+    } finally {
+      setSavingPreferences(false);
+    }
+  }
+
+  async function addSkill(
+    skillName: string
+  ) {
+    if (!user) {
+      setPreferencesMessage(
+        "Please sign in first."
+      );
+      return;
+    }
+
+    const cleanSkill =
+      skillName.trim();
+
+    if (!cleanSkill) {
+      return;
+    }
+
+    if (
+      isSkillSelected(cleanSkill)
+    ) {
+      setPreferencesMessage(
+        "This skill is already selected."
+      );
+      return;
+    }
+
+    if (
+      mySkills.length >= skillLimit
+    ) {
+      setPreferencesMessage(
+        `${planName} plan allows up to ${skillLimit} skills.`
+      );
+      return;
+    }
+
+    setSavingPreferences(true);
+    setPreferencesMessage("");
+
+    try {
+      const {
+        data: inserted,
+        error,
+      } = await supabase
+        .from("user_skills")
+        .insert({
+          user_id: user.id,
+          skill: cleanSkill,
+        })
+        .select()
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      setMySkills((current) => [
+        inserted,
+        ...current,
+      ]);
+
+      setTypedSkill("");
+
+      setPreferencesMessage(
+        "Skill added successfully."
+      );
+    } catch (error: any) {
+      console.error(
+        "Add skill error:",
+        error
+      );
+
+      setPreferencesMessage(
+        error?.message ||
+          "Could not add skill."
+      );
+    } finally {
+      setSavingPreferences(false);
+    }
+  }
+
+  async function removeSkill(
+    row: any
+  ) {
+    if (!user) {
+      return;
+    }
+
+    const rowId =
+      row?.id;
+
+    if (!rowId) {
+      setMySkills(
+        (current) =>
+          current.filter(
+            (item) =>
+              item !== row
+          )
+      );
+      return;
+    }
+
+    setSavingPreferences(true);
+    setPreferencesMessage("");
+
+    try {
+      const {
+        error,
+      } = await supabase
+        .from("user_skills")
+        .delete()
+        .eq("id", rowId)
+        .eq("user_id", user.id);
+
+      if (error) {
+        throw error;
+      }
+
+      setMySkills(
+        (current) =>
+          current.filter(
+            (item) =>
+              item.id !== rowId
+          )
+      );
+
+      setPreferencesMessage(
+        "Skill removed."
+      );
+    } catch (error: any) {
+      console.error(
+        "Remove skill error:",
+        error
+      );
+
+      setPreferencesMessage(
+        error?.message ||
+          "Could not remove skill."
+      );
+    } finally {
+      setSavingPreferences(false);
+    }
+  }
+
+  async function addTypedSkill() {
+    await addSkill(typedSkill);
+  }
+
+  function resetCategorySelection() {
+    setSelectedMain(null);
+    setSelectedCategory(null);
+        }
+    if (loading) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          background: "#000",
+          color: "#fff",
+          padding: 24,
+        }}
+      >
+        Loading Skills...
+      </div>
+    );
+  }
+
+  return (
+    <div
+      style={{
+        minHeight: "100vh",
+        background: "#000",
+        color: "#fff",
+        padding: 24,
+      }}
+    >
+      <div
+        style={{
+          maxWidth: 1000,
+          margin: "0 auto",
+        }}
+      >
+        <h1>My Skills</h1>
+
+        <p>
+          Plan: {planName} · Limit:{" "}
+          {skillLimit >= 999999
+            ? "Unlimited"
+            : skillLimit}
+        </p>
+
+        {skillsError && (
+          <div
+            style={{
+              background: "#fff",
+              color: "#000",
+              padding: 12,
+              borderRadius: 8,
+              marginBottom: 16,
+            }}
+          >
+            {skillsError}
+          </div>
+        )}
+
+        <section
+          style={{
+            marginTop: 24,
+            padding: 20,
+            border: "1px solid #333",
+            borderRadius: 12,
+          }}
+        >
+          <h2>My selected skills</h2>
+
+          {mySkills.length === 0 ? (
+            <p>
+              No skills selected yet.
+            </p>
+          ) : (
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 10,
+              }}
+            >
+              {mySkills.map(
+                (row, index) => {
+                  const name =
+                    getStoredSkillName(
+                      row
+                    );
+
+                  return (
+                    <div
+                      key={
+                        row?.id ??
+                        `${name}-${index}`
+                      }
+                      style={{
+                        display: "flex",
+                        alignItems:
+                          "center",
+                        gap: 8,
+                        background:
+                          "#fff",
+                        color: "#000",
+                        padding:
+                          "8px 12px",
+                        borderRadius: 8,
+                      }}
+                    >
+                      <span>
+                        {name}
+                      </span>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          removeSkill(
+                            row
+                          )
+                        }
+                        disabled={
+                          savingPreferences
+                        }
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  );
+                }
+              )}
+            </div>
+          )}
+        </section>
+
+        <section
+          style={{
+            marginTop: 24,
+            padding: 20,
+            border: "1px solid #333",
+            borderRadius: 12,
+          }}
+        >
+          <h2>
+            Choose your skill
+          </h2>
+
+          <p>
+            Select from your real
+            Supabase skills table.
+          </p>
+
+          <div
+            style={{
+              display: "grid",
+              gap: 12,
+            }}
+          >
+            <select
+              value={
+                selectedMain || ""
+              }
+              onChange={(event) =>
+                selectMainCategory(
+                  event.target.value
+                )
+              }
+              style={{
+                background: "#fff",
+                color: "#000",
+                padding: 12,
+                borderRadius: 8,
+              }}
+            >
+              <option value="">
+                Select Main Category
+              </option>
+
+              {mainCategories.map(
+                (value) => (
+                  <option
+                    key={value}
+                    value={value}
+                  >
+                    {value}
+                  </option>
+                )
+              )}
+            </select>
+
+            {selectedMain && (
+              <select
+                value={
+                  selectedCategory ||
+                  ""
+                }
+                onChange={(event) =>
+                  selectCategory(
+                    event.target.value
+                  )
+                }
+                style={{
+                  background: "#fff",
+                  color: "#000",
+                  padding: 12,
+                  borderRadius: 8,
+                }}
+              >
+                <option value="">
+                  Select Category
+                </option>
+
+                {categories.map(
+                  (value) => (
+                    <option
+                      key={value}
+                      value={value}
+                    >
+                      {value}
+                    </option>
+                  )
+                )}
+              </select>
+            )}
+          </div>
+
+          {selectedCategory && (
+            <div
+              style={{
+                marginTop: 20,
+              }}
+            >
+              <h3>
+                Available Skills
+              </h3>
+
+              {matchingSkills.length ===
+              0 ? (
+                <p>
+                  No skills found in
+                  this category.
+                </p>
+              ) : (
+                <div
+                  style={{
+                    display: "grid",
+                    gap: 10,
+                  }}
+                >
+                  {matchingSkills.map(
+                    (row, index) => {
+                      const name =
+                        getSkillName(
+                          row
+                        );
+
+                      const selected =
+                        isSkillSelected(
+                          name
+                        );
+
+                      return (
+                        <button
+                          key={
+                            row?.id ??
+                            `${name}-${index}`
+                          }
+                          type="button"
+                          onClick={() =>
+                            addSkill(
+                              name
+                            )
+                          }
+                          disabled={
+                            selected ||
+                            savingPreferences ||
+                            mySkills.length >=
+                              skillLimit
+                          }
+                          style={{
+                            background:
+                              "#fff",
+                            color: "#000",
+                            padding: 12,
+                            borderRadius: 8,
+                            textAlign:
+                              "left",
+                            cursor:
+                              selected
+                                ? "default"
+                                : "pointer",
+                          }}
+                        >
+                          {name}
+                          {selected
+                            ? " ✓"
+                            : ""}
+                        </button>
+                      );
+                    }
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div
+            style={{
+              marginTop: 24,
+            }}
+          >
+            <h3>
+              Add another skill
+            </h3>
+
+            <div
+              style={{
+                display: "flex",
+                gap: 10,
+                flexWrap: "wrap",
+              }}
+            >
+              <input
+                value={typedSkill}
+                onChange={(event) =>
+                  setTypedSkill(
+                    event.target.value
+                  )
+                }
+                placeholder="Enter skill"
+                style={{
+                  background: "#fff",
+                  color: "#000",
+                  padding: 12,
+                  borderRadius: 8,
+                  flex: 1,
+                  minWidth: 220,
+                }}
+              />
+
+              <button
+                type="button"
+                onClick={
+                  addTypedSkill
+                }
+                disabled={
+                  savingPreferences ||
+                  !typedSkill.trim() ||
+                  mySkills.length >=
+                    skillLimit
+                }
+                style={{
+                  background: "#fff",
+                  color: "#000",
+                  padding:
+                    "12px 18px",
+                  borderRadius: 8,
+                }}
+              >
+                Add Skill
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <section
+          style={{
+            marginTop: 24,
+            padding: 20,
+            border: "1px solid #333",
+            borderRadius: 12,
+          }}
+        >
+          <h2>Country</h2>
+
+          <select
+            value={country}
+            onChange={(event) =>
+              setCountry(
+                event.target.value
+              )
+            }
+            style={{
+              background: "#fff",
+              color: "#000",
+              padding: 12,
+              borderRadius: 8,
+              width: "100%",
+            }}
+          >
+            <option value="">
+              Select Country
+            </option>
+
+            {COUNTRIES.map(
+              (item) => (
+                <option
+                  key={item}
+                  value={item}
+                >
+                  {item}
+                </option>
+              )
+            )}
+          </select>
+
+          <button
+            type="button"
+            onClick={saveCountry}
+            disabled={
+              savingPreferences
+            }
+            style={{
+              marginTop: 12,
+              background: "#fff",
+              color: "#000",
+              padding:
+                "12px 18px",
+              borderRadius: 8,
+            }}
+          >
+            Save Country
+          </button>
+        </section>
+
+        {preferencesMessage && (
+          <p
+            style={{
+              marginTop: 16,
+            }}
+          >
+            {preferencesMessage}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+        }
