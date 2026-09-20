@@ -963,7 +963,8 @@ export default function Skills() {
               </button>
             </div>
           </div>
-        </section>
-          );
-        }
-  
+                </section>
+      </div>
+    </div>
+  );
+}
