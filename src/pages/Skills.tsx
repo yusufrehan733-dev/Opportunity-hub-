@@ -273,7 +273,8 @@ export default function Skills() {
       setSkillLimit(2);
     }
   }
-    const categories = useMemo(() => {
+
+  const categories = useMemo(() => {
     const values = data
       .map((row) =>
         getCategory(row)
@@ -365,9 +366,8 @@ export default function Skills() {
     await addSkill(
       skillName.trim()
     );
-  }
-
-  async function saveCountry() {
+      }
+    async function saveCountry() {
     if (!user) {
       setPreferencesMessage(
         "Please sign in first."
@@ -410,7 +410,8 @@ export default function Skills() {
       setSavingPreferences(false);
     }
   }
-    async function addSkill(
+
+  async function addSkill(
     skillName: string
   ) {
     if (!user) {
@@ -558,13 +559,16 @@ export default function Skills() {
     );
 
     setTypedSkill("");
-          }
-    if (loading) {
+  }
+
+  if (loading) {
     return (
       <div
         style={{
+          minHeight: "100vh",
+          background: "#000",
+          color: "#fff",
           padding: 24,
-          color: "#111",
         }}
       >
         Loading Skills...
@@ -576,8 +580,8 @@ export default function Skills() {
     <div
       style={{
         minHeight: "100vh",
-        background: "#f5f5f5",
-        color: "#111",
+        background: "#000",
+        color: "#fff",
         padding: 20,
       }}
     >
@@ -591,7 +595,11 @@ export default function Skills() {
           My Skills
         </h1>
 
-        <p>
+        <p
+          style={{
+            color: "#aaa",
+          }}
+        >
           Plan: {planName} · Limit:{" "}
           {skillLimit >= 999999
             ? "Unlimited"
@@ -601,8 +609,9 @@ export default function Skills() {
         {skillsError && (
           <div
             style={{
-              background: "#fee",
-              border: "1px solid #d88",
+              background: "#000",
+              color: "#fff",
+              border: "1px solid #888",
               padding: 12,
               borderRadius: 8,
               marginBottom: 16,
@@ -615,7 +624,9 @@ export default function Skills() {
         {preferencesMessage && (
           <div
             style={{
-              background: "#eee",
+              background: "#000",
+              color: "#ccc",
+              border: "1px solid #666",
               padding: 12,
               borderRadius: 8,
               marginBottom: 16,
@@ -624,11 +635,11 @@ export default function Skills() {
             {preferencesMessage}
           </div>
         )}
-
-        <section
+                <section
           style={{
-            background: "#fff",
-            border: "1px solid #ddd",
+            background: "#000",
+            color: "#fff",
+            border: "1px solid #777",
             borderRadius: 10,
             padding: 20,
             marginBottom: 20,
@@ -664,10 +675,10 @@ export default function Skills() {
                 width: "100%",
                 padding: "12px",
                 border:
-                  "1px solid #aaa",
+                  "1px solid #888",
                 borderRadius: 8,
-                background: "#fff",
-                color: "#111",
+                background: "#000",
+                color: "#fff",
                 fontSize: 16,
               }}
             >
@@ -696,12 +707,13 @@ export default function Skills() {
               }
               style={{
                 marginTop: 10,
-                background: "#111",
-                color: "#fff",
-                border: "none",
+                background: "#fff",
+                color: "#000",
+                border: "1px solid #fff",
                 padding:
                   "10px 16px",
                 borderRadius: 8,
+                fontWeight: 600,
               }}
             >
               {savingPreferences
@@ -724,21 +736,27 @@ export default function Skills() {
             >
               Category
             </label>
+
             <select
-              value={selectedCategory}
+              value={
+                selectedCategory
+              }
               onChange={(e) => {
                 setSelectedCategory(
                   e.target.value
                 );
-                setSelectedSubcategory("");
+                setSelectedSubcategory(
+                  ""
+                );
               }}
               style={{
                 width: "100%",
                 padding: "12px",
-                border: "1px solid #aaa",
+                border:
+                  "1px solid #888",
                 borderRadius: 8,
-                background: "#fff",
-                color: "#111",
+                background: "#000",
+                color: "#fff",
                 fontSize: 16,
               }}
             >
@@ -757,6 +775,317 @@ export default function Skills() {
                 )
               )}
             </select>
+          </div>
+
+          <div
+            style={{
+              marginBottom: 18,
+            }}
+          >
+            <label
+              style={{
+                display: "block",
+                fontWeight: 600,
+                marginBottom: 8,
+              }}
+            >
+              Subcategory
+            </label>
+
+            <select
+              value={
+                selectedSubcategory
+              }
+              onChange={(e) =>
+                selectSubcategory(
+                  e.target.value
+                )
+              }
+              disabled={
+                !selectedCategory
+              }
+              style={{
+                width: "100%",
+                padding: "12px",
+                border:
+                  "1px solid #888",
+                borderRadius: 8,
+                background: "#000",
+                color: "#fff",
+                fontSize: 16,
+              }}
+            >
+              <option value="">
+                Select subcategory
+              </option>
+
+              {subcategories.map(
+                (subcategory) => (
+                  <option
+                    key={subcategory}
+                    value={subcategory}
+                  >
+                    {subcategory}
+                  </option>
+                )
+              )}
+            </select>
+          </div>
+
+          {selectedSubcategory && (
+            <div
+              style={{
+                marginBottom: 18,
+              }}
+            >
+              <label
+                style={{
+                  display: "block",
+                  fontWeight: 600,
+                  marginBottom: 8,
+                }}
+              >
+                Available Skills
+              </label>
+
+              {matchingSkills.length ===
+              0 ? (
+                <p
+                  style={{
+                    color: "#999",
+                  }}
+                >
+                  No skills found for this
+                  subcategory.
+                </p>
+              ) : (
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: 10,
+                  }}
+                >
+                  {matchingSkills.map(
+                    (row) => {
+                      const skillName =
+                        getSkillName(
+                          row
+                        );
+
+                      const selected =
+                        isSkillSelected(
+                          skillName
+                        );
+
+                      return (
+                        <button
+                          key={
+                            String(
+                              row.id ??
+                                skillName
+                            )
+                          }
+                          type="button"
+                          onClick={() =>
+                            addSelectedSkill(
+                              skillName
+                            )
+                          }
+                          disabled={
+                            selected ||
+                            savingPreferences ||
+                            mySkills.length >=
+                              skillLimit
+                          }
+                          style={{
+                            background:
+                              selected
+                                ? "#333"
+                                : "#fff",
+                            color:
+                              selected
+                                ? "#aaa"
+                                : "#000",
+                            border:
+                              "1px solid #fff",
+                            padding:
+                              "10px 14px",
+                            borderRadius: 8,
+                            cursor:
+                              selected
+                                ? "default"
+                                : "pointer",
+                          }}
+                        >
+                          {selected
+                            ? `${skillName} ✓`
+                            : skillName}
+                        </button>
+                      );
+                    }
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div
+            style={{
+              marginBottom: 18,
+            }}
+          >
+            <label
+              style={{
+                display: "block",
+                fontWeight: 600,
+                marginBottom: 8,
+              }}
+            >
+              Typed Skill
+            </label>
+
+            <div
+              style={{
+                display: "flex",
+                gap: 10,
+                flexWrap: "wrap",
+              }}
+            >
+              <input
+                value={typedSkill}
+                onChange={(e) =>
+                  setTypedSkill(
+                    e.target.value
+                  )
+                }
+                placeholder="Enter a skill"
+                style={{
+                  flex: 1,
+                  minWidth: 220,
+                  padding: "12px",
+                  border:
+                    "1px solid #888",
+                  borderRadius: 8,
+                  background: "#000",
+                  color: "#fff",
+                  fontSize: 16,
+                }}
+              />
+
+              <button
+                type="button"
+                onClick={
+                  addTypedSkill
+                }
+                disabled={
+                  savingPreferences ||
+                  !typedSkill.trim() ||
+                  mySkills.length >=
+                    skillLimit
+                }
+                style={{
+                  background: "#fff",
+                  color: "#000",
+                  border:
+                    "1px solid #fff",
+                  padding:
+                    "12px 18px",
+                  borderRadius: 8,
+                  fontWeight: 600,
+                }}
+              >
+                Add Skill
+              </button>
+            </div>
+          </div>
+                            <div>
+            <h3>
+              My Skills
+            </h3>
+
+            {mySkills.length === 0 ? (
+              <p
+                style={{
+                  color: "#999",
+                }}
+              >
+                No skills added yet.
+              </p>
+            ) : (
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: 10,
+                }}
+              >
+                {mySkills.map(
+                  (skillRow, index) => {
+                    const skillName =
+                      getStoredSkillName(
+                        skillRow
+                      );
+
+                    return (
+                      <div
+                        key={
+                          String(
+                            skillRow?.id ??
+                              `${skillName}-${index}`
+                          )
+                        }
+                        style={{
+                          display: "flex",
+                          alignItems:
+                            "center",
+                          gap: 8,
+                          background: "#000",
+                          border:
+                            "1px solid #888",
+                          borderRadius: 8,
+                          padding:
+                            "8px 10px",
+                        }}
+                      >
+                        <span
+                          style={{
+                            color: "#fff",
+                          }}
+                        >
+                          {skillName}
+                        </span>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            removeSkill(
+                              skillRow
+                            )
+                          }
+                          disabled={
+                            savingPreferences
+                          }
+                          style={{
+                            background:
+                              "#fff",
+                            color: "#000",
+                            border:
+                              "1px solid #fff",
+                            borderRadius: 6,
+                            padding:
+                              "5px 9px",
+                            fontWeight: 600,
+                          }}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    );
+                  }
+                )}
+              </div>
+            )}
           </div>
         </section>
       </div>
