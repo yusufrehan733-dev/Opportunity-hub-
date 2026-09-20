@@ -488,7 +488,6 @@ export default async function handler(
       "Leads API error:",
       error
     );
-
     return res.status(500).json({
       success: false,
       leads: [],
@@ -498,4 +497,5 @@ export default async function handler(
         "Unable to load leads",
     });
   }
-    }
+}
+    
