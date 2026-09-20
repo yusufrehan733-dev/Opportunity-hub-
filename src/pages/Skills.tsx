@@ -764,4 +764,8 @@ export default function Skills() {
               )}
             </select>
           </div>
-          
+       </section>
+      </div>
+    </div>
+  );
+   }
