@@ -459,8 +459,8 @@ export default function Skills() {
       style={{
         minHeight: "100vh",
         padding: 24,
-        background: "#f5f5f5",
-        color: "#111",
+        background: "#000",
+        color: "#fff",
         boxSizing: "border-box",
       }}
     >
