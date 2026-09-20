@@ -201,8 +201,14 @@ function findCountry(text: string): string {
 
   for (const country of COUNTRIES) {
     if (value.includes(lower(country))) {
-      if (country === "USA") return "United States";
-      if (country === "UK") return "United Kingdom";
+      if (country === "USA") {
+        return "United States";
+      }
+
+      if (country === "UK") {
+        return "United Kingdom";
+      }
+
       if (country === "UAE") {
         return "United Arab Emirates";
       }
@@ -221,7 +227,9 @@ function findSkill(
   const value = lower(text);
 
   for (const skill of skills) {
-    const name = clean(skill.name || skill.skill);
+    const name = clean(
+      skill.name || skill.skill
+    );
 
     if (!name) continue;
 
@@ -313,7 +321,8 @@ function extractPersonName(
   const combined =
     `${title} ${snippet}`.trim();
 
-  const email = extractEmail(combined);
+  const email =
+    extractEmail(combined);
 
   if (email) {
     const beforeEmail =
@@ -350,7 +359,10 @@ function extractPersonName(
 
   if (
     separators.length > 1 &&
-    separators[0].trim().split(/\s+/).length >= 2
+    separators[0]
+      .trim()
+      .split(/\s+/)
+      .length >= 2
   ) {
     return separators[0].trim();
   }
@@ -369,7 +381,10 @@ function isDemand(
     return false;
   }
 
-  return hasAny(text, DEMAND_SIGNALS);
+  return hasAny(
+    text,
+    DEMAND_SIGNALS
+  );
 }
 
 function isSupply(
@@ -391,13 +406,21 @@ function isSupply(
     return false;
   }
 
-  return hasAny(text, SUPPLY_SIGNALS);
+  return hasAny(
+    text,
+    SUPPLY_SIGNALS
+  );
 }
 
 function isSaasProfessional(
   text: string
 ): boolean {
-  if (hasAny(text, BLOCKED_DOMAINS)) {
+  if (
+    hasAny(
+      text,
+      BLOCKED_DOMAINS
+    )
+  ) {
     return false;
   }
 
@@ -423,7 +446,10 @@ function isSaasProfessional(
 }
 
 function calculateScore(
-  type: "Demand" | "Supply" | "SaaS",
+  type:
+    | "Demand"
+    | "Supply"
+    | "SaaS",
   title: string,
   snippet: string,
   link: string,
@@ -436,13 +462,23 @@ function calculateScore(
   let score = 0;
 
   if (type === "Demand") {
-    if (hasAny(text, DEMAND_SIGNALS)) {
+    if (
+      hasAny(
+        text,
+        DEMAND_SIGNALS
+      )
+    ) {
       score += 30;
     }
   }
 
   if (type === "Supply") {
-    if (hasAny(text, SUPPLY_SIGNALS)) {
+    if (
+      hasAny(
+        text,
+        SUPPLY_SIGNALS
+      )
+    ) {
       score += 30;
     }
   }
@@ -487,7 +523,9 @@ function calculateScore(
   return Math.min(score, 100);
 }
 
-async function loadSkills(): Promise<SkillRow[]> {
+async function loadSkills(): Promise<
+  SkillRow[]
+> {
   const { data, error } =
     await supabase
       .from("skills")
@@ -595,18 +633,29 @@ async function processDemand(
   result: SearchResult,
   skill: SkillRow
 ): Promise<boolean> {
-  const title = clean(result.title);
-  const link = clean(result.link);
-  const snippet = clean(result.snippet);
+  const title =
+    clean(result.title);
 
-  if (!title || !link) return false;
+  const link =
+    clean(result.link);
+
+  const snippet =
+    clean(result.snippet);
+
+  if (!title || !link) {
+    return false;
+  }
 
   const text =
     `${title} ${snippet}`;
 
-  if (isBlocked(link)) return false;
+  if (isBlocked(link)) {
+    return false;
+  }
 
-  if (!isDemand(text)) return false;
+  if (!isDemand(text)) {
+    return false;
+  }
 
   const date =
     parseDate(result.date);
@@ -647,56 +696,67 @@ async function processDemand(
     return false;
   }
 
-  const inserted =
-    await insertLead(
-      "demand_leads",
-      {
-        type: "Demand",
-        source: link,
-        client_name: title,
-        skill_needed:
-          clean(skill.name || skill.skill),
-        description: snippet,
-        contact_email: email,
-        contact_phone: phone,
-        status: "active",
-        title,
-        category:
-          clean(skill.category) ||
-          "Real Opportunity",
-        subcategory:
-          clean(skill.subcategory) ||
-          "Google",
-        country:
-          findCountry(text),
-        city: null,
-        budget: null,
-        currency: null,
-        contact_name: null,
-        created_at:
-          date.toISOString(),
-      }
-    );
-
-  return inserted;
+  return insertLead(
+    "demand_leads",
+    {
+      type: "Demand",
+      source: link,
+      client_name: title,
+      skill_needed:
+        clean(
+          skill.name ||
+            skill.skill
+        ),
+      description: snippet,
+      contact_email: email,
+      contact_phone: phone,
+      status: "active",
+      title,
+      category:
+        clean(skill.category) ||
+        "Real Opportunity",
+      subcategory:
+        clean(skill.subcategory) ||
+        "Google",
+      country:
+        findCountry(text),
+      city: null,
+      budget: null,
+      currency: null,
+      contact_name: null,
+      created_at:
+        date.toISOString(),
+    }
+  );
 }
 
 async function processSupply(
   result: SearchResult,
   skill: SkillRow
 ): Promise<boolean> {
-  const title = clean(result.title);
-  const link = clean(result.link);
-  const snippet = clean(result.snippet);
+  const title =
+    clean(result.title);
 
-  if (!title || !link) return false;
+  const link =
+    clean(result.link);
+
+  const snippet =
+    clean(result.snippet);
+
+  if (!title || !link) {
+    return false;
+  }
 
   const text =
     `${title} ${snippet}`;
 
-  if (isBlocked(link)) return false;
+  if (isBlocked(link)) {
+    return false;
+  }
 
-  if (!isSupply(text)) return false;
+  if (!isSupply(text)) {
+    return false;
+  }
 
   const date =
     parseDate(result.date);
@@ -744,7 +804,10 @@ async function processSupply(
       source: link,
       client_name: title,
       skill_needed:
-        clean(skill.name || skill.skill),
+        clean(
+          skill.name ||
+            skill.skill
+        ),
       description: snippet,
       contact_email: email,
       contact_phone: phone,
@@ -772,16 +835,25 @@ async function processSaas(
   result: SearchResult,
   skill: SkillRow
 ): Promise<boolean> {
-  const title = clean(result.title);
-  const link = clean(result.link);
-  const snippet = clean(result.snippet);
+  const title =
+    clean(result.title);
 
-  if (!title || !link) return false;
+  const link =
+    clean(result.link);
+
+  const snippet =
+    clean(result.snippet);
+
+  if (!title || !link) {
+    return false;
+  }
 
   const text =
     `${title} ${snippet}`;
 
-  if (isBlocked(link)) return false;
+  if (isBlocked(link)) {
+    return false;
+  }
 
   if (!isSaasProfessional(text)) {
     return false;
@@ -807,7 +879,7 @@ async function processSaas(
     );
 
   /*
-   * SaaS is allowed to use a public
+   * SaaS can use a public
    * professional profile/source URL
    * as contact evidence.
    */
@@ -849,7 +921,10 @@ async function processSaas(
       client_name:
         personName || title,
       skill_needed:
-        clean(skill.name || skill.skill),
+        clean(
+          skill.name ||
+            skill.skill
+        ),
       description: snippet,
       contact_email: email,
       contact_phone: phone,
@@ -878,7 +953,10 @@ function buildDemandQueries(
   skill: SkillRow
 ): string[] {
   const name =
-    clean(skill.name || skill.skill);
+    clean(
+      skill.name ||
+        skill.skill
+    );
 
   return [
     `"looking for" "${name}"`,
@@ -891,7 +969,10 @@ function buildSupplyQueries(
   skill: SkillRow
 ): string[] {
   const name =
-    clean(skill.name || skill.skill);
+    clean(
+      skill.name ||
+        skill.skill
+    );
 
   return [
     `"hiring" "${name}"`,
@@ -904,19 +985,50 @@ function buildSaasQueries(
   skill: SkillRow
 ): string[] {
   const name =
-    clean(skill.name || skill.skill);
+    clean(
+      skill.name ||
+        skill.skill
+    );
 
-  return [
-    `"${name}" coach profile`,
-    `"${name}" teacher profile`,
+  const category =
+    clean(skill.category);
+
+  const subcategory =
+    clean(skill.subcategory);
+
+  const queries = [
     `"${name}" professional`,
+    `"${name}" profile`,
     `"${name}" LinkedIn`,
     `"${name}" Instagram`,
+    `"${name}" portfolio`,
+    `"${name}" consultant`,
+  ];
+
+  if (category) {
+    queries.push(
+      `"${name}" "${category}" professional`
+    );
+  }
+
+  if (subcategory) {
+    queries.push(
+      `"${name}" "${subcategory}" professional`
+    );
+  }
+
+  return [
+    ...new Set(
+      queries.filter(Boolean)
+    ),
   ];
 }
 
 async function runType(
-  type: "Demand" | "Supply" | "SaaS",
+  type:
+    | "Demand"
+    | "Supply"
+    | "SaaS",
   skills: SkillRow[]
 ): Promise<number> {
   let inserted = 0;
@@ -1120,4 +1232,4 @@ export default async function handler(
       }
     );
   }
-}
+    }
