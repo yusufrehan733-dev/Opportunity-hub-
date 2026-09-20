@@ -762,10 +762,8 @@ export default function Skills() {
                   </option>
                 )
               )}
-            </select>
-          </div>
-       </section>
+                     </section>
       </div>
     </div>
   );
-   }
+  }
