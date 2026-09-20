@@ -272,9 +272,8 @@ export default function Skills() {
       setPlanName("Basic");
       setSkillLimit(2);
     }
-  }
-
-  const categories = useMemo(() => {
+    }
+    const categories = useMemo(() => {
     const values = data
       .map((row) =>
         getCategory(row)
@@ -366,8 +365,9 @@ export default function Skills() {
     await addSkill(
       skillName.trim()
     );
-      }
-    async function saveCountry() {
+  }
+
+  async function saveCountry() {
     if (!user) {
       setPreferencesMessage(
         "Please sign in first."
@@ -560,8 +560,7 @@ export default function Skills() {
 
     setTypedSkill("");
   }
-
-  if (loading) {
+    if (loading) {
     return (
       <div
         style={{
@@ -635,7 +634,8 @@ export default function Skills() {
             {preferencesMessage}
           </div>
         )}
-                <section
+
+        <section
           style={{
             background: "#000",
             color: "#fff",
@@ -709,7 +709,8 @@ export default function Skills() {
                 marginTop: 10,
                 background: "#fff",
                 color: "#000",
-                border: "1px solid #fff",
+                border:
+                  "1px solid #fff",
                 padding:
                   "10px 16px",
                 borderRadius: 8,
@@ -831,8 +832,7 @@ export default function Skills() {
               )}
             </select>
           </div>
-
-          {selectedSubcategory && (
+                    {selectedSubcategory && (
             <div
               style={{
                 marginBottom: 18,
@@ -862,7 +862,7 @@ export default function Skills() {
                 <div
                   style={{
                     display: "flex",
-                    flexWrap: "wrap",
+                    flexDirection: "column",
                     gap: 10,
                   }}
                 >
@@ -879,49 +879,69 @@ export default function Skills() {
                         );
 
                       return (
-                        <button
+                        <div
                           key={
                             String(
                               row.id ??
                                 skillName
                             )
                           }
-                          type="button"
-                          onClick={() =>
-                            addSelectedSkill(
-                              skillName
-                            )
-                          }
-                          disabled={
-                            selected ||
-                            savingPreferences ||
-                            mySkills.length >=
-                              skillLimit
-                          }
                           style={{
-                            background:
-                              selected
-                                ? "#333"
-                                : "#fff",
-                            color:
-                              selected
-                                ? "#aaa"
-                                : "#000",
+                            display: "flex",
+                            alignItems:
+                              "center",
+                            justifyContent:
+                              "space-between",
+                            gap: 10,
+                            flexWrap:
+                              "wrap",
                             border:
-                              "1px solid #fff",
-                            padding:
-                              "10px 14px",
+                              "1px solid #777",
                             borderRadius: 8,
-                            cursor:
-                              selected
-                                ? "default"
-                                : "pointer",
+                            padding: 12,
                           }}
                         >
-                          {selected
-                            ? `${skillName} ✓`
-                            : skillName}
-                        </button>
+                          <span
+                            style={{
+                              color: "#fff",
+                              fontWeight: 600,
+                            }}
+                          >
+                            {skillName}
+                          </span>
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              addSelectedSkill(
+                                skillName
+                              )
+                            }
+                            disabled={
+                              selected ||
+                              savingPreferences ||
+                              mySkills.length >=
+                                skillLimit
+                            }
+                            style={{
+                              background:
+                                "#fff",
+                              color:
+                                "#000",
+                              border:
+                                "1px solid #fff",
+                              padding:
+                                "10px 14px",
+                              borderRadius: 8,
+                              fontWeight:
+                                600,
+                            }}
+                          >
+                            {selected
+                              ? "Added ✓"
+                              : "Add Skill"}
+                          </button>
+                        </div>
                       );
                     }
                   )}
@@ -999,7 +1019,8 @@ export default function Skills() {
               </button>
             </div>
           </div>
-                            <div>
+
+          <div>
             <h3>
               My Skills
             </h3>
@@ -1040,7 +1061,8 @@ export default function Skills() {
                           alignItems:
                             "center",
                           gap: 8,
-                          background: "#000",
+                          background:
+                            "#000",
                           border:
                             "1px solid #888",
                           borderRadius: 8,
@@ -1069,13 +1091,15 @@ export default function Skills() {
                           style={{
                             background:
                               "#fff",
-                            color: "#000",
+                            color:
+                              "#000",
                             border:
                               "1px solid #fff",
                             borderRadius: 6,
                             padding:
                               "5px 9px",
-                            fontWeight: 600,
+                            fontWeight:
+                              600,
                           }}
                         >
                           Remove
@@ -1091,4 +1115,4 @@ export default function Skills() {
       </div>
     </div>
   );
-}
+  }
