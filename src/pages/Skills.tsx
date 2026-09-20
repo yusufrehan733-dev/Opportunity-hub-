@@ -23,13 +23,11 @@ const COUNTRIES = [
 
 type SkillRow = {
   id?: string | number;
-  main_category?: string | null;
-  main?: string | null;
+  name?: string | null;
   category?: string | null;
   subcategory?: string | null;
-  skill?: string | null;
-  name?: string | null;
-  title?: string | null;
+  tags?: string | null;
+  created_at?: string | null;
   [key: string]: any;
 };
 
@@ -38,51 +36,27 @@ function cleanValue(value: any) {
 }
 
 function getMainCategory(row: SkillRow) {
-  return cleanValue(
-    row.main_category ??
-      row.main ??
-      row.category
-  );
+  return cleanValue(row.category);
 }
 
 function getCategory(row: SkillRow) {
-  return cleanValue(
-    row.category ??
-      row.subcategory ??
-      row.skill ??
-      row.name ??
-      row.title
-  );
+  return cleanValue(row.subcategory);
 }
 
 function getSubcategory(row: SkillRow) {
-  return cleanValue(
-    row.subcategory ??
-      row.skill ??
-      row.name ??
-      row.title
-  );
+  return cleanValue(row.subcategory);
 }
 
 function getSkillName(row: SkillRow) {
-  return cleanValue(
-    row.skill ??
-      row.name ??
-      row.title ??
-      row.subcategory ??
-      row.category
-  );
+  return cleanValue(row.name);
 }
 
 export default function Skills() {
-  const [data, setData] =
-    useState<SkillRow[]>([]);
+  const [data, setData] = useState<SkillRow[]>([]);
 
-  const [user, setUser] =
-    useState<any>(null);
+  const [user, setUser] = useState<any>(null);
 
-  const [mySkills, setMySkills] =
-    useState<any[]>([]);
+  const [mySkills, setMySkills] = useState<any[]>([]);
 
   const [selectedMain, setSelectedMain] =
     useState<string | null>(null);
@@ -90,23 +64,20 @@ export default function Skills() {
   const [selectedCategory, setSelectedCategory] =
     useState<string | null>(null);
 
-  const [country, setCountry] =
-    useState("");
+  const [selectedSubcategory, setSelectedSubcategory] =
+    useState<string | null>(null);
 
-  const [typedSkill, setTypedSkill] =
-    useState("");
+  const [country, setCountry] = useState("");
 
-  const [planName, setPlanName] =
-    useState("Basic");
+  const [typedSkill, setTypedSkill] = useState("");
 
-  const [skillLimit, setSkillLimit] =
-    useState(2);
+  const [planName, setPlanName] = useState("Basic");
 
-  const [loading, setLoading] =
-    useState(true);
+  const [skillLimit, setSkillLimit] = useState(2);
 
-  const [skillsError, setSkillsError] =
-    useState("");
+  const [loading, setLoading] = useState(true);
+
+  const [skillsError, setSkillsError] = useState("");
 
   const [savingPreferences, setSavingPreferences] =
     useState(false);
@@ -129,18 +100,13 @@ export default function Skills() {
       const {
         data: authData,
         error: authError,
-      } =
-        await supabase.auth.getUser();
+      } = await supabase.auth.getUser();
 
-      if (
-        authError ||
-        !authData.user
-      ) {
+      if (authError || !authData.user) {
         return;
       }
 
-      const currentUser =
-        authData.user;
+      const currentUser = authData.user;
 
       setUser(currentUser);
 
@@ -182,9 +148,7 @@ export default function Skills() {
       return;
     }
 
-    setData(
-      (rows || []) as SkillRow[]
-    );
+    setData((rows || []) as SkillRow[]);
   }
 
   async function loadUserSkills(
@@ -234,20 +198,18 @@ export default function Skills() {
       return;
     }
 
-    setCountry(
-      row?.country || ""
-    );
+    setCountry(row?.country || "");
 
-    if (
-      row?.skill_preference &&
-      mySkills.length === 0
-    ) {
+    if (row?.skill_preference) {
       const legacySkill =
         String(
           row.skill_preference
         ).trim();
 
-      if (legacySkill) {
+      if (
+        legacySkill &&
+        mySkills.length === 0
+      ) {
         setMySkills([
           {
             skill: legacySkill,
@@ -255,7 +217,7 @@ export default function Skills() {
         ]);
       }
     }
-                }
+         }
     async function loadUserPlan(
     userId: string
   ) {
@@ -264,7 +226,9 @@ export default function Skills() {
       error,
     } = await supabase
       .from("users")
-      .select("plan, plan_name, subscription_status")
+      .select(
+        "plan, plan_name, subscription_status"
+      )
       .eq("id", userId)
       .maybeSingle();
 
@@ -286,7 +250,9 @@ export default function Skills() {
         .trim()
         .toLowerCase();
 
-    if (normalizedPlan === "gold") {
+    if (
+      normalizedPlan === "gold"
+    ) {
       setPlanName("Gold");
       setSkillLimit(999999);
     } else if (
@@ -302,10 +268,11 @@ export default function Skills() {
 
   const mainCategories =
     useMemo(() => {
-      const values =
-        data
-          .map(getMainCategory)
-          .filter(Boolean);
+      const values = data
+        .map((row) =>
+          getMainCategory(row)
+        )
+        .filter(Boolean);
 
       return Array.from(
         new Set(values)
@@ -318,15 +285,16 @@ export default function Skills() {
         return [];
       }
 
-      const values =
-        data
-          .filter(
-            (row) =>
-              getMainCategory(row) ===
-              selectedMain
-          )
-          .map(getCategory)
-          .filter(Boolean);
+      const values = data
+        .filter(
+          (row) =>
+            getMainCategory(row) ===
+            selectedMain
+        )
+        .map((row) =>
+          getCategory(row)
+        )
+        .filter(Boolean);
 
       return Array.from(
         new Set(values)
@@ -345,17 +313,20 @@ export default function Skills() {
         return [];
       }
 
-      const values =
-        data
-          .filter(
-            (row) =>
-              getMainCategory(row) ===
-                selectedMain &&
-              getCategory(row) ===
-                selectedCategory
+      const values = data
+        .filter(
+          (row) =>
+            getMainCategory(row) ===
+              selectedMain &&
+            getCategory(row) ===
+              selectedCategory
+        )
+        .map((row) =>
+          cleanValue(
+            row.subcategory
           )
-          .map(getSubcategory)
-          .filter(Boolean);
+        )
+        .filter(Boolean);
 
       return Array.from(
         new Set(values)
@@ -370,41 +341,31 @@ export default function Skills() {
     useMemo(() => {
       if (
         !selectedMain ||
-        !selectedCategory
+        !selectedCategory ||
+        !selectedSubcategory
       ) {
         return [];
       }
 
       return data.filter(
-        (row) => {
-          if (
-            getMainCategory(row) !==
-              selectedMain ||
-            getCategory(row) !==
-              selectedCategory
-          ) {
-            return false;
-          }
-
-          if (
-            subcategories.length > 0 &&
-            !subcategories.includes(
-              getSubcategory(row)
-            )
-          ) {
-            return false;
-          }
-
-          return Boolean(
+        (row) =>
+          getMainCategory(row) ===
+            selectedMain &&
+          getCategory(row) ===
+            selectedCategory &&
+          cleanValue(
+            row.subcategory
+          ) ===
+            selectedSubcategory &&
+          Boolean(
             getSkillName(row)
-          );
-        }
+          )
       );
     }, [
       data,
       selectedMain,
       selectedCategory,
-      subcategories,
+      selectedSubcategory,
     ]);
 
   function getStoredSkillName(
@@ -434,13 +395,21 @@ export default function Skills() {
   ) {
     setSelectedMain(value);
     setSelectedCategory(null);
+    setSelectedSubcategory(null);
   }
 
   function selectCategory(
     value: string
   ) {
     setSelectedCategory(value);
-}
+    setSelectedSubcategory(null);
+  }
+
+  function selectSubcategory(
+    value: string
+  ) {
+    setSelectedSubcategory(value);
+      }
     async function saveCountry() {
     if (!user) {
       return;
@@ -627,12 +596,7 @@ export default function Skills() {
 
   async function addTypedSkill() {
     await addSkill(typedSkill);
-  }
-
-  function resetCategorySelection() {
-    setSelectedMain(null);
-    setSelectedCategory(null);
-        }
+}
     if (loading) {
     return (
       <div
@@ -848,9 +812,46 @@ export default function Skills() {
                 )}
               </select>
             )}
+
+            {selectedCategory &&
+              subcategories.length >
+                0 && (
+                <select
+                  value={
+                    selectedSubcategory ||
+                    ""
+                  }
+                  onChange={(event) =>
+                    selectSubcategory(
+                      event.target.value
+                    )
+                  }
+                  style={{
+                    background: "#fff",
+                    color: "#000",
+                    padding: 12,
+                    borderRadius: 8,
+                  }}
+                >
+                  <option value="">
+                    Select Subcategory
+                  </option>
+
+                  {subcategories.map(
+                    (value) => (
+                      <option
+                        key={value}
+                        value={value}
+                      >
+                        {value}
+                      </option>
+                    )
+                  )}
+                </select>
+              )}
           </div>
 
-          {selectedCategory && (
+          {selectedSubcategory && (
             <div
               style={{
                 marginTop: 20,
@@ -864,7 +865,7 @@ export default function Skills() {
               0 ? (
                 <p>
                   No skills found in
-                  this category.
+                  this subcategory.
                 </p>
               ) : (
                 <div
@@ -1060,5 +1061,6 @@ export default function Skills() {
         )}
       </div>
     </div>
-  );
-        }
+  );   
+
+  
