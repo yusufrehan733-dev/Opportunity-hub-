@@ -483,19 +483,18 @@ export default async function handler(
         saas: saasLeads.length,
       },
     });
-  } catch (error: any) {
-    console.error(
-      "Leads API error:",
-      error
-    );
-    return res.status(500).json({
-      success: false,
-      leads: [],
-      count: 0,
-      error:
-        error?.message ||
-        "Unable to load leads",
-    });
+} catch (error: any) {
+  const message =
+    error?.message ||
+    String(error) ||
+    "Unable to load leads";
+
+  console.error("LEADS_API_REAL_ERROR:", message);
+
+  return res.status(500).json({
+    success: false,
+    leads: [],
+    count: 0,
+    error: message,
+  });
   }
-}
-    
