@@ -227,7 +227,8 @@ export default function Skills() {
       });
     }
   }
-    async function loadUserPlan(
+
+  async function loadUserPlan(
     userId: string
   ) {
     const {
@@ -272,8 +273,7 @@ export default function Skills() {
       setSkillLimit(2);
     }
   }
-
-  const categories = useMemo(() => {
+    const categories = useMemo(() => {
     const values = data
       .map((row) =>
         getCategory(row)
@@ -349,17 +349,22 @@ export default function Skills() {
     );
   }
 
-  function selectCategory(
-    value: string
-  ) {
-    setSelectedCategory(value);
-    setSelectedSubcategory("");
-  }
-
   function selectSubcategory(
     value: string
   ) {
     setSelectedSubcategory(value);
+  }
+
+  async function addSelectedSkill(
+    skillName: string
+  ) {
+    if (!skillName.trim()) {
+      return;
+    }
+
+    await addSkill(
+      skillName.trim()
+    );
   }
 
   async function saveCountry() {
@@ -405,8 +410,7 @@ export default function Skills() {
       setSavingPreferences(false);
     }
   }
-
-  async function addSkill(
+    async function addSkill(
     skillName: string
   ) {
     if (!user) {
@@ -424,10 +428,12 @@ export default function Skills() {
     }
 
     if (
-      isSkillSelected(cleanSkill)
+      isSkillSelected(
+        cleanSkill
+      )
     ) {
       setPreferencesMessage(
-        "This skill is already selected."
+        "This skill is already added."
       );
       return;
     }
@@ -437,7 +443,7 @@ export default function Skills() {
       skillLimit
     ) {
       setPreferencesMessage(
-        `${planName} plan allows up to ${skillLimit} skills.`
+        `${planName} plan allows ${skillLimit} skills.`
       );
       return;
     }
@@ -447,27 +453,21 @@ export default function Skills() {
 
     try {
       const {
-        data: inserted,
         error,
       } = await supabase
         .from("user_skills")
         .insert({
           user_id: user.id,
           skill: cleanSkill,
-        })
-        .select()
-        .single();
+        });
 
       if (error) {
         throw error;
       }
 
-      setMySkills((current) => [
-        inserted,
-        ...current,
-      ]);
-
-      setTypedSkill("");
+      await loadUserSkills(
+        user.id
+      );
 
       setPreferencesMessage(
         "Skill added successfully."
@@ -488,21 +488,19 @@ export default function Skills() {
   }
 
   async function removeSkill(
-    row: any
+    skillRow: any
   ) {
     if (!user) {
+      setPreferencesMessage(
+        "Please sign in first."
+      );
       return;
     }
 
-    const rowId = row?.id;
+    const skillId =
+      skillRow?.id;
 
-    if (!rowId) {
-      setMySkills((current) =>
-        current.filter(
-          (item) =>
-            item !== row
-        )
-      );
+    if (!skillId) {
       return;
     }
 
@@ -515,22 +513,22 @@ export default function Skills() {
       } = await supabase
         .from("user_skills")
         .delete()
-        .eq("id", rowId)
-        .eq("user_id", user.id);
+        .eq("id", skillId)
+        .eq(
+          "user_id",
+          user.id
+        );
 
       if (error) {
         throw error;
       }
 
-      setMySkills((current) =>
-        current.filter(
-          (item) =>
-            item.id !== rowId
-        )
+      await loadUserSkills(
+        user.id
       );
 
       setPreferencesMessage(
-        "Skill removed."
+        "Skill removed successfully."
       );
     } catch (error: any) {
       console.error(
@@ -548,18 +546,25 @@ export default function Skills() {
   }
 
   async function addTypedSkill() {
-    await addSkill(typedSkill);
-  }
+    const skillName =
+      typedSkill.trim();
 
-  if (loading) {
+    if (!skillName) {
+      return;
+    }
+
+    await addSkill(
+      skillName
+    );
+
+    setTypedSkill("");
+          }
+    if (loading) {
     return (
       <div
         style={{
-          minHeight: "100vh",
-          background: "#111",
-          color: "#fff",
           padding: 24,
-          boxSizing: "border-box",
+          color: "#111",
         }}
       >
         Loading Skills...
@@ -571,25 +576,22 @@ export default function Skills() {
     <div
       style={{
         minHeight: "100vh",
-        background: "#111",
-        color: "#fff",
-        padding: 24,
-        boxSizing: "border-box",
+        background: "#f5f5f5",
+        color: "#111",
+        padding: 20,
       }}
     >
       <div
         style={{
-          maxWidth: 1000,
+          maxWidth: 900,
           margin: "0 auto",
         }}
       >
-        <h1>My Skills</h1>
+        <h1>
+          My Skills
+        </h1>
 
-        <p
-          style={{
-            color: "#ddd",
-          }}
-        >
+        <p>
           Plan: {planName} · Limit:{" "}
           {skillLimit >= 999999
             ? "Unlimited"
@@ -599,9 +601,9 @@ export default function Skills() {
         {skillsError && (
           <div
             style={{
-              background: "#fff",
-              color: "#111",
-              padding: 14,
+              background: "#fee",
+              border: "1px solid #d88",
+              padding: 12,
               borderRadius: 8,
               marginBottom: 16,
             }}
@@ -613,9 +615,8 @@ export default function Skills() {
         {preferencesMessage && (
           <div
             style={{
-              background: "#fff",
-              color: "#111",
-              padding: 14,
+              background: "#eee",
+              padding: 12,
               borderRadius: 8,
               marginBottom: 16,
             }}
@@ -626,345 +627,141 @@ export default function Skills() {
 
         <section
           style={{
-            marginTop: 24,
+            background: "#fff",
+            border: "1px solid #ddd",
+            borderRadius: 10,
             padding: 20,
-            background: "#181818",
-            border: "1px solid #444",
-            borderRadius: 12,
+            marginBottom: 20,
           }}
         >
           <h2>
-            My selected skills
+            Your Lead Preferences
           </h2>
-
-          {mySkills.length === 0 ? (
-            <p
-              style={{
-                color: "#ccc",
-              }}
-            >
-              No skills selected yet.
-            </p>
-          ) : (
-            <div
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: 10,
-              }}
-            >
-              {mySkills.map(
-                (row, index) => {
-                  const name =
-                    getStoredSkillName(
-                      row
-                    );
-
-                  return (
-                    <div
-                      key={
-                        row?.id ??
-                        `${name}-${index}`
-                      }
-                      style={{
-                        display: "flex",
-                        alignItems:
-                          "center",
-                        gap: 8,
-                        background:
-                          "#fff",
-                        color: "#111",
-                        padding:
-                          "8px 12px",
-                        borderRadius: 8,
-                      }}
-                    >
-                      <span>
-                        {name}
-                      </span>
-
-                      <button
-                        type="button"
-                        onClick={() =>
-                          removeSkill(
-                            row
-                          )
-                        }
-                        disabled={
-                          savingPreferences
-                        }
-                        style={{
-                          background:
-                            "#111",
-                          color: "#fff",
-                          border: "none",
-                          padding:
-                            "6px 10px",
-                          borderRadius: 6,
-                        }}
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  );
-                }
-              )}
-            </div>
-          )}
-        </section>
-                <section
-          style={{
-            marginTop: 24,
-            padding: 20,
-            background: "#181818",
-            border: "1px solid #444",
-            borderRadius: 12,
-          }}
-        >
-          <h2>
-            Choose your skill
-          </h2>
-
-          <p
-            style={{
-              color: "#ccc",
-            }}
-          >
-            Choose a category, then a
-            subcategory, then select
-            the skill you want to add.
-          </p>
 
           <div
             style={{
-              display: "grid",
-              gap: 12,
+              marginBottom: 18,
             }}
           >
+            <label
+              style={{
+                display: "block",
+                fontWeight: 600,
+                marginBottom: 8,
+              }}
+            >
+              Country
+            </label>
+
             <select
-              value={selectedCategory}
-              onChange={(event) =>
-                selectCategory(
-                  event.target.value
+              value={country}
+              onChange={(e) =>
+                setCountry(
+                  e.target.value
                 )
               }
               style={{
+                width: "100%",
+                padding: "12px",
+                border:
+                  "1px solid #aaa",
+                borderRadius: 8,
                 background: "#fff",
                 color: "#111",
-                padding: 12,
-                borderRadius: 8,
-                border: "1px solid #aaa",
-                width: "100%",
-                boxSizing: "border-box",
+                fontSize: 16,
               }}
             >
               <option value="">
-                Select Category
+                Select country
               </option>
 
-              {categories.map(
-                (value) => (
+              {COUNTRIES.map(
+                (item) => (
                   <option
-                    key={value}
-                    value={value}
+                    key={item}
+                    value={item}
                   >
-                    {value}
+                    {item}
                   </option>
                 )
               )}
             </select>
 
-            {selectedCategory && (
-              <select
-                value={
-                  selectedSubcategory
-                }
-                onChange={(event) =>
-                  selectSubcategory(
-                    event.target.value
-                  )
-                }
-                style={{
-                  background: "#fff",
-                  color: "#111",
-                  padding: 12,
-                  borderRadius: 8,
-                  border: "1px solid #aaa",
-                  width: "100%",
-                  boxSizing: "border-box",
-                }}
-              >
-                <option value="">
-                  Select Subcategory
-                </option>
-
-                {subcategories.map(
-                  (value) => (
-                    <option
-                      key={value}
-                      value={value}
-                    >
-                      {value}
-                    </option>
-                  )
-                )}
-              </select>
-            )}
-          </div>
-
-          {selectedSubcategory && (
-            <div
+            <button
+              type="button"
+              onClick={saveCountry}
+              disabled={
+                savingPreferences ||
+                !country.trim()
+              }
               style={{
-                marginTop: 20,
+                marginTop: 10,
+                background: "#111",
+                color: "#fff",
+                border: "none",
+                padding:
+                  "10px 16px",
+                borderRadius: 8,
               }}
             >
-              <h3>
-                Available Skills
-              </h3>
-
-              {matchingSkills.length ===
-              0 ? (
-                <p
-                  style={{
-                    color: "#ccc",
-                  }}
-                >
-                  No skills found in
-                  this subcategory.
-                </p>
-              ) : (
-                <div
-                  style={{
-                    display: "grid",
-                    gap: 10,
-                  }}
-                >
-                  {matchingSkills.map(
-                    (row, index) => {
-                      const name =
-                        getSkillName(
-                          row
-                        );
-
-                      const selected =
-                        isSkillSelected(
-                          name
-                        );
-
-                      return (
-                        <button
-                          key={
-                            row?.id ??
-                            `${name}-${index}`
-                          }
-                          type="button"
-                          onClick={() =>
-                            addSkill(
-                              name
-                            )
-                          }
-                          disabled={
-                            selected ||
-                            savingPreferences ||
-                            mySkills.length >=
-                              skillLimit
-                          }
-                          style={{
-                            background:
-                              selected
-                                ? "#ddd"
-                                : "#fff",
-                            color: "#111",
-                            border:
-                              "1px solid #aaa",
-                            padding: 12,
-                            borderRadius: 8,
-                            textAlign:
-                              "left",
-                            cursor:
-                              selected ||
-                              savingPreferences ||
-                              mySkills.length >=
-                                skillLimit
-                                ? "default"
-                                : "pointer",
-                          }}
-                        >
-                          {name}
-                          {selected
-                            ? " ✓"
-                            : ""}
-                        </button>
-                      );
-                    }
-                  )}
-                </div>
-              )}
-            </div>
-          )}
+              {savingPreferences
+                ? "Saving..."
+                : "Save Country"}
+            </button>
+          </div>
 
           <div
             style={{
-              marginTop: 24,
+              marginBottom: 18,
             }}
           >
-            <h3>
-              Add another skill
-            </h3>
-
-            <div
+            <label
               style={{
-                display: "flex",
-                gap: 10,
-                flexWrap: "wrap",
+                display: "block",
+                fontWeight: 600,
+                marginBottom: 8,
               }}
             >
-              <input
-                value={typedSkill}
-                onChange={(event) =>
-                  setTypedSkill(
-                    event.target.value
-                  )
-                }
-                placeholder="Enter skill"
-                style={{
-                  background: "#fff",
-                  color: "#111",
-                  padding: 12,
-                  borderRadius: 8,
-                  border: "1px solid #aaa",
-                  flex: 1,
-                  minWidth: 220,
-                  boxSizing: "border-box",
-                }}
-              />
+              Category
+            </label>
 
-              <button
-                type="button"
-                onClick={
-                  addTypedSkill
-                }
-                disabled={
-                  savingPreferences ||
-                  !typedSkill.trim() ||
-                  mySkills.length >=
-                    skillLimit
-                }
-                style={{
-                  background: "#fff",
-                  color: "#111",
-                  border: "1px solid #aaa",
-                  padding:
-                    "12px 18px",
-                  borderRadius: 8,
-                }}
-              >
-                Add Skill
-              </button>
-            </div>
+            <select
+              value={
+                selectedCategory
+              }
+              onChange={(e) => {
+                setSelectedCategory(
+                  e.target.value
+                );
+                setSelectedSubcategory(
+                  ""
+                );
+              }}
+              style={{
+                width: "100%",
+                padding: "12px",
+                border:
+                  "1px solid #aaa",
+                borderRadius: 8,
+                background: "#fff",
+                color: "#111",
+                fontSize: 16,
+              }}
+            >
+              <option value="">
+                Select category
+              </option>
+
+              {categories.map(
+                (category) => (
+                  <option
+                    key={category}
+                    value={category}
+                  >
+                    {category}
+                  </option>
+                )
+              )}
+            </select>
           </div>
-                </section>
-      </div>
-    </div>
-  );
-}
+          
