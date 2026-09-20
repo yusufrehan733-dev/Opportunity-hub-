@@ -23,26 +23,29 @@ const COUNTRIES = [
 
 export default function Skills() {
   const [data, setData] = useState<any[]>([]);
-  const [selectedMain, setSelectedMain] = useState<string | null>(null);
-  const [selectedCategory, setSelectedCategory] =
-    useState<string | null>(null);
-
   const [user, setUser] = useState<any>(null);
   const [mySkills, setMySkills] = useState<any[]>([]);
 
-  const [skillLimit, setSkillLimit] = useState(2);
-  const [planName, setPlanName] = useState("Basic");
+  const [selectedMain, setSelectedMain] =
+    useState<string | null>(null);
+
+  const [selectedCategory, setSelectedCategory] =
+    useState<string | null>(null);
 
   const [country, setCountry] = useState("");
   const [typedSkill, setTypedSkill] = useState("");
 
-  const [savingPreferences, setSavingPreferences] =
-    useState(false);
-  const [preferencesMessage, setPreferencesMessage] =
-    useState("");
+  const [planName, setPlanName] = useState("Basic");
+  const [skillLimit, setSkillLimit] = useState(2);
 
   const [loading, setLoading] = useState(true);
   const [skillsError, setSkillsError] = useState("");
+
+  const [savingPreferences, setSavingPreferences] =
+    useState(false);
+
+  const [preferencesMessage, setPreferencesMessage] =
+    useState("");
 
   useEffect(() => {
     initialize();
@@ -53,7 +56,7 @@ export default function Skills() {
     setSkillsError("");
     setPreferencesMessage("");
 
-    await fetchSkills();
+    await loadSkills();
 
     const {
       data: authData,
@@ -69,15 +72,15 @@ export default function Skills() {
 
     setUser(currentUser);
 
-    await fetchUserSkills(currentUser.id);
-    await fetchUserPlan(currentUser.id);
-    await fetchUserCountry(currentUser.id);
+    await loadUserSkills(currentUser.id);
+    await loadUserCountry(currentUser.id);
+    await loadUserPlan(currentUser.id);
 
     setLoading(false);
   }
 
-  async function fetchSkills() {
-    const { data: skills, error } = await supabase
+  async function loadSkills() {
+    const { data: rows, error } = await supabase
       .from("skills")
       .select("*");
 
@@ -87,11 +90,11 @@ export default function Skills() {
       return;
     }
 
-    setData(skills || []);
+    setData(rows || []);
   }
 
-  async function fetchUserSkills(userId: string) {
-    const { data, error } = await supabase
+  async function loadUserSkills(userId: string) {
+    const { data: rows, error } = await supabase
       .from("user_skills")
       .select("*")
       .eq("user_id", userId)
@@ -100,28 +103,34 @@ export default function Skills() {
       });
 
     if (error) {
-      console.error("User skills error:", error);
+      console.error(
+        "User skills error:",
+        error
+      );
       return;
     }
 
-    setMySkills(data || []);
+    setMySkills(rows || []);
   }
 
-  async function fetchUserCountry(userId: string) {
-    const { data, error } = await supabase
+  async function loadUserCountry(userId: string) {
+    const { data: row, error } = await supabase
       .from("users")
       .select("country")
       .eq("id", userId)
       .maybeSingle();
 
     if (error) {
-      console.error("User country error:", error);
+      console.error(
+        "User country error:",
+        error
+      );
       return;
     }
 
-    setCountry(data?.country || "");
-  }
-    async function fetchUserPlan(userId: string) {
+    setCountry(row?.country || "");
+                       }
+    async function loadUserPlan(userId: string) {
     const {
       data: subscription,
       error,
@@ -173,14 +182,15 @@ export default function Skills() {
       return false;
     }
 
-    const exists = mySkills.some(
+    const alreadyExists = mySkills.some(
       (item) =>
         String(item?.skill || "")
           .trim()
-          .toLowerCase() === cleanSkill.toLowerCase()
+          .toLowerCase() ===
+        cleanSkill.toLowerCase()
     );
 
-    if (exists) {
+    if (alreadyExists) {
       alert("Skill already added.");
       return false;
     }
@@ -190,7 +200,7 @@ export default function Skills() {
       mySkills.length >= skillLimit
     ) {
       alert(
-        `${planName} plan allows a maximum of ${skillLimit} saved skills. Remove a skill or upgrade your plan to add this one.`
+        `${planName} plan allows a maximum of ${skillLimit} saved skills.`
       );
       return false;
     }
@@ -203,12 +213,15 @@ export default function Skills() {
       });
 
     if (error) {
-      console.error("Add skill error:", error);
+      console.error(
+        "Add skill error:",
+        error
+      );
       alert(error.message);
       return false;
     }
 
-    await fetchUserSkills(user.id);
+    await loadUserSkills(user.id);
     setPreferencesMessage("");
 
     return true;
@@ -229,8 +242,8 @@ export default function Skills() {
     }
   }
 
-  async function removeSkill(skillId?: string) {
-    if (!user || !skillId) return;
+  async function removeSkill(skillId: string) {
+    if (!user) return;
 
     const { error } = await supabase
       .from("user_skills")
@@ -239,12 +252,15 @@ export default function Skills() {
       .eq("user_id", user.id);
 
     if (error) {
-      console.error("Remove skill error:", error);
+      console.error(
+        "Remove skill error:",
+        error
+      );
       alert(error.message);
       return;
     }
 
-    await fetchUserSkills(user.id);
+    await loadUserSkills(user.id);
   }
 
   async function savePreferences() {
@@ -302,18 +318,15 @@ export default function Skills() {
         setPreferencesMessage(
           `Save failed: ${error.message}`
         );
+
         return;
       }
 
       if (!updatedUser) {
-        console.error(
-          "No user row was updated.",
-          user.id
-        );
-
         setPreferencesMessage(
           "Save failed: Supabase did not update your user profile."
         );
+
         return;
       }
 
@@ -325,14 +338,10 @@ export default function Skills() {
           .maybeSingle();
 
       if (verifyError) {
-        console.error(
-          "Verification error:",
-          verifyError
+        setPreferencesMessage(
+          `Verification failed: ${verifyError.message}`
         );
 
-        setPreferencesMessage(
-          `Save verification failed: ${verifyError.message}`
-        );
         return;
       }
 
@@ -340,6 +349,7 @@ export default function Skills() {
         setPreferencesMessage(
           "Save failed: your profile could not be verified."
         );
+
         return;
       }
 
@@ -352,10 +362,13 @@ export default function Skills() {
         setPreferencesMessage(
           "Save failed: Supabase did not keep the selected country."
         );
+
         return;
       }
 
-      setCountry(verifiedUser.country || "");
+      setCountry(
+        String(verifiedUser.country || "")
+      );
 
       setPreferencesMessage(
         "Preferences saved. Your Demand, Supply and SaaS leads will now use these preferences."
@@ -363,7 +376,7 @@ export default function Skills() {
     } finally {
       setSavingPreferences(false);
     }
-        }
+}
     const mainCategories = Array.from(
     new Set(
       data
@@ -537,7 +550,6 @@ export default function Skills() {
                         padding: 0,
                         fontSize: 18,
                       }}
-                      aria-label={`Remove ${item.skill}`}
                     >
                       ×
                     </button>
@@ -592,7 +604,8 @@ export default function Skills() {
               Add Skill
             </button>
           </div>
-                    <div
+
+          <div
             style={{
               borderTop: "1px solid #eee",
               paddingTop: 20,
@@ -608,9 +621,9 @@ export default function Skills() {
                 fontSize: 14,
               }}
             >
-              Choose your country and save your skills.
-              These preferences control your Demand,
-              Supply and SaaS leads.
+              Choose your country and save your
+              skills. These preferences control your
+              Demand, Supply and SaaS leads.
             </p>
 
             <label
@@ -693,8 +706,7 @@ export default function Skills() {
             )}
           </div>
         </div>
-
-        <div
+                <div
           style={{
             background: "#fff",
             border: "1px solid #ddd",
@@ -811,9 +823,7 @@ export default function Skills() {
                     <button
                       key={item}
                       type="button"
-                      onClick={() =>
-                        addSkill(item)
-                      }
+                      onClick={() => addSkill(item)}
                       style={{
                         padding: "10px 14px",
                         borderRadius: 6,
@@ -833,4 +843,4 @@ export default function Skills() {
       </div>
     </div>
   );
-   }
+  }
