@@ -724,24 +724,18 @@ export default function Skills() {
             >
               Category
             </label>
-
             <select
-              value={
-                selectedCategory
-              }
+              value={selectedCategory}
               onChange={(e) => {
                 setSelectedCategory(
                   e.target.value
                 );
-                setSelectedSubcategory(
-                  ""
-                );
+                setSelectedSubcategory("");
               }}
               style={{
                 width: "100%",
                 padding: "12px",
-                border:
-                  "1px solid #aaa",
+                border: "1px solid #aaa",
                 borderRadius: 8,
                 background: "#fff",
                 color: "#111",
@@ -762,8 +756,10 @@ export default function Skills() {
                   </option>
                 )
               )}
-                     </section>
+            </select>
+          </div>
+        </section>
       </div>
     </div>
   );
-  }
+}
