@@ -967,4 +967,131 @@ async function processDemand(
         new Date().toISOString(),
     }
   );
-            }
+   }
+async function processSupply(
+  result: SearchResult,
+  skills: SkillRow[]
+): Promise<boolean> {
+  const title =
+    clean(result.title) ||
+    "Untitled Supply Lead";
+
+  const snippet =
+    clean(result.snippet);
+
+  const text =
+    clean(`${title} ${snippet}`);
+
+  if (!isSupply(text)) {
+    return false;
+  }
+
+  if (isBlocked(result.link || "")) {
+    return false;
+  }
+
+  const date =
+    getResultDate(result);
+
+  if (!isFresh(date)) {
+    return false;
+  }
+
+  const matchedSkill =
+    findMatchingSkill(text, skills);
+
+  if (!matchedSkill) {
+    return false;
+  }
+
+  const email =
+    extractEmail(text);
+
+  const phone =
+    extractPhone(text);
+
+  const link =
+    clean(result.link);
+
+  const actionableUrl =
+    isActionableUrl(link)
+      ? link
+      : "";
+
+  if (
+    !email &&
+    !phone &&
+    !actionableUrl
+  ) {
+    return false;
+  }
+
+  if (
+    await alreadyExists(
+      "supply_leads",
+      link
+    )
+  ) {
+    return false;
+  }
+
+  const score =
+    calculateScore(
+      "Supply",
+      title,
+      snippet,
+      link,
+      date,
+      Boolean(
+        email ||
+        phone ||
+        actionableUrl
+      )
+    );
+
+  return insertLead(
+    "supply_leads",
+    {
+      source: link,
+      source_url: link,
+      title,
+      contact_name:
+        extractPersonName(
+          title,
+          snippet
+        ),
+      company_name:
+        extractPersonName(
+          title,
+          snippet
+        ),
+      description: snippet,
+      skill:
+        matchedSkill.name,
+      category:
+        matchedSkill.category,
+      subcategory:
+        matchedSkill.subcategory,
+      country:
+        findCountry(text),
+      city: "",
+      salary: null,
+      currency: null,
+      contact:
+        email ||
+        phone ||
+        actionableUrl,
+      contact_email: email,
+      contact_phone: phone,
+      contact_url:
+        actionableUrl,
+      status: "active",
+      lead_type: "Supply",
+      gold_score: score,
+      posted_at:
+        date.toISOString(),
+      created_at:
+        new Date().toISOString(),
+    }
+  );
+      }
