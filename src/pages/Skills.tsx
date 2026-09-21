@@ -21,6 +21,28 @@ const COUNTRIES = [
   "Bangladesh",
 ];
 
+const ONLINE_TEACHING_CATEGORY = "Online Teaching";
+
+const ONLINE_TEACHING_SUBCATEGORIES = [
+  "Economics",
+  "Law",
+  "Sharia and Law",
+  "Sociology",
+  "Psychology",
+  "Anthropology",
+  "Political Science",
+  "Science Subject",
+  "Physics",
+  "Chemistry",
+  "Biology",
+  "General Subject",
+  "Islamiyat",
+  "Urdu",
+  "English",
+  "GK",
+  "Add your subject",
+];
+
 type SkillRow = {
   id?: string | number;
   name?: string | null;
@@ -41,10 +63,6 @@ function getCategory(row: SkillRow): string {
 
 function getSubcategory(row: SkillRow): string {
   return cleanValue(row.subcategory);
-}
-
-function getSkillName(row: SkillRow): string {
-  return cleanValue(row.name);
 }
 
 function getStoredSkillName(row: any): string {
@@ -68,7 +86,15 @@ export default function Skills() {
     useState<string>("");
 
   const [country, setCountry] = useState<string>("");
-  const [typedSkill, setTypedSkill] = useState<string>("");
+
+  const [typedSkill, setTypedSkill] =
+    useState<string>("");
+
+  const [customSubject, setCustomSubject] =
+    useState<string>("");
+
+  const [showCustomSubject, setShowCustomSubject] =
+    useState<boolean>(false);
 
   const [planName, setPlanName] =
     useState<string>("Basic");
@@ -135,9 +161,8 @@ export default function Skills() {
     } finally {
       setLoading(false);
     }
-  }
-
-  async function loadSkills() {
+    }
+    async function loadSkills() {
     const {
       data: rows,
       error,
@@ -272,13 +297,22 @@ export default function Skills() {
       setPlanName("Basic");
       setSkillLimit(2);
     }
-    }
-    const categories = useMemo(() => {
+  }
+
+  const categories = useMemo(() => {
     const values = data
       .map((row) =>
         getCategory(row)
       )
-      .filter(Boolean);
+      .filter(
+        (value) =>
+          Boolean(value) &&
+          value !== "Freelancing & Business"
+      );
+
+    values.push(
+      ONLINE_TEACHING_CATEGORY
+    );
 
     return Array.from(
       new Set(values)
@@ -288,6 +322,13 @@ export default function Skills() {
   const subcategories = useMemo(() => {
     if (!selectedCategory) {
       return [];
+    }
+
+    if (
+      selectedCategory ===
+      ONLINE_TEACHING_CATEGORY
+    ) {
+      return ONLINE_TEACHING_SUBCATEGORIES;
     }
 
     const values = data
@@ -309,29 +350,41 @@ export default function Skills() {
     selectedCategory,
   ]);
 
-  const matchingSkills = useMemo(() => {
+  function selectCategory(
+    value: string
+  ) {
+    setSelectedCategory(value);
+    setSelectedSubcategory("");
+    setCustomSubject("");
+    setShowCustomSubject(false);
+    setPreferencesMessage("");
+  }
+
+  function selectSubcategory(
+    value: string
+  ) {
+    setSelectedSubcategory(value);
+
     if (
-      !selectedCategory ||
-      !selectedSubcategory
+      selectedCategory ===
+        ONLINE_TEACHING_CATEGORY &&
+      value === "Add your subject"
     ) {
-      return [];
+      setShowCustomSubject(true);
+    } else {
+      setShowCustomSubject(false);
+      setCustomSubject("");
     }
 
-    return data.filter(
-      (row) =>
-        getCategory(row) ===
-          selectedCategory &&
-        getSubcategory(row) ===
-          selectedSubcategory &&
-        Boolean(
-          getSkillName(row)
-        )
-    );
-  }, [
-    data,
-    selectedCategory,
-    selectedSubcategory,
-  ]);
+    setPreferencesMessage("");
+  }
+
+  function getSkillPair(
+    category: string,
+    subcategory: string
+  ): string {
+    return `${category} — ${subcategory}`;
+  }
 
   function isSkillSelected(
     skillName: string
@@ -344,26 +397,51 @@ export default function Skills() {
     return mySkills.some(
       (row) =>
         getStoredSkillName(row)
+          .trim()
           .toLowerCase() ===
         target
     );
-  }
-
-  function selectSubcategory(
-    value: string
-  ) {
-    setSelectedSubcategory(value);
-  }
-
-  async function addSelectedSkill(
-    skillName: string
-  ) {
-    if (!skillName.trim()) {
+      }
+    async function addSelectedSkill() {
+    if (!selectedCategory) {
+      setPreferencesMessage(
+        "Please select a category."
+      );
       return;
     }
 
+    if (!selectedSubcategory) {
+      setPreferencesMessage(
+        "Please select a subcategory."
+      );
+      return;
+    }
+
+    let finalSubcategory =
+      selectedSubcategory;
+
+    if (
+      selectedCategory ===
+        ONLINE_TEACHING_CATEGORY &&
+      selectedSubcategory ===
+        "Add your subject"
+    ) {
+      finalSubcategory =
+        customSubject.trim();
+
+      if (!finalSubcategory) {
+        setPreferencesMessage(
+          "Please enter your subject."
+        );
+        return;
+      }
+    }
+
     await addSkill(
-      skillName.trim()
+      getSkillPair(
+        selectedCategory,
+        finalSubcategory
+      )
     );
   }
 
@@ -473,6 +551,10 @@ export default function Skills() {
       setPreferencesMessage(
         "Skill added successfully."
       );
+
+      setSelectedSubcategory("");
+      setCustomSubject("");
+      setShowCustomSubject(false);
     } catch (error: any) {
       console.error(
         "Add skill error:",
@@ -486,6 +568,21 @@ export default function Skills() {
     } finally {
       setSavingPreferences(false);
     }
+  }
+
+  async function addTypedSkill() {
+    const skillName =
+      typedSkill.trim();
+
+    if (!skillName) {
+      return;
+    }
+
+    await addSkill(
+      skillName
+    );
+
+    setTypedSkill("");
   }
 
   async function removeSkill(
@@ -546,21 +643,7 @@ export default function Skills() {
     }
   }
 
-  async function addTypedSkill() {
-    const skillName =
-      typedSkill.trim();
-
-    if (!skillName) {
-      return;
-    }
-
-    await addSkill(
-      skillName
-    );
-
-    setTypedSkill("");
-  }
-    if (loading) {
+  if (loading) {
     return (
       <div
         style={{
@@ -573,9 +656,8 @@ export default function Skills() {
         Loading Skills...
       </div>
     );
-  }
-
-  return (
+        }
+    return (
     <div
       style={{
         minHeight: "100vh",
@@ -667,15 +749,12 @@ export default function Skills() {
             <select
               value={country}
               onChange={(e) =>
-                setCountry(
-                  e.target.value
-                )
+                setCountry(e.target.value)
               }
               style={{
                 width: "100%",
                 padding: "12px",
-                border:
-                  "1px solid #888",
+                border: "1px solid #888",
                 borderRadius: 8,
                 background: "#000",
                 color: "#fff",
@@ -686,16 +765,14 @@ export default function Skills() {
                 Select country
               </option>
 
-              {COUNTRIES.map(
-                (item) => (
-                  <option
-                    key={item}
-                    value={item}
-                  >
-                    {item}
-                  </option>
-                )
-              )}
+              {COUNTRIES.map((item) => (
+                <option
+                  key={item}
+                  value={item}
+                >
+                  {item}
+                </option>
+              ))}
             </select>
 
             <button
@@ -709,25 +786,25 @@ export default function Skills() {
                 marginTop: 10,
                 background: "#fff",
                 color: "#000",
-                border:
-                  "1px solid #fff",
-                padding:
-                  "10px 16px",
+                border: "1px solid #fff",
+                padding: "10px 16px",
                 borderRadius: 8,
                 fontWeight: 600,
               }}
             >
-              {savingPreferences
-                ? "Saving..."
-                : "Save Country"}
+              Save Country
             </button>
           </div>
 
           <div
             style={{
-              marginBottom: 18,
+              marginBottom: 20,
             }}
           >
+            <h3>
+              Add Skill
+            </h3>
+
             <label
               style={{
                 display: "block",
@@ -739,50 +816,35 @@ export default function Skills() {
             </label>
 
             <select
-              value={
-                selectedCategory
+              value={selectedCategory}
+              onChange={(e) =>
+                selectCategory(e.target.value)
               }
-              onChange={(e) => {
-                setSelectedCategory(
-                  e.target.value
-                );
-                setSelectedSubcategory(
-                  ""
-                );
-              }}
               style={{
                 width: "100%",
                 padding: "12px",
-                border:
-                  "1px solid #888",
+                border: "1px solid #888",
                 borderRadius: 8,
                 background: "#000",
                 color: "#fff",
                 fontSize: 16,
+                marginBottom: 12,
               }}
             >
               <option value="">
                 Select category
               </option>
 
-              {categories.map(
-                (category) => (
-                  <option
-                    key={category}
-                    value={category}
-                  >
-                    {category}
-                  </option>
-                )
-              )}
+              {categories.map((category) => (
+                <option
+                  key={category}
+                  value={category}
+                >
+                  {category}
+                </option>
+              ))}
             </select>
-          </div>
 
-          <div
-            style={{
-              marginBottom: 18,
-            }}
-          >
             <label
               style={{
                 display: "block",
@@ -794,176 +856,87 @@ export default function Skills() {
             </label>
 
             <select
-              value={
-                selectedSubcategory
-              }
+              value={selectedSubcategory}
               onChange={(e) =>
-                selectSubcategory(
-                  e.target.value
-                )
+                selectSubcategory(e.target.value)
               }
-              disabled={
-                !selectedCategory
-              }
+              disabled={!selectedCategory}
               style={{
                 width: "100%",
                 padding: "12px",
-                border:
-                  "1px solid #888",
+                border: "1px solid #888",
                 borderRadius: 8,
                 background: "#000",
                 color: "#fff",
                 fontSize: 16,
+                marginBottom: 12,
               }}
             >
               <option value="">
                 Select subcategory
               </option>
 
-              {subcategories.map(
-                (subcategory) => (
-                  <option
-                    key={subcategory}
-                    value={subcategory}
-                  >
-                    {subcategory}
-                  </option>
-                )
-              )}
+              {subcategories.map((subcategory) => (
+                <option
+                  key={subcategory}
+                  value={subcategory}
+                >
+                  {subcategory}
+                </option>
+              ))}
             </select>
-          </div>
-                    {selectedSubcategory && (
-            <div
+
+            {showCustomSubject && (
+              <input
+                value={customSubject}
+                onChange={(e) =>
+                  setCustomSubject(e.target.value)
+                }
+                placeholder="Enter the subject you want to teach"
+                style={{
+                  width: "100%",
+                  boxSizing: "border-box",
+                  padding: "12px",
+                  border: "1px solid #888",
+                  borderRadius: 8,
+                  background: "#000",
+                  color: "#fff",
+                  fontSize: 16,
+                  marginBottom: 12,
+                }}
+              />
+            )}
+
+            <button
+              type="button"
+              onClick={addSelectedSkill}
+              disabled={
+                savingPreferences ||
+                !selectedCategory ||
+                !selectedSubcategory ||
+                mySkills.length >= skillLimit
+              }
               style={{
-                marginBottom: 18,
+                background: "#fff",
+                color: "#000",
+                border: "1px solid #fff",
+                padding: "10px 14px",
+                borderRadius: 8,
+                fontWeight: 600,
               }}
             >
-              <label
-                style={{
-                  display: "block",
-                  fontWeight: 600,
-                  marginBottom: 8,
-                }}
-              >
-                Available Skills
-              </label>
-
-              {matchingSkills.length ===
-              0 ? (
-                <p
-                  style={{
-                    color: "#999",
-                  }}
-                >
-                  No skills found for this
-                  subcategory.
-                </p>
-              ) : (
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 10,
-                  }}
-                >
-                  {matchingSkills.map(
-                    (row) => {
-                      const skillName =
-                        getSkillName(
-                          row
-                        );
-
-                      const selected =
-                        isSkillSelected(
-                          skillName
-                        );
-
-                      return (
-                        <div
-                          key={
-                            String(
-                              row.id ??
-                                skillName
-                            )
-                          }
-                          style={{
-                            display: "flex",
-                            alignItems:
-                              "center",
-                            justifyContent:
-                              "space-between",
-                            gap: 10,
-                            flexWrap:
-                              "wrap",
-                            border:
-                              "1px solid #777",
-                            borderRadius: 8,
-                            padding: 12,
-                          }}
-                        >
-                          <span
-                            style={{
-                              color: "#fff",
-                              fontWeight: 600,
-                            }}
-                          >
-                            {skillName}
-                          </span>
-
-                          <button
-                            type="button"
-                            onClick={() =>
-                              addSelectedSkill(
-                                skillName
-                              )
-                            }
-                            disabled={
-                              selected ||
-                              savingPreferences ||
-                              mySkills.length >=
-                                skillLimit
-                            }
-                            style={{
-                              background:
-                                "#fff",
-                              color:
-                                "#000",
-                              border:
-                                "1px solid #fff",
-                              padding:
-                                "10px 14px",
-                              borderRadius: 8,
-                              fontWeight:
-                                600,
-                            }}
-                          >
-                            {selected
-                              ? "Added ✓"
-                              : "Add Skill"}
-                          </button>
-                        </div>
-                      );
-                    }
-                  )}
-                </div>
-              )}
-            </div>
-          )}
+              Add Skill
+            </button>
+          </div>
 
           <div
             style={{
-              marginBottom: 18,
+              marginBottom: 20,
             }}
           >
-            <label
-              style={{
-                display: "block",
-                fontWeight: 600,
-                marginBottom: 8,
-              }}
-            >
-              Typed Skill
-            </label>
+            <h3>
+              Type your skill
+            </h3>
 
             <div
               style={{
@@ -975,42 +948,35 @@ export default function Skills() {
               <input
                 value={typedSkill}
                 onChange={(e) =>
-                  setTypedSkill(
-                    e.target.value
-                  )
+                  setTypedSkill(e.target.value)
                 }
                 placeholder="Enter a skill"
                 style={{
                   flex: 1,
                   minWidth: 220,
                   padding: "12px",
-                  border:
-                    "1px solid #888",
+                  border: "1px solid #888",
                   borderRadius: 8,
                   background: "#000",
                   color: "#fff",
                   fontSize: 16,
+                  boxSizing: "border-box",
                 }}
               />
 
               <button
                 type="button"
-                onClick={
-                  addTypedSkill
-                }
+                onClick={addTypedSkill}
                 disabled={
                   savingPreferences ||
                   !typedSkill.trim() ||
-                  mySkills.length >=
-                    skillLimit
+                  mySkills.length >= skillLimit
                 }
                 style={{
                   background: "#fff",
                   color: "#000",
-                  border:
-                    "1px solid #fff",
-                  padding:
-                    "12px 18px",
+                  border: "1px solid #fff",
+                  padding: "10px 14px",
                   borderRadius: 8,
                   fontWeight: 600,
                 }}
@@ -1115,4 +1081,4 @@ export default function Skills() {
       </div>
     </div>
   );
-  }
+      }
