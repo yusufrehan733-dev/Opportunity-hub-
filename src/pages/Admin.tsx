@@ -314,7 +314,7 @@ export default function Admin() {
     } finally {
       setFetchingLeads(false);
     }
-  }
+    }
     useEffect(() => {
     loadData();
   }, [section]);
@@ -527,7 +527,7 @@ function Overview({
       ))}
     </div>
   );
-    }
+  }
 function UsersSection({
   users,
   updateUser,
@@ -988,5 +988,4 @@ function Placeholder({
       </div>
     </div>
   );
-  
-}
+          }
