@@ -1294,3 +1294,223 @@ function buildSaasQueries(
     18
   );
     }
+async function runType(
+  type: "Demand" | "Supply" | "SaaS",
+  queries: string[],
+  skills: SkillRow[]
+): Promise<number> {
+  let added = 0;
+
+  for (const query of queries) {
+    try {
+      const results =
+        await searchSerper(query);
+
+      for (const result of results) {
+        let inserted = false;
+
+        if (type === "Demand") {
+          inserted =
+            await processDemand(
+              result,
+              skills
+            );
+        } else if (
+          type === "Supply"
+        ) {
+          inserted =
+            await processSupply(
+              result,
+              skills
+            );
+        } else {
+          inserted =
+            await processSaas(
+              result,
+              skills
+            );
+        }
+
+        if (inserted) {
+          added++;
+        }
+      }
+    } catch (error) {
+      console.error(
+        `Collector error for ${type}:`,
+        error
+      );
+    }
+  }
+
+  return added;
+}
+
+export default async function handler(
+  req: Request
+): Promise<Response> {
+  if (req.method !== "POST") {
+    return new Response(
+      JSON.stringify({
+        error:
+          "Method not allowed"
+      }),
+      {
+        status: 405,
+        headers: {
+          "Content-Type":
+            "application/json"
+        }
+      }
+    );
+  }
+
+  if (!supabaseUrl) {
+    return new Response(
+      JSON.stringify({
+        error:
+          "SUPABASE_URL is missing"
+      }),
+      {
+        status: 500,
+        headers: {
+          "Content-Type":
+            "application/json"
+        }
+      }
+    );
+  }
+
+  if (!supabaseServiceKey) {
+    return new Response(
+      JSON.stringify({
+        error:
+          "SUPABASE_SERVICE_ROLE_KEY is missing"
+      }),
+      {
+        status: 500,
+        headers: {
+          "Content-Type":
+            "application/json"
+        }
+      }
+    );
+  }
+
+  if (!serperApiKey) {
+    return new Response(
+      JSON.stringify({
+        error:
+          "SERPER_API_KEY is missing"
+      }),
+      {
+        status: 500,
+        headers: {
+          "Content-Type":
+            "application/json"
+        }
+      }
+    );
+  }
+
+  try {
+    const skills =
+      await loadSkills();
+
+    if (
+      skills.length === 0
+    ) {
+      return new Response(
+        JSON.stringify({
+          error:
+            "No skills found in Supabase"
+        }),
+        {
+          status: 500,
+          headers: {
+            "Content-Type":
+              "application/json"
+          }
+        }
+      );
+    }
+
+    const demandQueries =
+      buildDemandQueries(
+        skills
+      );
+
+    const supplyQueries =
+      buildSupplyQueries(
+        skills
+      );
+
+    const saasQueries =
+      buildSaasQueries(
+        skills
+      );
+
+    const demand =
+      await runType(
+        "Demand",
+        demandQueries,
+        skills
+      );
+
+    const supply =
+      await runType(
+        "Supply",
+        supplyQueries,
+        skills
+      );
+
+    const saas =
+      await runType(
+        "SaaS",
+        saasQueries,
+        skills
+      );
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        added:
+          demand +
+          supply +
+          saas,
+        demand,
+        supply,
+        saas
+      }),
+      {
+        status: 200,
+        headers: {
+          "Content-Type":
+            "application/json"
+        }
+      }
+    );
+  } catch (error) {
+    console.error(
+      "Real lead collection failed:",
+      error
+    );
+
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Real lead collection failed"
+      }),
+      {
+        status: 500,
+        headers: {
+          "Content-Type":
+            "application/json"
+        }
+      }
+    );
+  }
+  }
