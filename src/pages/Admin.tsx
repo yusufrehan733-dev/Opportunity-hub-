@@ -122,9 +122,7 @@ function dateText(value?: string | null) {
 }
 
 function getStatus(user: AdminUser) {
-  if (user.status) {
-    return user.status;
-  }
+  if (user.status) return user.status;
 
   const now = new Date();
 
@@ -142,9 +140,7 @@ function getStatus(user: AdminUser) {
     return "active";
   }
 
-  if (!user.active) {
-    return "inactive";
-  }
+  if (!user.active) return "inactive";
 
   return "expired";
 }
@@ -186,6 +182,12 @@ export default function Admin() {
     useState(false);
 
   const [error, setError] =
+    useState("");
+
+  const [fetchingLeads, setFetchingLeads] =
+    useState(false);
+
+  const [fetchResult, setFetchResult] =
     useState("");
 
   async function loadData() {
@@ -254,7 +256,66 @@ export default function Admin() {
     }
   }
 
-  useEffect(() => {
+  async function fetchRealLeads() {
+    setFetchingLeads(true);
+    setFetchResult("");
+    setError("");
+
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session?.access_token) {
+        throw new Error(
+          "Admin session not found."
+        );
+      }
+
+      const response = await fetch(
+        "/api/fetch-leads",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        }
+      );
+
+      const data = await response.json();
+
+      if (
+        !response.ok ||
+        data?.success === false
+      ) {
+        throw new Error(
+          data?.error ||
+            "Real lead collection failed."
+        );
+      }
+
+      setFetchResult(
+        `Added ${data.count ?? 0} leads — Demand: ${
+          data.demand ?? 0
+        }, Supply: ${
+          data.supply ?? 0
+        }, SaaS: ${
+          data.saas ?? 0
+        }`
+      );
+
+      await loadData();
+    } catch (err: any) {
+      setError(
+        err?.message ||
+          "Could not fetch real leads."
+      );
+    } finally {
+      setFetchingLeads(false);
+    }
+  }
+    useEffect(() => {
     loadData();
   }, [section]);
 
@@ -403,6 +464,9 @@ export default function Admin() {
         {section === "leads" && (
           <LeadsSection
             leads={leads}
+            fetchRealLeads={fetchRealLeads}
+            fetchingLeads={fetchingLeads}
+            fetchResult={fetchResult}
           />
         )}
 
@@ -429,7 +493,8 @@ export default function Admin() {
       </div>
     </div>
   );
-  }
+}
+
 function Overview({
   overview,
 }: {
@@ -462,8 +527,7 @@ function Overview({
       ))}
     </div>
   );
-}
-
+    }
 function UsersSection({
   users,
   updateUser,
@@ -654,11 +718,45 @@ function SubscriptionSection({
 
 function LeadsSection({
   leads,
+  fetchRealLeads,
+  fetchingLeads,
+  fetchResult,
 }: {
   leads: AdminLead[];
+  fetchRealLeads: () => Promise<void>;
+  fetchingLeads: boolean;
+  fetchResult: string;
 }) {
   return (
     <div className="space-y-3">
+
+      <div className="rounded-xl border border-[#222] bg-[#111] p-4">
+        <div className="font-semibold">
+          Real Lead Collection
+        </div>
+
+        <div className="text-xs text-[#777] mt-1">
+          Fetch fresh Demand, Supply and SaaS
+          leads from the real lead collector.
+        </div>
+
+        <button
+          onClick={fetchRealLeads}
+          disabled={fetchingLeads}
+          className="mt-4 w-full rounded-lg bg-white text-black py-3 text-sm font-semibold disabled:opacity-50"
+        >
+          {fetchingLeads
+            ? "Fetching Real Leads..."
+            : "Fetch Real Leads"}
+        </button>
+
+        {fetchResult && (
+          <div className="mt-3 rounded-lg border border-[#333] bg-[#0a0a0a] p-3 text-xs text-[#aaa]">
+            {fetchResult}
+          </div>
+        )}
+      </div>
+
       {leads.length === 0 ? (
         <div className="rounded-xl border border-[#222] bg-[#111] p-5 text-sm text-[#888]">
           No leads found.
@@ -698,6 +796,7 @@ function LeadsSection({
     </div>
   );
 }
+
 function LinksSection({
   invites,
   reload,
@@ -834,8 +933,7 @@ function LinksSection({
           </div>
         )}
       </div>
-
-      <div className="rounded-xl border border-[#222] bg-[#111] p-4">
+            <div className="rounded-xl border border-[#222] bg-[#111] p-4">
         <div className="font-semibold mb-3">
           Existing Invites
         </div>
@@ -890,4 +988,5 @@ function Placeholder({
       </div>
     </div>
   );
+  
 }
