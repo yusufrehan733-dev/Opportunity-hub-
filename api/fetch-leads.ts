@@ -326,6 +326,129 @@ function parseDate(
       date.getTime()
     )
   ) {
+    async function processSaas(
+  result: SearchResult,
+  skills: SkillRow[]
+): Promise<boolean> {
+  const title =
+    clean(result.title) ||
+    "Untitled SaaS Lead";
+
+  const snippet =
+    clean(result.snippet);
+
+  const text =
+    clean(`${title} ${snippet}`);
+
+  if (!isSaasProfessional(text)) {
+    return false;
+  }
+
+  if (isBlocked(result.link || "")) {
+    return false;
+  }
+
+  const date =
+    getResultDate(result);
+
+  if (!isFresh(date)) {
+    return false;
+  }
+
+  const matchedSkill =
+    findMatchingSkill(text, skills);
+
+  if (!matchedSkill) {
+    return false;
+  }
+
+  const email =
+    extractEmail(text);
+
+  const phone =
+    extractPhone(text);
+
+  const link =
+    clean(result.link);
+
+  const actionableUrl =
+    isActionableUrl(link)
+      ? link
+      : "";
+
+  if (
+    !email &&
+    !phone &&
+    !actionableUrl
+  ) {
+    return false;
+  }
+
+  if (
+    await alreadyExists(
+      "saas_leads",
+      link
+    )
+  ) {
+    return false;
+  }
+
+  const personName =
+    extractPersonName(
+      title,
+      snippet
+    );
+
+  const score =
+    calculateScore(
+      "SaaS",
+      title,
+      snippet,
+      link,
+      date,
+      Boolean(
+        email ||
+        phone ||
+        actionableUrl
+      )
+    );
+
+  return insertLead(
+    "saas_leads",
+    {
+      source: link,
+      source_url: link,
+      title,
+      name: personName,
+      contact_name: personName,
+      description: snippet,
+      skill:
+        matchedSkill.name,
+      category:
+        matchedSkill.category,
+      subcategory:
+        matchedSkill.subcategory,
+      country:
+        findCountry(text),
+      city: "",
+      contact:
+        email ||
+        phone ||
+        actionableUrl,
+      contact_email: email,
+      contact_phone: phone,
+      contact_url:
+        actionableUrl,
+      status: "active",
+      lead_type: "SaaS",
+      gold_score: score,
+      posted_at:
+        date.toISOString(),
+      created_at:
+        new Date().toISOString(),
+    }
+  );
+    }
     return null;
   }
 
@@ -1094,4 +1217,179 @@ async function processSupply(
         new Date().toISOString(),
     }
   );
+  }
+async function runCollector(): Promise<{
+  demand: number;
+  supply: number;
+  saas: number;
+  queries: number;
+  results: number;
+}> {
+  const skills =
+    await loadSkills();
+
+  if (!skills.length) {
+    throw new Error(
+      "No skills found in the skills table."
+    );
+  }
+
+  const demandQueries =
+    buildDemandQueries(skills);
+
+  const supplyQueries =
+    buildSupplyQueries(skills);
+
+  const saasQueries =
+    buildSaasQueries(skills);
+
+  let demand = 0;
+  let supply = 0;
+  let saas = 0;
+  let queries = 0;
+  let results = 0;
+
+  const runSearches = async (
+    searchQueries: string[],
+    type:
+      | "Demand"
+      | "Supply"
+      | "SaaS"
+  ) => {
+    for (const query of searchQueries) {
+      queries++;
+
+      let searchResults:
+        SearchResult[] = [];
+
+      try {
+        searchResults =
+          await searchSerper(query);
+      } catch (error) {
+        console.error(
+          `Serper ${type} search failed:`,
+          error
+        );
+
+        continue;
       }
+
+      results +=
+        searchResults.length;
+
+      for (const result of searchResults) {
+        try {
+          let inserted = false;
+
+          if (type === "Demand") {
+            inserted =
+              await processDemand(
+                result,
+                skills
+              );
+
+            if (inserted) {
+              demand++;
+            }
+          }
+
+          if (type === "Supply") {
+            inserted =
+              await processSupply(
+                result,
+                skills
+              );
+
+            if (inserted) {
+              supply++;
+            }
+          }
+
+          if (type === "SaaS") {
+            inserted =
+              await processSaas(
+                result,
+                skills
+              );
+
+            if (inserted) {
+              saas++;
+            }
+          }
+        } catch (error) {
+          console.error(
+            `Processing ${type} result failed:`,
+            error
+          );
+        }
+      }
+    }
+  };
+
+  await runSearches(
+    demandQueries,
+    "Demand"
+  );
+
+  await runSearches(
+    supplyQueries,
+    "Supply"
+  );
+
+  await runSearches(
+    saasQueries,
+    "SaaS"
+  );
+
+  return {
+    demand,
+    supply,
+    saas,
+    queries,
+    results,
+  };
+}
+
+export default async function handler(
+  req: any,
+  res: any
+) {
+  if (req.method !== "POST") {
+    return res.status(405).json({
+      success: false,
+      error: "Method not allowed",
+    });
+  }
+
+  try {
+    const result =
+      await runCollector();
+
+    return res.status(200).json({
+      success: true,
+      message:
+        "Real lead collection completed.",
+      added:
+        result.demand +
+        result.supply +
+        result.saas,
+      demand: result.demand,
+      supply: result.supply,
+      saas: result.saas,
+      queries: result.queries,
+      results: result.results,
+    });
+  } catch (error: any) {
+    console.error(
+      "Fetch leads error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      error:
+        error?.message ||
+        "Server error while collecting leads.",
+    });
+  }
+  }
