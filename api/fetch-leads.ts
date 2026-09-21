@@ -20,6 +20,8 @@ export const config = {
 
 const MAX_AGE_HOURS = 72;
 
+const MAX_QUERIES_PER_TYPE = 4;
+
 const COUNTRIES = [
   "United States",
   "USA",
@@ -57,7 +59,9 @@ const BLOCKED_DOMAINS = [
 
 const GENERIC_TERMS = [
   "job board",
+  "job boards",
   "job listings",
+  "job listing",
   "find freelancers",
   "hire freelancers",
   "freelancers for hire",
@@ -126,6 +130,7 @@ const SUPPLY_SIGNALS = [
   "we are hiring",
   "now hiring",
   "job opening",
+  "job openings",
   "vacancy",
   "vacancies",
   "position available",
@@ -165,31 +170,41 @@ type SearchResult = {
   link?: string;
   date?: string;
 };
-
-function lower(value: unknown): string {
+function lower(
+  value: unknown
+): string {
   return String(value ?? "")
     .trim()
     .toLowerCase();
 }
 
-function clean(value: unknown): string {
-  return String(value ?? "").trim();
+function clean(
+  value: unknown
+): string {
+  return String(value ?? "")
+    .trim();
 }
 
 function hasAny(
   text: string,
   terms: string[]
 ): boolean {
-  const value = lower(text);
+  const value =
+    lower(text);
 
-  return terms.some((term) =>
-    value.includes(lower(term))
+  return terms.some(
+    (term) =>
+      value.includes(
+        lower(term)
+      )
   );
 }
+
 function isBlocked(
   url: string
 ): boolean {
-  const value = lower(url);
+  const value =
+    lower(url);
 
   return BLOCKED_DOMAINS.some(
     (domain) =>
@@ -200,23 +215,32 @@ function isBlocked(
 function findCountry(
   text: string
 ): string {
-  const value = lower(text);
+  const value =
+    lower(text);
 
-  for (const country of COUNTRIES) {
+  for (
+    const country of COUNTRIES
+  ) {
     if (
       value.includes(
         lower(country)
       )
     ) {
-      if (country === "USA") {
+      if (
+        country === "USA"
+      ) {
         return "United States";
       }
 
-      if (country === "UK") {
+      if (
+        country === "UK"
+      ) {
         return "United Kingdom";
       }
 
-      if (country === "UAE") {
+      if (
+        country === "UAE"
+      ) {
         return "United Arab Emirates";
       }
 
@@ -230,9 +254,10 @@ function findCountry(
 function extractEmail(
   text: string
 ): string | null {
-  const match = text.match(
-    /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i
-  );
+  const match =
+    text.match(
+      /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i
+    );
 
   return match
     ? match[0]
@@ -242,9 +267,10 @@ function extractEmail(
 function extractPhone(
   text: string
 ): string | null {
-  const match = text.match(
-    /(?:\+?\d[\d\s().-]{7,}\d)/
-  );
+  const match =
+    text.match(
+      /(?:\+?\d[\d\s().-]{7,}\d)/
+    );
 
   return match
     ? match[0].trim()
@@ -258,11 +284,15 @@ function isActionableUrl(
     return false;
   }
 
-  if (isBlocked(link)) {
+  if (
+    isBlocked(link)
+  ) {
     return false;
   }
 
-  return /^https?:\/\//i.test(link);
+  return /^https?:\/\//i.test(
+    link
+  );
 }
 
 function parseDate(
@@ -273,7 +303,9 @@ function parseDate(
   }
 
   const raw =
-    value.trim().toLowerCase();
+    value
+      .trim()
+      .toLowerCase();
 
   const relative =
     raw.match(
@@ -287,15 +319,22 @@ function parseDate(
     const unit =
       relative[2];
 
-    let milliseconds = 0;
+    let milliseconds =
+      0;
 
     if (
-      unit.startsWith("minute")
+      unit.startsWith(
+        "minute"
+      )
     ) {
       milliseconds =
-        amount * 60 * 1000;
+        amount *
+        60 *
+        1000;
     } else if (
-      unit.startsWith("hour")
+      unit.startsWith(
+        "hour"
+      )
     ) {
       milliseconds =
         amount *
@@ -303,7 +342,9 @@ function parseDate(
         60 *
         1000;
     } else if (
-      unit.startsWith("day")
+      unit.startsWith(
+        "day"
+      )
     ) {
       milliseconds =
         amount *
@@ -314,7 +355,8 @@ function parseDate(
     }
 
     return new Date(
-      Date.now() - milliseconds
+      Date.now() -
+        milliseconds
     );
   }
 
@@ -326,129 +368,6 @@ function parseDate(
       date.getTime()
     )
   ) {
-    async function processSaas(
-  result: SearchResult,
-  skills: SkillRow[]
-): Promise<boolean> {
-  const title =
-    clean(result.title) ||
-    "Untitled SaaS Lead";
-
-  const snippet =
-    clean(result.snippet);
-
-  const text =
-    clean(`${title} ${snippet}`);
-
-  if (!isSaasProfessional(text)) {
-    return false;
-  }
-
-  if (isBlocked(result.link || "")) {
-    return false;
-  }
-
-  const date =
-    getResultDate(result);
-
-  if (!isFresh(date)) {
-    return false;
-  }
-
-  const matchedSkill =
-    findMatchingSkill(text, skills);
-
-  if (!matchedSkill) {
-    return false;
-  }
-
-  const email =
-    extractEmail(text);
-
-  const phone =
-    extractPhone(text);
-
-  const link =
-    clean(result.link);
-
-  const actionableUrl =
-    isActionableUrl(link)
-      ? link
-      : "";
-
-  if (
-    !email &&
-    !phone &&
-    !actionableUrl
-  ) {
-    return false;
-  }
-
-  if (
-    await alreadyExists(
-      "saas_leads",
-      link
-    )
-  ) {
-    return false;
-  }
-
-  const personName =
-    extractPersonName(
-      title,
-      snippet
-    );
-
-  const score =
-    calculateScore(
-      "SaaS",
-      title,
-      snippet,
-      link,
-      date,
-      Boolean(
-        email ||
-        phone ||
-        actionableUrl
-      )
-    );
-
-  return insertLead(
-    "saas_leads",
-    {
-      source: link,
-      source_url: link,
-      title,
-      name: personName,
-      contact_name: personName,
-      description: snippet,
-      skill:
-        matchedSkill.name,
-      category:
-        matchedSkill.category,
-      subcategory:
-        matchedSkill.subcategory,
-      country:
-        findCountry(text),
-      city: "",
-      contact:
-        email ||
-        phone ||
-        actionableUrl,
-      contact_email: email,
-      contact_phone: phone,
-      contact_url:
-        actionableUrl,
-      status: "active",
-      lead_type: "SaaS",
-      gold_score: score,
-      posted_at:
-        date.toISOString(),
-      created_at:
-        new Date().toISOString(),
-    }
-  );
-    }
     return null;
   }
 
@@ -458,11 +377,10 @@ function parseDate(
 function getResultDate(
   result: SearchResult
 ): Date {
-  const parsed =
-    parseDate(result.date);
-
   return (
-    parsed ||
+    parseDate(
+      result.date
+    ) ||
     new Date()
   );
 }
@@ -477,7 +395,8 @@ function isFresh(
 
   return (
     ageHours >= 0 &&
-    ageHours <= MAX_AGE_HOURS
+    ageHours <=
+      MAX_AGE_HOURS
   );
 }
 
@@ -486,10 +405,13 @@ function extractPersonName(
   snippet: string
 ): string | null {
   const combined =
-    `${title} ${snippet}`.trim();
+    `${title} ${snippet}`
+      .trim();
 
   const email =
-    extractEmail(combined);
+    extractEmail(
+      combined
+    );
 
   if (email) {
     const beforeEmail =
@@ -502,7 +424,9 @@ function extractPersonName(
         .split(/\s+/)
         .filter(Boolean);
 
-    if (words.length >= 2) {
+    if (
+      words.length >= 2
+    ) {
       const candidate =
         words
           .slice(
@@ -514,8 +438,10 @@ function extractPersonName(
           .join(" ");
 
       if (
-        candidate.length >= 4 &&
-        candidate.length <= 80
+        candidate.length >=
+          4 &&
+        candidate.length <=
+          80
       ) {
         return candidate;
       }
@@ -534,11 +460,12 @@ function extractPersonName(
       .split(/\s+/)
       .length >= 2
   ) {
-    return separators[0].trim();
+    return separators[0]
+      .trim();
   }
 
   return null;
-  }
+    }
 function isDemand(
   text: string
 ): boolean {
@@ -662,23 +589,14 @@ function calculateScore(
     score += 30;
   }
 
-  if (type === "SaaS") {
-    if (
-      hasAny(
-        text,
-        SAAS_PROVIDER_SIGNALS
-      )
-    ) {
-      score += 30;
-    }
-
-    if (
-      /linkedin|instagram|facebook|youtube|website|profile|portfolio/i.test(
-        link
-      )
-    ) {
-      score += 20;
-    }
+  if (
+    type === "SaaS" &&
+    hasAny(
+      text,
+      SAAS_PROVIDER_SIGNALS
+    )
+  ) {
+    score += 30;
   }
 
   if (hasContact) {
@@ -694,9 +612,13 @@ function calculateScore(
       date.getTime()) /
     (1000 * 60 * 60);
 
-  if (ageHours <= 24) {
+  if (
+    ageHours <= 24
+  ) {
     score += 10;
-  } else if (ageHours <= 48) {
+  } else if (
+    ageHours <= 48
+  ) {
     score += 5;
   }
 
@@ -746,7 +668,10 @@ async function alreadyExists(
   } = await supabase
     .from(table)
     .select("id")
-    .eq("source", source)
+    .eq(
+      "source",
+      source
+    )
     .limit(1);
 
   if (error) {
@@ -830,136 +755,533 @@ async function insertLead(
 
   return true;
   }
+function uniqueStrings(
+  values: string[]
+): string[] {
+  return Array.from(
+    new Set(
+      values
+        .map((value) =>
+          clean(value)
+        )
+        .filter(Boolean)
+    )
+  );
+}
+
+function getSkillSearchTerms(
+  skill: SkillRow
+): string[] {
+  const terms: string[] = [];
+
+  if (skill.name) {
+    terms.push(
+      clean(skill.name)
+    );
+  }
+
+  if (skill.category) {
+    terms.push(
+      clean(skill.category)
+    );
+  }
+
+  if (skill.subcategory) {
+    terms.push(
+      clean(skill.subcategory)
+    );
+  }
+
+  if (Array.isArray(skill.tags)) {
+    terms.push(
+      ...skill.tags.map(
+        (tag) => clean(tag)
+      )
+    );
+  } else if (
+    typeof skill.tags === "string"
+  ) {
+    terms.push(
+      ...skill.tags
+        .split(",")
+        .map((tag) =>
+          clean(tag)
+        )
+    );
+  }
+
+  const text = lower(
+    terms.join(" ")
+  );
+
+  /*
+   * Add broader parent skills.
+   *
+   * This lets the collector search for
+   * both specialized and broader wording.
+   */
+  if (
+    /tajweed|qiraat|hifz|tafseer|tafsir|quran/.test(
+      text
+    )
+  ) {
+    terms.push("Quran");
+  }
+
+  if (
+    /calculus|algebra|geometry|trigonometry|statistics|mathematics|math/.test(
+      text
+    )
+  ) {
+    terms.push("Math");
+    terms.push("Mathematics");
+  }
+
+  if (
+    /sociology|social research/.test(
+      text
+    )
+  ) {
+    terms.push("Social Research");
+    terms.push("Research");
+  }
+
+  if (
+    /psychology|psychological/.test(
+      text
+    )
+  ) {
+    terms.push("Psychology");
+  }
+
+  if (
+    /anthropology/.test(
+      text
+    )
+  ) {
+    terms.push("Anthropology");
+    terms.push("Social Science");
+  }
+
+  if (
+    /economics|economic/.test(
+      text
+    )
+  ) {
+    terms.push("Economics");
+  }
+
+  if (
+    /physics/.test(
+      text
+    )
+  ) {
+    terms.push("Physics");
+    terms.push("Science");
+  }
+
+  if (
+    /chemistry/.test(
+      text
+    )
+  ) {
+    terms.push("Chemistry");
+    terms.push("Science");
+  }
+
+  if (
+    /biology/.test(
+      text
+    )
+  ) {
+    terms.push("Biology");
+    terms.push("Science");
+  }
+
+  if (
+    /fiqh/.test(
+      text
+    )
+  ) {
+    terms.push("Fiqh");
+    terms.push("Islamic Studies");
+  }
+
+  if (
+    /islamiyat|islamic studies|islamic/.test(
+      text
+    )
+  ) {
+    terms.push(
+      "Islamiyat"
+    );
+    terms.push(
+      "Islamic Studies"
+    );
+  }
+
+  return uniqueStrings(
+    terms
+  );
+}
+
+function getAllSkillSearchTerms(
+  skills: SkillRow[]
+): string[] {
+  const all: string[] = [];
+
+  for (
+    const skill of skills
+  ) {
+    all.push(
+      ...getSkillSearchTerms(
+        skill
+      )
+    );
+  }
+
+  return uniqueStrings(
+    all
+  );
+}
+
+function quoteSearchTerm(
+  term: string
+): string {
+  const value =
+    clean(term)
+      .replace(
+        /"/g,
+        ""
+      );
+
+  return `"${value}"`;
+}
+
+function buildSkillGroups(
+  skills: SkillRow[]
+): string[][] {
+  const terms =
+    getAllSkillSearchTerms(
+      skills
+    );
+
+  if (
+    terms.length === 0
+  ) {
+    return [
+      ["teacher"],
+      ["tutor"],
+      ["freelancer"],
+      ["consultant"],
+    ];
+  }
+
+  const groupCount =
+    Math.min(
+      MAX_QUERIES_PER_TYPE,
+      Math.max(
+        1,
+        Math.ceil(
+          terms.length / 10
+        )
+      )
+    );
+
+  const groups: string[][] =
+    Array.from(
+      {
+        length:
+          groupCount,
+      },
+      () => []
+    );
+
+  terms.forEach(
+    (
+      term,
+      index
+    ) => {
+      groups[
+        index %
+          groupCount
+      ].push(term);
+    }
+  );
+
+  return groups;
+}
+
+function buildQueries(
+  skills: SkillRow[],
+  signals: string[],
+  type:
+    | "Demand"
+    | "Supply"
+    | "SaaS"
+): string[] {
+  const groups =
+    buildSkillGroups(
+      skills
+    );
+
+  const signalGroups =
+    type === "Demand"
+      ? [
+          [
+            "looking for",
+            "need",
+            "seeking",
+            "wanted",
+          ],
+          [
+            "need someone",
+            "help me find",
+            "can anyone recommend",
+          ],
+          [
+            "my child needs",
+            "my daughter needs",
+            "my son needs",
+          ],
+          [
+            "client needs",
+            "company needs",
+            "urgent",
+          ],
+        ]
+      : type === "Supply"
+      ? [
+          [
+            "hiring",
+            "now hiring",
+            "job opening",
+          ],
+          [
+            "vacancy",
+            "vacancies",
+            "position available",
+          ],
+          [
+            "apply now",
+            "apply for",
+            "applications open",
+          ],
+          [
+            "recruiting",
+            "seeking a",
+            "looking to hire",
+          ],
+        ]
+      : [
+          [
+            "teacher",
+            "tutor",
+            "coach",
+          ],
+          [
+            "consultant",
+            "researcher",
+            "author",
+          ],
+          [
+            "freelancer",
+            "designer",
+            "developer",
+          ],
+          [
+            "writer",
+            "virtual assistant",
+            "professional",
+          ],
+        ];
+
+  const queries: string[] =
+    [];
+
+  for (
+    let index = 0;
+    index <
+    Math.min(
+      MAX_QUERIES_PER_TYPE,
+      groups.length
+    );
+    index++
+  ) {
+    const skillPart =
+      groups[index]
+        .map(
+          quoteSearchTerm
+        )
+        .join(" OR ");
+
+    const signalPart =
+      signalGroups[index]
+        .map(
+          quoteSearchTerm
+        )
+        .join(" OR ");
+
+    const query =
+      `(${skillPart}) (${signalPart})`;
+
+    queries.push(
+      query
+    );
+  }
+
+  /*
+   * Make sure every lead type gets
+   * at least one search even when the
+   * skills table is temporarily empty.
+   */
+  if (
+    queries.length === 0
+  ) {
+    queries.push(
+      `(${signals
+        .slice(0, 6)
+        .map(
+          quoteSearchTerm
+        )
+        .join(" OR ")})`
+    );
+  }
+
+  return queries;
+}
+
 function findMatchingSkill(
   text: string,
   skills: SkillRow[]
-): SkillRow | null {
-  const normalizedText =
+): {
+  name: string;
+  category: string;
+  subcategory: string;
+} | null {
+  const value =
     lower(text);
 
-  let bestMatch:
-    SkillRow | null = null;
+  /*
+   * Pass 1:
+   * exact skill names first.
+   *
+   * This prevents a broad skill such as
+   * "Math" from hiding a more specific
+   * skill such as "Calculus".
+   */
+  for (
+    const skill of skills
+  ) {
+    const name =
+      clean(skill.name);
 
-  let bestLength = 0;
-
-  for (const skill of skills) {
-    const names = [
-      skill.name,
-      skill.category,
-      skill.subcategory,
-      ...(Array.isArray(skill.tags)
-        ? skill.tags
-        : typeof skill.tags === "string"
-        ? skill.tags
-            .split(",")
-            .map((tag) => tag.trim())
-        : [])
-    ]
-      .filter(Boolean)
-      .map((value) =>
-        lower(String(value))
-      );
-
-    for (const name of names) {
-      if (
-        name &&
-        normalizedText.includes(name) &&
-        name.length > bestLength
-      ) {
-        bestMatch = skill;
-        bestLength = name.length;
-      }
+    if (
+      name &&
+      value.includes(
+        lower(name)
+      )
+    ) {
+      return {
+        name,
+        category:
+          clean(
+            skill.category
+          ),
+        subcategory:
+          clean(
+            skill.subcategory
+          ),
+      };
     }
   }
 
-  return bestMatch;
+  /*
+   * Pass 2:
+   * category / subcategory / tags.
+   */
+  for (
+    const skill of skills
+  ) {
+    const terms =
+      getSkillSearchTerms(
+        skill
+      );
+
+    const matchingTerm =
+      terms.find(
+        (term) =>
+          value.includes(
+            lower(term)
+          )
+      );
+
+    if (
+      matchingTerm
+    ) {
+      return {
+        name:
+          clean(
+            skill.name
+          ) ||
+          matchingTerm,
+        category:
+          clean(
+            skill.category
+          ),
+        subcategory:
+          clean(
+            skill.subcategory
+          ),
+      };
+    }
+  }
+
+  return null;
 }
 
-function buildDemandQueries(
-  skills: SkillRow[]
-): string[] {
-  const queries: string[] = [];
+function getContactValue(
+  result: SearchResult
+): {
+  email: string | null;
+  phone: string | null;
+  contact: string | null;
+} {
+  const text =
+    `${clean(
+      result.title
+    )} ${clean(
+      result.snippet
+    )} ${clean(
+      result.link
+    )}`;
 
-  for (const skill of skills) {
-    const names = [
-      clean(skill.name),
-      clean(skill.category),
-      clean(skill.subcategory),
-    ].filter(Boolean);
+  const email =
+    extractEmail(
+      text
+    );
 
-    const uniqueNames =
-      Array.from(
-        new Set(names)
-      );
+  const phone =
+    extractPhone(
+      text
+    );
 
-    for (const name of uniqueNames) {
-      queries.push(
-        `"${name}" ("looking for" OR "need" OR "needed" OR "hiring" OR "seeking")`
-      );
-    }
-  }
+  const contact =
+    email ||
+    phone ||
+    (isActionableUrl(
+      clean(result.link)
+    )
+      ? clean(
+          result.link
+        )
+      : null);
 
-  return Array.from(
-    new Set(queries)
-  ).slice(0, 12);
-}
-
-function buildSupplyQueries(
-  skills: SkillRow[]
-): string[] {
-  const queries: string[] = [];
-
-  for (const skill of skills) {
-    const names = [
-      clean(skill.name),
-      clean(skill.category),
-      clean(skill.subcategory),
-    ].filter(Boolean);
-
-    const uniqueNames =
-      Array.from(
-        new Set(names)
-      );
-
-    for (const name of uniqueNames) {
-      queries.push(
-        `"${name}" ("job" OR "position" OR "opportunity" OR "vacancy" OR "hiring" OR "recruiting")`
-      );
-    }
-  }
-
-  return Array.from(
-    new Set(queries)
-  ).slice(0, 12);
-}
-
-function buildSaasQueries(
-  skills: SkillRow[]
-): string[] {
-  const queries: string[] = [];
-
-  for (const skill of skills) {
-    const names = [
-      clean(skill.name),
-      clean(skill.category),
-      clean(skill.subcategory),
-    ].filter(Boolean);
-
-    const uniqueNames =
-      Array.from(
-        new Set(names)
-      );
-
-    for (const name of uniqueNames) {
-      queries.push(
-        `"${name}" ("teacher" OR "tutor" OR "coach" OR "consultant" OR "researcher" OR "author" OR "designer" OR "developer" OR "writer")`
-      );
-    }
-  }
-
-  return Array.from(
-    new Set(queries)
-  ).slice(0, 12);
+  return {
+    email,
+    phone,
+    contact,
+  };
 }
 
 async function processDemand(
@@ -967,29 +1289,54 @@ async function processDemand(
   skills: SkillRow[]
 ): Promise<boolean> {
   const title =
-    clean(result.title) ||
-    "Untitled Demand Lead";
+    clean(result.title);
 
   const snippet =
     clean(result.snippet);
 
+  const link =
+    clean(result.link);
+
   const text =
-    clean(
-      `${title} ${snippet}`
+    `${title} ${snippet}`;
+
+  if (
+    !title ||
+    !link
+  ) {
+    return false;
+  }
+
+  if (
+    isBlocked(link)
+  ) {
+    return false;
+  }
+
+  if (
+    !isFresh(
+      getResultDate(
+        result
+      )
+    )
+  ) {
+    return false;
+  }
+
+  if (
+    !isDemand(text)
+  ) {
+    return false;
+  }
+
+  const contact =
+    getContactValue(
+      result
     );
 
-  if (!isDemand(text)) {
-    return false;
-  }
-
-  if (isBlocked(result.link || "")) {
-    return false;
-  }
-
-  const date =
-    getResultDate(result);
-
-  if (!isFresh(date)) {
+  if (
+    !contact.contact
+  ) {
     return false;
   }
 
@@ -999,28 +1346,8 @@ async function processDemand(
       skills
     );
 
-  if (!matchedSkill) {
-    return false;
-  }
-
-  const email =
-    extractEmail(text);
-
-  const phone =
-    extractPhone(text);
-
-  const link =
-    clean(result.link);
-
-  const actionableUrl =
-    isActionableUrl(link)
-      ? link
-      : "";
-
   if (
-    !email &&
-    !phone &&
-    !actionableUrl
+    !matchedSkill
   ) {
     return false;
   }
@@ -1034,6 +1361,11 @@ async function processDemand(
     return false;
   }
 
+  const date =
+    getResultDate(
+      result
+    );
+
   const score =
     calculateScore(
       "Demand",
@@ -1042,9 +1374,7 @@ async function processDemand(
       link,
       date,
       Boolean(
-        email ||
-        phone ||
-        actionableUrl
+        contact.contact
       )
     );
 
@@ -1059,92 +1389,97 @@ async function processDemand(
           title,
           snippet
         ),
-      description: snippet,
       skill_needed:
         matchedSkill.name,
-      skill:
-        matchedSkill.name,
+      description:
+        snippet,
+      contact_email:
+        contact.email,
+      contact_phone:
+        contact.phone,
+      contact:
+        contact.contact,
+      status: "new",
       category:
         matchedSkill.category,
       subcategory:
         matchedSkill.subcategory,
       country:
         findCountry(text),
-      city: "",
+      city: null,
       budget: null,
       currency: null,
-      contact:
-        email ||
-        phone ||
-        actionableUrl,
-      contact_email: email,
-      contact_phone: phone,
-      contact_url:
-        actionableUrl,
-      status: "active",
       lead_type: "Demand",
       gold_score: score,
       posted_at:
         date.toISOString(),
-      created_at:
-        new Date().toISOString(),
     }
   );
-   }
+        }
 async function processSupply(
   result: SearchResult,
   skills: SkillRow[]
 ): Promise<boolean> {
   const title =
-    clean(result.title) ||
-    "Untitled Supply Lead";
+    clean(result.title);
 
   const snippet =
     clean(result.snippet);
 
+  const link =
+    clean(result.link);
+
   const text =
-    clean(`${title} ${snippet}`);
+    `${title} ${snippet}`;
 
-  if (!isSupply(text)) {
+  if (
+    !title ||
+    !link
+  ) {
     return false;
   }
 
-  if (isBlocked(result.link || "")) {
+  if (
+    isBlocked(link)
+  ) {
     return false;
   }
 
-  const date =
-    getResultDate(result);
+  if (
+    !isFresh(
+      getResultDate(
+        result
+      )
+    )
+  ) {
+    return false;
+  }
 
-  if (!isFresh(date)) {
+  if (
+    !isSupply(text)
+  ) {
+    return false;
+  }
+
+  const contact =
+    getContactValue(
+      result
+    );
+
+  if (
+    !contact.contact
+  ) {
     return false;
   }
 
   const matchedSkill =
-    findMatchingSkill(text, skills);
-
-  if (!matchedSkill) {
-    return false;
-  }
-
-  const email =
-    extractEmail(text);
-
-  const phone =
-    extractPhone(text);
-
-  const link =
-    clean(result.link);
-
-  const actionableUrl =
-    isActionableUrl(link)
-      ? link
-      : "";
+    findMatchingSkill(
+      text,
+      skills
+    );
 
   if (
-    !email &&
-    !phone &&
-    !actionableUrl
+    !matchedSkill
   ) {
     return false;
   }
@@ -1158,6 +1493,11 @@ async function processSupply(
     return false;
   }
 
+  const date =
+    getResultDate(
+      result
+    );
+
   const score =
     calculateScore(
       "Supply",
@@ -1166,9 +1506,7 @@ async function processSupply(
       link,
       date,
       Boolean(
-        email ||
-        phone ||
-        actionableUrl
+        contact.contact
       )
     );
 
@@ -1178,175 +1516,343 @@ async function processSupply(
       source: link,
       source_url: link,
       title,
-      contact_name:
-        extractPersonName(
-          title,
-          snippet
-        ),
       company_name:
         extractPersonName(
           title,
           snippet
         ),
-      description: snippet,
+      contact_name:
+        extractPersonName(
+          title,
+          snippet
+        ),
       skill:
         matchedSkill.name,
+      description:
+        snippet,
+      contact_email:
+        contact.email,
+      contact_phone:
+        contact.phone,
+      contact:
+        contact.contact,
+      status: "new",
       category:
         matchedSkill.category,
       subcategory:
         matchedSkill.subcategory,
       country:
         findCountry(text),
-      city: "",
+      city: null,
       salary: null,
       currency: null,
-      contact:
-        email ||
-        phone ||
-        actionableUrl,
-      contact_email: email,
-      contact_phone: phone,
-      contact_url:
-        actionableUrl,
-      status: "active",
       lead_type: "Supply",
       gold_score: score,
       posted_at:
         date.toISOString(),
-      created_at:
-        new Date().toISOString(),
     }
   );
-  }
-async function runCollector(): Promise<{
-  demand: number;
-  supply: number;
-  saas: number;
-  queries: number;
-  results: number;
-}> {
-  const skills =
-    await loadSkills();
+}
 
-  if (!skills.length) {
-    throw new Error(
-      "No skills found in the skills table."
+async function processSaas(
+  result: SearchResult,
+  skills: SkillRow[]
+): Promise<boolean> {
+  const title =
+    clean(result.title);
+
+  const snippet =
+    clean(result.snippet);
+
+  const link =
+    clean(result.link);
+
+  const text =
+    `${title} ${snippet}`;
+
+  if (
+    !title ||
+    !link
+  ) {
+    return false;
+  }
+
+  if (
+    isBlocked(link)
+  ) {
+    return false;
+  }
+
+  if (
+    !isFresh(
+      getResultDate(
+        result
+      )
+    )
+  ) {
+    return false;
+  }
+
+  if (
+    !isSaasProfessional(
+      text
+    )
+  ) {
+    return false;
+  }
+
+  const contact =
+    getContactValue(
+      result
     );
+
+  if (
+    !contact.contact
+  ) {
+    return false;
   }
 
-  const demandQueries =
-    buildDemandQueries(skills);
+  /*
+   * SaaS prospects do not have to be
+   * looking for work.
+   *
+   * We first try to map them to one
+   * of the user's supported skills.
+   */
+  const matchedSkill =
+    findMatchingSkill(
+      text,
+      skills
+    );
 
-  const supplyQueries =
-    buildSupplyQueries(skills);
+  const fallbackSkill =
+    matchedSkill || {
+      name: "Professional Services",
+      category:
+        "Freelancing & Business",
+      subcategory: "",
+    };
 
-  const saasQueries =
-    buildSaasQueries(skills);
+  if (
+    await alreadyExists(
+      "saas_leads",
+      link
+    )
+  ) {
+    return false;
+  }
 
-  let demand = 0;
-  let supply = 0;
-  let saas = 0;
-  let queries = 0;
-  let results = 0;
+  const date =
+    getResultDate(
+      result
+    );
 
-  const runSearches = async (
-    searchQueries: string[],
-    type:
-      | "Demand"
-      | "Supply"
-      | "SaaS"
-  ) => {
-    for (const query of searchQueries) {
-      queries++;
+  const score =
+    calculateScore(
+      "SaaS",
+      title,
+      snippet,
+      link,
+      date,
+      Boolean(
+        contact.contact
+      )
+    );
 
-      let searchResults:
-        SearchResult[] = [];
-
-      try {
-        searchResults =
-          await searchSerper(query);
-      } catch (error) {
-        console.error(
-          `Serper ${type} search failed:`,
-          error
+  return insertLead(
+    "saas_leads",
+    {
+      source: link,
+      source_url: link,
+      title,
+      name:
+        extractPersonName(
+          title,
+          snippet
+        ),
+      skill:
+        fallbackSkill.name,
+      description:
+        snippet,
+      contact_email:
+        contact.email,
+      contact_phone:
+        contact.phone,
+      contact:
+        contact.contact,
+      status: "new",
+      category:
+        fallbackSkill.category,
+      subcategory:
+        fallbackSkill.subcategory,
+      country:
+        findCountry(text),
+      city: null,
+      lead_type: "SaaS",
+      gold_score: score,
+      posted_at:
+        date.toISOString(),
+    }
+  );
+      }
+async function runSearches(
+  type:
+    | "Demand"
+    | "Supply"
+    | "SaaS",
+  skills: SkillRow[]
+): Promise<number> {
+  const queries =
+    type === "Demand"
+      ? buildQueries(
+          skills,
+          DEMAND_SIGNALS,
+          "Demand"
+        )
+      : type === "Supply"
+      ? buildQueries(
+          skills,
+          SUPPLY_SIGNALS,
+          "Supply"
+        )
+      : buildQueries(
+          skills,
+          SAAS_PROVIDER_SIGNALS,
+          "SaaS"
         );
 
-        continue;
-      }
+  let added = 0;
 
-      results +=
-        searchResults.length;
+  for (
+    const query of queries
+  ) {
+    try {
+      console.log(
+        `Searching ${type}:`,
+        query
+      );
 
-      for (const result of searchResults) {
+      const results =
+        await searchSerper(
+          query
+        );
+
+      for (
+        const result of results
+      ) {
         try {
-          let inserted = false;
+          let inserted =
+            false;
 
-          if (type === "Demand") {
+          if (
+            type === "Demand"
+          ) {
             inserted =
               await processDemand(
                 result,
                 skills
               );
-
-            if (inserted) {
-              demand++;
-            }
-          }
-
-          if (type === "Supply") {
+          } else if (
+            type === "Supply"
+          ) {
             inserted =
               await processSupply(
                 result,
                 skills
               );
-
-            if (inserted) {
-              supply++;
-            }
-          }
-
-          if (type === "SaaS") {
+          } else {
             inserted =
               await processSaas(
                 result,
                 skills
               );
-
-            if (inserted) {
-              saas++;
-            }
           }
-        } catch (error) {
+
+          if (
+            inserted
+          ) {
+            added++;
+          }
+        } catch (
+          error
+        ) {
           console.error(
             `Processing ${type} result failed:`,
             error
           );
         }
       }
+    } catch (
+      error
+    ) {
+      console.error(
+        `${type} search failed:`,
+        error
+      );
     }
-  };
+  }
 
-  await runSearches(
-    demandQueries,
-    "Demand"
+  return added;
+}
+
+async function runCollector(): Promise<{
+  demand: number;
+  supply: number;
+  saas: number;
+}> {
+  if (
+    !supabaseUrl
+  ) {
+    throw new Error(
+      "SUPABASE_URL is missing"
+    );
+  }
+
+  if (
+    !supabaseServiceKey
+  ) {
+    throw new Error(
+      "SUPABASE_SERVICE_ROLE_KEY is missing"
+    );
+  }
+
+  if (
+    !serperApiKey
+  ) {
+    throw new Error(
+      "SERPER_API_KEY is missing"
+    );
+  }
+
+  const skills =
+    await loadSkills();
+
+  console.log(
+    `Loaded ${skills.length} skills`
   );
 
-  await runSearches(
-    supplyQueries,
-    "Supply"
-  );
+  const demand =
+    await runSearches(
+      "Demand",
+      skills
+    );
 
-  await runSearches(
-    saasQueries,
-    "SaaS"
-  );
+  const supply =
+    await runSearches(
+      "Supply",
+      skills
+    );
+
+  const saas =
+    await runSearches(
+      "SaaS",
+      skills
+    );
 
   return {
     demand,
     supply,
     saas,
-    queries,
-    results,
   };
 }
 
@@ -1354,42 +1860,53 @@ export default async function handler(
   req: any,
   res: any
 ) {
-  if (req.method !== "POST") {
-    return res.status(405).json({
-      success: false,
-      error: "Method not allowed",
-    });
+  if (
+    req.method !== "POST"
+  ) {
+    return res
+      .status(405)
+      .json({
+        error:
+          "Method not allowed",
+      });
   }
 
   try {
     const result =
       await runCollector();
 
-    return res.status(200).json({
-      success: true,
-      message:
-        "Real lead collection completed.",
-      added:
-        result.demand +
-        result.supply +
-        result.saas,
-      demand: result.demand,
-      supply: result.supply,
-      saas: result.saas,
-      queries: result.queries,
-      results: result.results,
-    });
-  } catch (error: any) {
+    return res
+      .status(200)
+      .json({
+        success: true,
+        added:
+          result.demand +
+          result.supply +
+          result.saas,
+        demand:
+          result.demand,
+        supply:
+          result.supply,
+        saas:
+          result.saas,
+      });
+  } catch (
+    error
+  ) {
     console.error(
-      "Fetch leads error:",
+      "Lead collector failed:",
       error
     );
 
-    return res.status(500).json({
-      success: false,
-      error:
-        error?.message ||
-        "Server error while collecting leads.",
-    });
+    return res
+      .status(500)
+      .json({
+        success: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Lead collector failed",
+      });
   }
-  }
+}
+
