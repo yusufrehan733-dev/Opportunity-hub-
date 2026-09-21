@@ -14,12 +14,6 @@ const supabase = createClient(
   supabaseServiceKey
 );
 
-/*
- * IMPORTANT:
- * This function uses @supabase/supabase-js,
- * so it must run on the Node.js runtime,
- * not Vercel Edge.
- */
 export const config = {
   runtime: "nodejs",
 };
@@ -125,7 +119,6 @@ const DEMAND_SIGNALS = [
   "can anyone recommend",
   "does anyone know",
   "help me find",
-  "hiring",
 ];
 
 const SUPPLY_SIGNALS = [
@@ -149,41 +142,38 @@ const SAAS_PROVIDER_SIGNALS = [
   "teacher",
   "tutor",
   "coach",
-  "author",
   "consultant",
+  "freelancer",
   "designer",
   "developer",
   "writer",
-  "copywriter",
-  "video editor",
+  "researcher",
+  "author",
   "virtual assistant",
-  "freelancer",
-  "trainer",
-  "mentor",
-  "therapist",
-  "professional",
 ];
+
+type SkillRow = {
+  name?: string | null;
+  category?: string | null;
+  subcategory?: string | null;
+  tags?: string[] | string | null;
+};
 
 type SearchResult = {
   title?: string;
-  link?: string;
   snippet?: string;
+  link?: string;
   date?: string;
 };
 
-type SkillRow = {
-  name?: string;
-  category?: string;
-  subcategory?: string;
-  tags?: string[] | string;
-};
-
-function clean(value: unknown): string {
-  return String(value || "").trim();
+function lower(value: unknown): string {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase();
 }
 
-function lower(value: string): string {
-  return value.toLowerCase();
+function clean(value: unknown): string {
+  return String(value ?? "").trim();
 }
 
 function hasAny(
@@ -193,11 +183,12 @@ function hasAny(
   const value = lower(text);
 
   return terms.some((term) =>
-    value.includes(term)
+    value.includes(lower(term))
   );
 }
-
-function isBlocked(url: string): boolean {
+function isBlocked(
+  url: string
+): boolean {
   const value = lower(url);
 
   return BLOCKED_DOMAINS.some(
@@ -342,17 +333,15 @@ function parseDate(
 }
 
 function getResultDate(
-  value?: string
+  result: SearchResult
 ): Date {
   const parsed =
-    parseDate(value);
+    parseDate(result.date);
 
-  /*
-   * Serper can omit the date field.
-   * The search itself is restricted
-   * to the last 3 days.
-   */
-  return parsed || new Date();
+  return (
+    parsed ||
+    new Date()
+  );
 }
 
 function isFresh(
@@ -426,8 +415,7 @@ function extractPersonName(
   }
 
   return null;
-}
-
+  }
 function isDemand(
   text: string
 ): boolean {
@@ -571,8 +559,7 @@ function calculateScore(
   }
 
   if (hasContact) {
-    score +=
-            25;
+    score += 25;
   }
 
   if (link) {
@@ -599,12 +586,14 @@ function calculateScore(
 async function loadSkills(): Promise<
   SkillRow[]
 > {
-  const { data, error } =
-    await supabase
-      .from("skills")
-      .select(
-        "name, category, subcategory, tags"
-      );
+  const {
+    data,
+    error,
+  } = await supabase
+    .from("skills")
+    .select(
+      "name, category, subcategory, tags"
+    );
 
   if (error) {
     console.error(
@@ -624,12 +613,18 @@ async function alreadyExists(
   table: string,
   source: string
 ): Promise<boolean> {
-  const { data, error } =
-    await supabase
-      .from(table)
-      .select("id")
-      .eq("source", source)
-      .limit(1);
+  if (!source) {
+    return false;
+  }
+
+  const {
+    data,
+    error,
+  } = await supabase
+    .from(table)
+    .select("id")
+    .eq("source", source)
+    .limit(1);
 
   if (error) {
     console.error(
@@ -650,7 +645,9 @@ async function searchSerper(
   query: string
 ): Promise<SearchResult[]> {
   if (!serperApiKey) {
-    return [];
+    throw new Error(
+      "SERPER_API_KEY is missing"
+    );
   }
 
   const response =
@@ -693,10 +690,11 @@ async function insertLead(
     unknown
   >
 ): Promise<boolean> {
-  const { error } =
-    await supabase
-      .from(table)
-      .insert(lead);
+  const {
+    error,
+  } = await supabase
+    .from(table)
+    .insert(lead);
 
   if (error) {
     console.error(
@@ -708,483 +706,7 @@ async function insertLead(
   }
 
   return true;
-}
-async function processDemand(
-  result: SearchResult,
-  skills: SkillRow[]
-): Promise<boolean> {
-  const title =
-    clean(result.title) ||
-    "Untitled Demand Lead";
-
-  const snippet =
-    clean(result.snippet);
-
-  const text = clean(
-    `${title} ${snippet}`
-  );
-
-  if (!isDemand(text)) {
-    return false;
   }
-
-  if (isBlocked(text)) {
-    return false;
-  }
-
-  const date = getResultDate(result);
-
-  if (!isFresh(date)) {
-    return false;
-  }
-
-  const country =
-    findCountry(text);
-
-  const matchedSkill =
-    findMatchingSkill(
-      text,
-      skills
-    );
-
-  if (!matchedSkill) {
-    return false;
-  }
-
-  const email =
-    extractEmail(text);
-
-  const phone =
-    extractPhone(text);
-
-  const link =
-    clean(result.link);
-
-  const actionableUrl =
-    isActionableUrl(link)
-      ? link
-      : "";
-
-  if (
-    !email &&
-    !phone &&
-    !actionableUrl
-  ) {
-    return false;
-  }
-
-  if (
-    await alreadyExists(
-      "demand_leads",
-      link
-    )
-  ) {
-    return false;
-  }
-
-  const score =
-    calculateScore(
-      result,
-      date,
-      Boolean(
-        email ||
-        phone ||
-        actionableUrl
-      )
-    );
-
-  const inserted =
-    await insertLead(
-      "demand_leads",
-      {
-        source: link,
-        source_url: link,
-
-        title,
-
-        client_name:
-          extractPersonName(
-            title
-          ),
-
-        description:
-          snippet,
-
-        skill_needed:
-          matchedSkill.name,
-
-        skill:
-          matchedSkill.name,
-
-        category:
-          matchedSkill.category,
-
-        subcategory:
-          matchedSkill.subcategory,
-
-        country,
-
-        city:
-          "",
-
-        budget:
-          null,
-
-        currency:
-          null,
-
-        contact:
-          email ||
-          phone ||
-          actionableUrl,
-
-        contact_email:
-          email,
-
-        contact_phone:
-          phone,
-
-        contact_url:
-          actionableUrl,
-
-        status:
-          "active",
-
-        lead_type:
-          "Demand",
-
-        gold_score:
-          score,
-
-        posted_at:
-          date.toISOString(),
-
-        created_at:
-          new Date().toISOString()
-      }
-    );
-
-  return inserted;
-}
-
-async function processSupply(
-  result: SearchResult,
-  skills: SkillRow[]
-): Promise<boolean> {
-  const title =
-    clean(result.title) ||
-    "Untitled Supply Lead";
-
-  const snippet =
-    clean(result.snippet);
-
-  const text = clean(
-    `${title} ${snippet}`
-  );
-
-  if (!isSupply(text)) {
-    return false;
-  }
-
-  if (isBlocked(text)) {
-    return false;
-  }
-
-  const date = getResultDate(result);
-
-  if (!isFresh(date)) {
-    return false;
-  }
-
-  const country =
-    findCountry(text);
-
-  const matchedSkill =
-    findMatchingSkill(
-      text,
-      skills
-    );
-
-  if (!matchedSkill) {
-    return false;
-  }
-
-  const email =
-    extractEmail(text);
-
-  const phone =
-    extractPhone(text);
-
-  const link =
-    clean(result.link);
-
-  const actionableUrl =
-    isActionableUrl(link)
-      ? link
-      : "";
-
-  if (
-    !email &&
-    !phone &&
-    !actionableUrl
-  ) {
-    return false;
-  }
-
-  if (
-    await alreadyExists(
-      "supply_leads",
-      link
-    )
-  ) {
-    return false;
-  }
-
-  const score =
-    calculateScore(
-      result,
-      date,
-      Boolean(
-        email ||
-        phone ||
-        actionableUrl
-      )
-    );
-
-  const companyName =
-    extractPersonName(
-      title
-    );
-
-  const inserted =
-    await insertLead(
-      "supply_leads",
-      {
-        source: link,
-        source_url: link,
-
-        title,
-
-        company_name:
-          companyName,
-
-        client_name:
-          companyName,
-
-        description:
-          snippet,
-
-        skill:
-          matchedSkill.name,
-
-        skill_needed:
-          matchedSkill.name,
-
-        category:
-          matchedSkill.category,
-
-        subcategory:
-          matchedSkill.subcategory,
-
-        country,
-
-        city:
-          "",
-
-        budget:
-          null,
-
-        currency:
-          null,
-
-        contact:
-          email ||
-          phone ||
-          actionableUrl,
-
-        contact_email:
-          email,
-
-        contact_phone:
-          phone,
-
-        contact_url:
-          actionableUrl,
-
-        status:
-          "active",
-
-        lead_type:
-          "Supply",
-
-        gold_score:
-          score,
-
-        posted_at:
-          date.toISOString(),
-
-        created_at:
-          new Date().toISOString()
-      }
-    );
-
-  return inserted;
-}
-async function processSaas(
-  result: SearchResult,
-  skills: SkillRow[]
-): Promise<boolean> {
-  const title =
-    clean(result.title) ||
-    "Untitled SaaS Lead";
-
-  const snippet =
-    clean(result.snippet);
-
-  const text = clean(
-    `${title} ${snippet}`
-  );
-
-  if (!isSaasProfessional(text)) {
-    return false;
-  }
-
-  if (isBlocked(text)) {
-    return false;
-  }
-
-  const date = getResultDate(result);
-
-  if (!isFresh(date)) {
-    return false;
-  }
-
-  const matchedSkill =
-    findMatchingSkill(
-      text,
-      skills
-    );
-
-  if (!matchedSkill) {
-    return false;
-  }
-
-  const email =
-    extractEmail(text);
-
-  const phone =
-    extractPhone(text);
-
-  const link =
-    clean(result.link);
-
-  const actionableUrl =
-    isActionableUrl(link)
-      ? link
-      : "";
-
-  if (
-    !email &&
-    !phone &&
-    !actionableUrl
-  ) {
-    return false;
-  }
-
-  if (
-    await alreadyExists(
-      "saas_leads",
-      link
-    )
-  ) {
-    return false;
-  }
-
-  const score =
-    calculateScore(
-      result,
-      date,
-      Boolean(
-        email ||
-        phone ||
-        actionableUrl
-      )
-    );
-
-  const name =
-    extractPersonName(
-      title
-    );
-
-  const inserted =
-    await insertLead(
-      "saas_leads",
-      {
-        source: link,
-        source_url: link,
-
-        title,
-
-        name,
-
-        client_name:
-          name,
-
-        description:
-          snippet,
-
-        skill:
-          matchedSkill.name,
-
-        skill_needed:
-          matchedSkill.name,
-
-        category:
-          matchedSkill.category,
-
-        subcategory:
-          matchedSkill.subcategory,
-
-        country:
-          findCountry(text),
-
-        city:
-          "",
-
-        contact:
-          email ||
-          phone ||
-          actionableUrl,
-
-        contact_email:
-          email,
-
-        contact_phone:
-          phone,
-
-        contact_url:
-          actionableUrl,
-
-        status:
-          "active",
-
-        lead_type:
-          "SaaS",
-
-        gold_score:
-          score,
-
-        posted_at:
-          date.toISOString(),
-
-        created_at:
-          new Date().toISOString()
-      }
-    );
-
-  return inserted;
-}
-
 function findMatchingSkill(
   text: string,
   skills: SkillRow[]
@@ -1204,6 +726,10 @@ function findMatchingSkill(
       skill.subcategory,
       ...(Array.isArray(skill.tags)
         ? skill.tags
+        : typeof skill.tags === "string"
+        ? skill.tags
+            .split(",")
+            .map((tag) => tag.trim())
         : [])
     ]
       .filter(Boolean)
@@ -1232,21 +758,27 @@ function buildDemandQueries(
   const queries: string[] = [];
 
   for (const skill of skills) {
-    const name = clean(skill.name);
+    const names = [
+      clean(skill.name),
+      clean(skill.category),
+      clean(skill.subcategory),
+    ].filter(Boolean);
 
-    if (!name) {
-      continue;
+    const uniqueNames =
+      Array.from(
+        new Set(names)
+      );
+
+    for (const name of uniqueNames) {
+      queries.push(
+        `"${name}" ("looking for" OR "need" OR "needed" OR "hiring" OR "seeking")`
+      );
     }
-
-    queries.push(
-      `"${name}" ("looking for" OR "need" OR "needed" OR "hiring")`
-    );
   }
 
-  return queries.slice(
-    0,
-    18
-  );
+  return Array.from(
+    new Set(queries)
+  ).slice(0, 12);
 }
 
 function buildSupplyQueries(
@@ -1255,21 +787,27 @@ function buildSupplyQueries(
   const queries: string[] = [];
 
   for (const skill of skills) {
-    const name = clean(skill.name);
+    const names = [
+      clean(skill.name),
+      clean(skill.category),
+      clean(skill.subcategory),
+    ].filter(Boolean);
 
-    if (!name) {
-      continue;
+    const uniqueNames =
+      Array.from(
+        new Set(names)
+      );
+
+    for (const name of uniqueNames) {
+      queries.push(
+        `"${name}" ("job" OR "position" OR "opportunity" OR "vacancy" OR "hiring" OR "recruiting")`
+      );
     }
-
-    queries.push(
-      `"${name}" ("job" OR "position" OR "opportunity" OR "vacancy")`
-    );
   }
 
-  return queries.slice(
-    0,
-    18
-  );
+  return Array.from(
+    new Set(queries)
+  ).slice(0, 12);
 }
 
 function buildSaasQueries(
@@ -1278,239 +816,155 @@ function buildSaasQueries(
   const queries: string[] = [];
 
   for (const skill of skills) {
-    const name = clean(skill.name);
+    const names = [
+      clean(skill.name),
+      clean(skill.category),
+      clean(skill.subcategory),
+    ].filter(Boolean);
 
-    if (!name) {
-      continue;
-    }
+    const uniqueNames =
+      Array.from(
+        new Set(names)
+      );
 
-    queries.push(
-      `"${name}" ("teacher" OR "tutor" OR "coach" OR "consultant" OR "freelancer" OR "designer" OR "developer" OR "writer")`
-    );
-  }
-
-  return queries.slice(
-    0,
-    18
-  );
-    }
-async function runType(
-  type: "Demand" | "Supply" | "SaaS",
-  queries: string[],
-  skills: SkillRow[]
-): Promise<number> {
-  let added = 0;
-
-  for (const query of queries) {
-    try {
-      const results =
-        await searchSerper(query);
-
-      for (const result of results) {
-        let inserted = false;
-
-        if (type === "Demand") {
-          inserted =
-            await processDemand(
-              result,
-              skills
-            );
-        } else if (
-          type === "Supply"
-        ) {
-          inserted =
-            await processSupply(
-              result,
-              skills
-            );
-        } else {
-          inserted =
-            await processSaas(
-              result,
-              skills
-            );
-        }
-
-        if (inserted) {
-          added++;
-        }
-      }
-    } catch (error) {
-      console.error(
-        `Collector error for ${type}:`,
-        error
+    for (const name of uniqueNames) {
+      queries.push(
+        `"${name}" ("teacher" OR "tutor" OR "coach" OR "consultant" OR "researcher" OR "author" OR "designer" OR "developer" OR "writer")`
       );
     }
   }
 
-  return added;
+  return Array.from(
+    new Set(queries)
+  ).slice(0, 12);
 }
 
-export default async function handler(
-  req: Request
-): Promise<Response> {
-  if (req.method !== "POST") {
-    return new Response(
-      JSON.stringify({
-        error:
-          "Method not allowed"
-      }),
-      {
-        status: 405,
-        headers: {
-          "Content-Type":
-            "application/json"
-        }
-      }
+async function processDemand(
+  result: SearchResult,
+  skills: SkillRow[]
+): Promise<boolean> {
+  const title =
+    clean(result.title) ||
+    "Untitled Demand Lead";
+
+  const snippet =
+    clean(result.snippet);
+
+  const text =
+    clean(
+      `${title} ${snippet}`
     );
+
+  if (!isDemand(text)) {
+    return false;
   }
 
-  if (!supabaseUrl) {
-    return new Response(
-      JSON.stringify({
-        error:
-          "SUPABASE_URL is missing"
-      }),
-      {
-        status: 500,
-        headers: {
-          "Content-Type":
-            "application/json"
-        }
-      }
-    );
+  if (isBlocked(result.link || "")) {
+    return false;
   }
 
-  if (!supabaseServiceKey) {
-    return new Response(
-      JSON.stringify({
-        error:
-          "SUPABASE_SERVICE_ROLE_KEY is missing"
-      }),
-      {
-        status: 500,
-        headers: {
-          "Content-Type":
-            "application/json"
-        }
-      }
-    );
+  const date =
+    getResultDate(result);
+
+  if (!isFresh(date)) {
+    return false;
   }
 
-  if (!serperApiKey) {
-    return new Response(
-      JSON.stringify({
-        error:
-          "SERPER_API_KEY is missing"
-      }),
-      {
-        status: 500,
-        headers: {
-          "Content-Type":
-            "application/json"
-        }
-      }
+  const matchedSkill =
+    findMatchingSkill(
+      text,
+      skills
     );
+
+  if (!matchedSkill) {
+    return false;
   }
 
-  try {
-    const skills =
-      await loadSkills();
+  const email =
+    extractEmail(text);
 
-    if (
-      skills.length === 0
-    ) {
-      return new Response(
-        JSON.stringify({
-          error:
-            "No skills found in Supabase"
-        }),
-        {
-          status: 500,
-          headers: {
-            "Content-Type":
-              "application/json"
-          }
-        }
-      );
+  const phone =
+    extractPhone(text);
+
+  const link =
+    clean(result.link);
+
+  const actionableUrl =
+    isActionableUrl(link)
+      ? link
+      : "";
+
+  if (
+    !email &&
+    !phone &&
+    !actionableUrl
+  ) {
+    return false;
+  }
+
+  if (
+    await alreadyExists(
+      "demand_leads",
+      link
+    )
+  ) {
+    return false;
+  }
+
+  const score =
+    calculateScore(
+      "Demand",
+      title,
+      snippet,
+      link,
+      date,
+      Boolean(
+        email ||
+        phone ||
+        actionableUrl
+      )
+    );
+
+  return insertLead(
+    "demand_leads",
+    {
+      source: link,
+      source_url: link,
+      title,
+      client_name:
+        extractPersonName(
+          title,
+          snippet
+        ),
+      description: snippet,
+      skill_needed:
+        matchedSkill.name,
+      skill:
+        matchedSkill.name,
+      category:
+        matchedSkill.category,
+      subcategory:
+        matchedSkill.subcategory,
+      country:
+        findCountry(text),
+      city: "",
+      budget: null,
+      currency: null,
+      contact:
+        email ||
+        phone ||
+        actionableUrl,
+      contact_email: email,
+      contact_phone: phone,
+      contact_url:
+        actionableUrl,
+      status: "active",
+      lead_type: "Demand",
+      gold_score: score,
+      posted_at:
+        date.toISOString(),
+      created_at:
+        new Date().toISOString(),
     }
-
-    const demandQueries =
-      buildDemandQueries(
-        skills
-      );
-
-    const supplyQueries =
-      buildSupplyQueries(
-        skills
-      );
-
-    const saasQueries =
-      buildSaasQueries(
-        skills
-      );
-
-    const demand =
-      await runType(
-        "Demand",
-        demandQueries,
-        skills
-      );
-
-    const supply =
-      await runType(
-        "Supply",
-        supplyQueries,
-        skills
-      );
-
-    const saas =
-      await runType(
-        "SaaS",
-        saasQueries,
-        skills
-      );
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-        added:
-          demand +
-          supply +
-          saas,
-        demand,
-        supply,
-        saas
-      }),
-      {
-        status: 200,
-        headers: {
-          "Content-Type":
-            "application/json"
-        }
-      }
-    );
-  } catch (error) {
-    console.error(
-      "Real lead collection failed:",
-      error
-    );
-
-    return new Response(
-      JSON.stringify({
-        success: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : "Real lead collection failed"
-      }),
-      {
-        status: 500,
-        headers: {
-          "Content-Type":
-            "application/json"
-        }
-      }
-    );
-  }
-  }
+  );
+            }
