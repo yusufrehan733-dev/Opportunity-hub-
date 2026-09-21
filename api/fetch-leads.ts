@@ -1,8 +1,11 @@
 import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = process.env.SUPABASE_URL || "";
+const supabaseUrl =
+  process.env.SUPABASE_URL || "";
+
 const supabaseServiceKey =
   process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+
 const serperApiKey =
   process.env.SERPER_API_KEY || "";
 
@@ -11,8 +14,14 @@ const supabase = createClient(
   supabaseServiceKey
 );
 
+/*
+ * IMPORTANT:
+ * This function uses @supabase/supabase-js,
+ * so it must run on the Node.js runtime,
+ * not Vercel Edge.
+ */
 export const config = {
-  runtime: "edge",
+  runtime: "nodejs",
 };
 
 const MAX_AGE_HOURS = 72;
@@ -177,15 +186,6 @@ function lower(value: string): string {
   return value.toLowerCase();
 }
 
-function isBlocked(url: string): boolean {
-  const value = lower(url);
-
-  return BLOCKED_DOMAINS.some(
-    (domain) =>
-      value.includes(domain)
-  );
-}
-
 function hasAny(
   text: string,
   terms: string[]
@@ -197,7 +197,18 @@ function hasAny(
   );
 }
 
-function findCountry(text: string): string {
+function isBlocked(url: string): boolean {
+  const value = lower(url);
+
+  return BLOCKED_DOMAINS.some(
+    (domain) =>
+      value.includes(domain)
+  );
+}
+
+function findCountry(
+  text: string
+): string {
   const value = lower(text);
 
   for (const country of COUNTRIES) {
@@ -296,13 +307,19 @@ function parseDate(
       unit.startsWith("hour")
     ) {
       milliseconds =
-        amount * 60 * 60 * 1000;
+        amount *
+        60 *
+        60 *
+        1000;
     } else if (
       unit.startsWith("day")
     ) {
       milliseconds =
-        amount * 24 *
-        60 * 60 * 1000;
+        amount *
+        24 *
+        60 *
+        60 *
+        1000;
     }
 
     return new Date(
@@ -331,11 +348,9 @@ function getResultDate(
     parseDate(value);
 
   /*
-   * Serper does not always return
-   * a date field. The search itself
-   * is restricted to the last 3 days,
-   * so use the collection time when
-   * Google/Serper omits the date.
+   * Serper can omit the date field.
+   * The search itself is restricted
+   * to the last 3 days.
    */
   return parsed || new Date();
 }
@@ -352,7 +367,8 @@ function isFresh(
     ageHours >= 0 &&
     ageHours <= MAX_AGE_HOURS
   );
-  }
+}
+
 function extractPersonName(
   title: string,
   snippet: string
@@ -555,7 +571,8 @@ function calculateScore(
   }
 
   if (hasContact) {
-    score += 25;
+    score +=
+            25;
   }
 
   if (link) {
@@ -691,39 +708,46 @@ async function insertLead(
   }
 
   return true;
-        }
+}
 async function processDemand(
   result: SearchResult,
-  skill: SkillRow
+  skills: SkillRow[]
 ): Promise<boolean> {
   const title =
-    clean(result.title);
-
-  const link =
-    clean(result.link);
+    clean(result.title) ||
+    "Untitled Demand Lead";
 
   const snippet =
     clean(result.snippet);
 
-  if (!title || !link) {
-    return false;
-  }
-
-  const text =
-    `${title} ${snippet}`;
-
-  if (isBlocked(link)) {
-    return false;
-  }
+  const text = clean(
+    `${title} ${snippet}`
+  );
 
   if (!isDemand(text)) {
     return false;
   }
 
-  const date =
-    getResultDate(result.date);
+  if (isBlocked(text)) {
+    return false;
+  }
+
+  const date = getResultDate(result);
 
   if (!isFresh(date)) {
+    return false;
+  }
+
+  const country =
+    findCountry(text);
+
+  const matchedSkill =
+    findMatchingSkill(
+      text,
+      skills
+    );
+
+  if (!matchedSkill) {
     return false;
   }
 
@@ -733,27 +757,19 @@ async function processDemand(
   const phone =
     extractPhone(text);
 
+  const link =
+    clean(result.link);
+
   const actionableUrl =
-    isActionableUrl(link);
+    isActionableUrl(link)
+      ? link
+      : "";
 
-  const hasContact =
-    Boolean(
-      email ||
-      phone ||
-      actionableUrl
-    );
-
-  const score =
-    calculateScore(
-      "Demand",
-      title,
-      snippet,
-      link,
-      date,
-      hasContact
-    );
-
-  if (score < 60) {
+  if (
+    !email &&
+    !phone &&
+    !actionableUrl
+  ) {
     return false;
   }
 
@@ -766,516 +782,130 @@ async function processDemand(
     return false;
   }
 
-  return insertLead(
-    "demand_leads",
-    {
-      type: "Demand",
-      source: link,
-
-      client_name: title,
-
-      skill_needed:
-        clean(skill.name),
-
-      description:
-        snippet,
-
-      contact_email:
-        email,
-
-      contact_phone:
-        phone,
-
-      contact:
-        actionableUrl
-          ? link
-          : null,
-
-      contact_url:
-        actionableUrl
-          ? link
-          : null,
-
-      status: "active",
-
-      title,
-
-      category:
-        clean(skill.category) ||
-        "Real Opportunity",
-
-      subcategory:
-        clean(skill.subcategory) ||
-        "Google",
-
-      country:
-        findCountry(text),
-
-      city: null,
-      budget: null,
-      currency: null,
-
-      contact_name: null,
-
-      created_at:
-        date.toISOString(),
-    }
-  );
-}
-
-async function processSupply(
-  result: SearchResult,
-  skill: SkillRow
-): Promise<boolean> {
-  const title =
-    clean(result.title);
-
-  const link =
-    clean(result.link);
-
-  const snippet =
-    clean(result.snippet);
-
-  if (!title || !link) {
-    return false;
-  }
-
-  const text =
-    `${title} ${snippet}`;
-
-  if (isBlocked(link)) {
-    return false;
-  }
-
-  if (!isSupply(text)) {
-    return false;
-  }
-
-  const date =
-    getResultDate(result.date);
-
-  if (!isFresh(date)) {
-    return false;
-  }
-
-  const email =
-    extractEmail(text);
-
-  const phone =
-    extractPhone(text);
-
-  const actionableUrl =
-    isActionableUrl(link);
-
-  const hasContact =
-    Boolean(
-      email ||
-      phone ||
-      actionableUrl
-    );
-
   const score =
     calculateScore(
-      "Supply",
-      title,
-      snippet,
-      link,
+      result,
       date,
-      hasContact
-    );
-
-  if (score < 60) {
-    return false;
-  }
-
-  if (
-    await alreadyExists(
-      "supply_leads",
-      link
-    )
-  ) {
-    return false;
-  }
-
-  return insertLead(
-    "supply_leads",
-    {
-      type: "Supply",
-      source: link,
-
-      /*
-       * Supply uses company_name
-       * so /api/leads can read it.
-       */
-      company_name: title,
-
-      /*
-       * Keep client_name too when
-       * the existing database accepts it.
-       */
-      client_name: title,
-
-      skill_needed:
-        clean(skill.name),
-
-      description:
-        snippet,
-
-      contact_email:
-        email,
-
-      contact_phone:
-        phone,
-
-      contact:
+      Boolean(
+        email ||
+        phone ||
         actionableUrl
-          ? link
-          : null,
-
-      contact_url:
-        actionableUrl
-          ? link
-          : null,
-
-      status: "active",
-
-      title,
-
-      category:
-        clean(skill.category) ||
-        "Real Opportunity",
-
-      subcategory:
-        clean(skill.subcategory) ||
-        "Google",
-
-      country:
-        findCountry(text),
-
-      city: null,
-      budget: null,
-      currency: null,
-
-      contact_name: null,
-
-      created_at:
-        date.toISOString(),
-    }
-  );
-}
-
-async function processSaas(
-  result: SearchResult,
-  skill: SkillRow
-): Promise<boolean> {
-  const title =
-    clean(result.title);
-
-  const link =
-    clean(result.link);
-
-  const snippet =
-    clean(result.snippet);
-
-  if (!title || !link) {
-    return false;
-  }
-
-  const text =
-    `${title} ${snippet}`;
-
-  if (isBlocked(link)) {
-    return false;
-  }
-
-  if (!isSaasProfessional(text)) {
-    return false;
-  }
-
-  const date =
-    getResultDate(result.date);
-
-  if (!isFresh(date)) {
-    return false;
-  }
-
-  const email =
-    extractEmail(text);
-
-  const phone =
-    extractPhone(text);
-
-  const personName =
-    extractPersonName(
-      title,
-      snippet
+      )
     );
 
-  /*
-   * For SaaS, a public professional
-   * profile/source URL is an actionable
-   * contact path.
-   */
-  const actionableUrl =
-    isActionableUrl(link);
-
-  const hasContact =
-    Boolean(
-      email ||
-      phone ||
-      actionableUrl
-    );
-
-  const score =
-    calculateScore(
-      "SaaS",
-      title,
-      snippet,
-      link,
-      date,
-      hasContact
-    );
-
-  if (score < 60) {
-    return false;
-  }
-
-  if (
-    await alreadyExists(
-      "saas_leads",
-      link
-    )
-  ) {
-    return false;
-  }
-
-  return insertLead(
-    "saas_leads",
-    {
-      type: "SaaS",
-      source: link,
-
-      /*
-       * SaaS API expects name.
-       */
-      name:
-        personName || title,
-
-      client_name:
-        personName || title,
-
-      skill_needed:
-        clean(skill.name),
-
-      description:
-        snippet,
-
-      contact_email:
-        email,
-
-      contact_phone:
-        phone,
-
-      contact:
-        actionableUrl
-          ? link
-          : null,
-
-      contact_url:
-        actionableUrl
-          ? link
-          : null,
-
-      contact_name:
-        personName,
-
-      status: "active",
-
-      title,
-
-      category:
-        clean(skill.category) ||
-        "Professional",
-
-      subcategory:
-        clean(skill.subcategory) ||
-        "SaaS Prospect",
-
-      country:
-        findCountry(text),
-
-      city: null,
-      budget: null,
-      currency: null,
-
-      created_at:
-        date.toISOString(),
-    }
-  );
-   }
-async function processDemand(
-  result: SearchResult,
-  skill: SkillRow
-): Promise<boolean> {
-  const title =
-    clean(result.title);
-
-  const link =
-    clean(result.link);
-
-  const snippet =
-    clean(result.snippet);
-
-  if (!title || !link) {
-    return false;
-  }
-
-  const text =
-    `${title} ${snippet}`;
-
-  if (isBlocked(link)) {
-    return false;
-  }
-
-  if (!isDemand(text)) {
-    return false;
-  }
-
-  const date =
-    getResultDate(result.date);
-
-  if (!isFresh(date)) {
-    return false;
-  }
-
-  const email =
-    extractEmail(text);
-
-  const phone =
-    extractPhone(text);
-
-  const actionableUrl =
-    isActionableUrl(link);
-
-  const hasContact =
-    Boolean(
-      email ||
-      phone ||
-      actionableUrl
-    );
-
-  const score =
-    calculateScore(
-      "Demand",
-      title,
-      snippet,
-      link,
-      date,
-      hasContact
-    );
-
-  if (score < 60) {
-    return false;
-  }
-
-  if (
-    await alreadyExists(
+  const inserted =
+    await insertLead(
       "demand_leads",
-      link
-    )
-  ) {
-    return false;
-  }
+      {
+        source: link,
+        source_url: link,
 
-  return insertLead(
-    "demand_leads",
-    {
-      type: "Demand",
-      source: link,
+        title,
 
-      client_name: title,
+        client_name:
+          extractPersonName(
+            title
+          ),
 
-      skill_needed:
-        clean(skill.name),
+        description:
+          snippet,
 
-      description:
-        snippet,
+        skill_needed:
+          matchedSkill.name,
 
-      contact_email:
-        email,
+        skill:
+          matchedSkill.name,
 
-      contact_phone:
-        phone,
+        category:
+          matchedSkill.category,
 
-      contact:
-        actionableUrl
-          ? link
-          : null,
+        subcategory:
+          matchedSkill.subcategory,
 
-      contact_url:
-        actionableUrl
-          ? link
-          : null,
+        country,
 
-      status: "active",
+        city:
+          "",
 
-      title,
+        budget:
+          null,
 
-      category:
-        clean(skill.category) ||
-        "Real Opportunity",
+        currency:
+          null,
 
-      subcategory:
-        clean(skill.subcategory) ||
-        "Google",
+        contact:
+          email ||
+          phone ||
+          actionableUrl,
 
-      country:
-        findCountry(text),
+        contact_email:
+          email,
 
-      city: null,
-      budget: null,
-      currency: null,
+        contact_phone:
+          phone,
 
-      contact_name: null,
+        contact_url:
+          actionableUrl,
 
-      created_at:
-        date.toISOString(),
-    }
-  );
+        status:
+          "active",
+
+        lead_type:
+          "Demand",
+
+        gold_score:
+          score,
+
+        posted_at:
+          date.toISOString(),
+
+        created_at:
+          new Date().toISOString()
+      }
+    );
+
+  return inserted;
 }
 
 async function processSupply(
   result: SearchResult,
-  skill: SkillRow
+  skills: SkillRow[]
 ): Promise<boolean> {
   const title =
-    clean(result.title);
-
-  const link =
-    clean(result.link);
+    clean(result.title) ||
+    "Untitled Supply Lead";
 
   const snippet =
     clean(result.snippet);
 
-  if (!title || !link) {
-    return false;
-  }
-
-  const text =
-    `${title} ${snippet}`;
-
-  if (isBlocked(link)) {
-    return false;
-  }
+  const text = clean(
+    `${title} ${snippet}`
+  );
 
   if (!isSupply(text)) {
     return false;
   }
 
-  const date =
-    getResultDate(result.date);
+  if (isBlocked(text)) {
+    return false;
+  }
+
+  const date = getResultDate(result);
 
   if (!isFresh(date)) {
+    return false;
+  }
+
+  const country =
+    findCountry(text);
+
+  const matchedSkill =
+    findMatchingSkill(
+      text,
+      skills
+    );
+
+  if (!matchedSkill) {
     return false;
   }
 
@@ -1285,27 +915,19 @@ async function processSupply(
   const phone =
     extractPhone(text);
 
+  const link =
+    clean(result.link);
+
   const actionableUrl =
-    isActionableUrl(link);
+    isActionableUrl(link)
+      ? link
+      : "";
 
-  const hasContact =
-    Boolean(
-      email ||
-      phone ||
-      actionableUrl
-    );
-
-  const score =
-    calculateScore(
-      "Supply",
-      title,
-      snippet,
-      link,
-      date,
-      hasContact
-    );
-
-  if (score < 60) {
+  if (
+    !email &&
+    !phone &&
+    !actionableUrl
+  ) {
     return false;
   }
 
@@ -1318,105 +940,132 @@ async function processSupply(
     return false;
   }
 
-  return insertLead(
-    "supply_leads",
-    {
-      type: "Supply",
-      source: link,
-
-      /*
-       * Supply uses company_name
-       * so /api/leads can read it.
-       */
-      company_name: title,
-
-      /*
-       * Keep client_name too when
-       * the existing database accepts it.
-       */
-      client_name: title,
-
-      skill_needed:
-        clean(skill.name),
-
-      description:
-        snippet,
-
-      contact_email:
-        email,
-
-      contact_phone:
-        phone,
-
-      contact:
+  const score =
+    calculateScore(
+      result,
+      date,
+      Boolean(
+        email ||
+        phone ||
         actionableUrl
-          ? link
-          : null,
+      )
+    );
 
-      contact_url:
-        actionableUrl
-          ? link
-          : null,
+  const companyName =
+    extractPersonName(
+      title
+    );
 
-      status: "active",
+  const inserted =
+    await insertLead(
+      "supply_leads",
+      {
+        source: link,
+        source_url: link,
 
-      title,
+        title,
 
-      category:
-        clean(skill.category) ||
-        "Real Opportunity",
+        company_name:
+          companyName,
 
-      subcategory:
-        clean(skill.subcategory) ||
-        "Google",
+        client_name:
+          companyName,
 
-      country:
-        findCountry(text),
+        description:
+          snippet,
 
-      city: null,
-      budget: null,
-      currency: null,
+        skill:
+          matchedSkill.name,
 
-      contact_name: null,
+        skill_needed:
+          matchedSkill.name,
 
-      created_at:
-        date.toISOString(),
-    }
-  );
+        category:
+          matchedSkill.category,
+
+        subcategory:
+          matchedSkill.subcategory,
+
+        country,
+
+        city:
+          "",
+
+        budget:
+          null,
+
+        currency:
+          null,
+
+        contact:
+          email ||
+          phone ||
+          actionableUrl,
+
+        contact_email:
+          email,
+
+        contact_phone:
+          phone,
+
+        contact_url:
+          actionableUrl,
+
+        status:
+          "active",
+
+        lead_type:
+          "Supply",
+
+        gold_score:
+          score,
+
+        posted_at:
+          date.toISOString(),
+
+        created_at:
+          new Date().toISOString()
+      }
+    );
+
+  return inserted;
 }
-
 async function processSaas(
   result: SearchResult,
-  skill: SkillRow
+  skills: SkillRow[]
 ): Promise<boolean> {
   const title =
-    clean(result.title);
-
-  const link =
-    clean(result.link);
+    clean(result.title) ||
+    "Untitled SaaS Lead";
 
   const snippet =
     clean(result.snippet);
 
-  if (!title || !link) {
-    return false;
-  }
-
-  const text =
-    `${title} ${snippet}`;
-
-  if (isBlocked(link)) {
-    return false;
-  }
+  const text = clean(
+    `${title} ${snippet}`
+  );
 
   if (!isSaasProfessional(text)) {
     return false;
   }
 
-  const date =
-    getResultDate(result.date);
+  if (isBlocked(text)) {
+    return false;
+  }
+
+  const date = getResultDate(result);
 
   if (!isFresh(date)) {
+    return false;
+  }
+
+  const matchedSkill =
+    findMatchingSkill(
+      text,
+      skills
+    );
+
+  if (!matchedSkill) {
     return false;
   }
 
@@ -1426,38 +1075,19 @@ async function processSaas(
   const phone =
     extractPhone(text);
 
-  const personName =
-    extractPersonName(
-      title,
-      snippet
-    );
+  const link =
+    clean(result.link);
 
-  /*
-   * For SaaS, a public professional
-   * profile/source URL is an actionable
-   * contact path.
-   */
   const actionableUrl =
-    isActionableUrl(link);
+    isActionableUrl(link)
+      ? link
+      : "";
 
-  const hasContact =
-    Boolean(
-      email ||
-      phone ||
-      actionableUrl
-    );
-
-  const score =
-    calculateScore(
-      "SaaS",
-      title,
-      snippet,
-      link,
-      date,
-      hasContact
-    );
-
-  if (score < 60) {
+  if (
+    !email &&
+    !phone &&
+    !actionableUrl
+  ) {
     return false;
   }
 
@@ -1470,67 +1100,197 @@ async function processSaas(
     return false;
   }
 
-  return insertLead(
-    "saas_leads",
-    {
-      type: "SaaS",
-      source: link,
-
-      /*
-       * SaaS API expects name.
-       */
-      name:
-        personName || title,
-
-      client_name:
-        personName || title,
-
-      skill_needed:
-        clean(skill.name),
-
-      description:
-        snippet,
-
-      contact_email:
-        email,
-
-      contact_phone:
-        phone,
-
-      contact:
+  const score =
+    calculateScore(
+      result,
+      date,
+      Boolean(
+        email ||
+        phone ||
         actionableUrl
-          ? link
-          : null,
+      )
+    );
 
-      contact_url:
-        actionableUrl
-          ? link
-          : null,
+  const name =
+    extractPersonName(
+      title
+    );
 
-      contact_name:
-        personName,
+  const inserted =
+    await insertLead(
+      "saas_leads",
+      {
+        source: link,
+        source_url: link,
 
-      status: "active",
+        title,
 
-      title,
+        name,
 
-      category:
-        clean(skill.category) ||
-        "Professional",
+        client_name:
+          name,
 
-      subcategory:
-        clean(skill.subcategory) ||
-        "SaaS Prospect",
+        description:
+          snippet,
 
-      country:
-        findCountry(text),
+        skill:
+          matchedSkill.name,
 
-      city: null,
-      budget: null,
-      currency: null,
+        skill_needed:
+          matchedSkill.name,
 
-      created_at:
-        date.toISOString(),
+        category:
+          matchedSkill.category,
+
+        subcategory:
+          matchedSkill.subcategory,
+
+        country:
+          findCountry(text),
+
+        city:
+          "",
+
+        contact:
+          email ||
+          phone ||
+          actionableUrl,
+
+        contact_email:
+          email,
+
+        contact_phone:
+          phone,
+
+        contact_url:
+          actionableUrl,
+
+        status:
+          "active",
+
+        lead_type:
+          "SaaS",
+
+        gold_score:
+          score,
+
+        posted_at:
+          date.toISOString(),
+
+        created_at:
+          new Date().toISOString()
+      }
+    );
+
+  return inserted;
+}
+
+function findMatchingSkill(
+  text: string,
+  skills: SkillRow[]
+): SkillRow | null {
+  const normalizedText =
+    lower(text);
+
+  let bestMatch:
+    SkillRow | null = null;
+
+  let bestLength = 0;
+
+  for (const skill of skills) {
+    const names = [
+      skill.name,
+      skill.category,
+      skill.subcategory,
+      ...(Array.isArray(skill.tags)
+        ? skill.tags
+        : [])
+    ]
+      .filter(Boolean)
+      .map((value) =>
+        lower(String(value))
+      );
+
+    for (const name of names) {
+      if (
+        name &&
+        normalizedText.includes(name) &&
+        name.length > bestLength
+      ) {
+        bestMatch = skill;
+        bestLength = name.length;
+      }
     }
+  }
+
+  return bestMatch;
+}
+
+function buildDemandQueries(
+  skills: SkillRow[]
+): string[] {
+  const queries: string[] = [];
+
+  for (const skill of skills) {
+    const name = clean(skill.name);
+
+    if (!name) {
+      continue;
+    }
+
+    queries.push(
+      `"${name}" ("looking for" OR "need" OR "needed" OR "hiring")`
+    );
+  }
+
+  return queries.slice(
+    0,
+    18
   );
 }
+
+function buildSupplyQueries(
+  skills: SkillRow[]
+): string[] {
+  const queries: string[] = [];
+
+  for (const skill of skills) {
+    const name = clean(skill.name);
+
+    if (!name) {
+      continue;
+    }
+
+    queries.push(
+      `"${name}" ("job" OR "position" OR "opportunity" OR "vacancy")`
+    );
+  }
+
+  return queries.slice(
+    0,
+    18
+  );
+}
+
+function buildSaasQueries(
+  skills: SkillRow[]
+): string[] {
+  const queries: string[] = [];
+
+  for (const skill of skills) {
+    const name = clean(skill.name);
+
+    if (!name) {
+      continue;
+    }
+
+    queries.push(
+      `"${name}" ("teacher" OR "tutor" OR "coach" OR "consultant" OR "freelancer" OR "designer" OR "developer" OR "writer")`
+    );
+  }
+
+  return queries.slice(
+    0,
+    18
+  );
+    }
