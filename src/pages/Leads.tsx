@@ -45,37 +45,151 @@ type LeadFilter =
   | "Supply"
   | "SaaS";
 
-function normalizeCountry(
+type SkillInfo = {
+  name: string;
+  category: string;
+  subcategory: string;
+};
+
+function normalizeText(
   value: string
 ) {
-  return value
+  return String(value || "")
     .trim()
     .toLowerCase()
     .replace(/\s+/g, " ");
 }
 
+function normalizeCountry(
+  value: string
+) {
+  return normalizeText(value);
+}
+
+/*
+ * Lead matching rule:
+ *
+ * 1. Exact saved skill -> exact lead skill.
+ * 2. A specialized saved skill can match its
+ *    broader category.
+ *
+ * Example:
+ * Calculus -> Calculus + Math
+ * Tajweed -> Tajweed + Quran
+ *
+ * 3. A saved skill can also match a lead whose
+ *    subcategory represents that saved skill.
+ *
+ * 4. We do NOT make a broad skill match every
+ *    specialization.
+ *
+ * The category/subcategory information comes
+ * from the existing Supabase skills table.
+ */
+
 function skillMatches(
   preferredSkill: string,
-  leadSkill: string
+  leadSkill: string,
+  leadCategory: string,
+  leadSubcategory: string,
+  skillInfo?: SkillInfo
 ) {
   const preferred =
-    preferredSkill
-      .trim()
-      .toLowerCase();
+    normalizeText(preferredSkill);
 
   const actual =
-    leadSkill
-      .trim()
-      .toLowerCase();
+    normalizeText(leadSkill);
 
-  if (!preferred || !actual) {
+  const category =
+    normalizeText(leadCategory);
+
+  const subcategory =
+    normalizeText(leadSubcategory);
+
+  if (!preferred) {
     return false;
   }
 
-  return (
-    actual.includes(preferred) ||
-    preferred.includes(actual)
-  );
+  // Exact skill match.
+  if (
+    actual &&
+    (
+      actual === preferred ||
+      actual.includes(preferred) ||
+      preferred.includes(actual)
+    )
+  ) {
+    return true;
+  }
+
+  if (!skillInfo) {
+    return false;
+  }
+
+  const parentCategory =
+    normalizeText(
+      skillInfo.category
+    );
+
+  const parentSubcategory =
+    normalizeText(
+      skillInfo.subcategory
+    );
+
+  /*
+   * Specialized skill -> broader category.
+   *
+   * Example:
+   * User skill = Calculus
+   * Skill category = Math
+   *
+   * A lead saying "Need Math teacher"
+   * should therefore match.
+   */
+  if (
+    parentCategory &&
+    (
+      actual === parentCategory ||
+      category === parentCategory ||
+      subcategory === parentCategory
+    )
+  ) {
+    return true;
+  }
+
+  /*
+   * Match the saved skill against the lead's
+   * subcategory. This catches opportunities
+   * where the lead is organized by hierarchy
+   * instead of putting the skill in lead.skill.
+   */
+  if (
+    parentSubcategory &&
+    (
+      actual === parentSubcategory ||
+      category === parentSubcategory ||
+      subcategory === parentSubcategory
+    )
+  ) {
+    return true;
+  }
+
+  /*
+   * If the lead explicitly identifies the saved
+   * skill as its subcategory, it is a match.
+   */
+  if (
+    subcategory &&
+    (
+      subcategory === preferred ||
+      subcategory.includes(preferred) ||
+      preferred.includes(subcategory)
+    )
+  ) {
+    return true;
+  }
+
+  return false;
 }
 
 function formatDate(
@@ -141,6 +255,16 @@ function sendEmail(
     `mailto:${email}`;
 }
 
+const buttonStyle: React.CSSProperties = {
+  padding: "9px 14px",
+  borderRadius: 8,
+  border: "1px solid #444",
+  background: "#1a1a1a",
+  color: "#fff",
+  cursor: "pointer",
+  fontWeight: 600,
+};
+
 export default function Leads() {
   const navigate =
     useNavigate();
@@ -182,6 +306,13 @@ export default function Leads() {
     preferencesError,
     setPreferencesError,
   ] = useState("");
+
+  const [
+    skillInfos,
+    setSkillInfos,
+  ] = useState<
+    SkillInfo[]
+  >([]);
 
   useEffect(() => {
     loadLeads();
@@ -239,16 +370,18 @@ export default function Leads() {
         String(
           userData?.country || ""
         ).trim();
-            const {
+
+      const {
         data: skillRows,
         error: skillsError,
-      } = await supabase
-        .from("user_skills")
-        .select("skill")
-        .eq("user_id", user.id)
-        .order("created_at", {
-          ascending: true,
-        });
+      } =
+        await supabase
+          .from("user_skills")
+          .select("skill")
+          .eq("user_id", user.id)
+          .order("created_at", {
+            ascending: true,
+          });
 
       if (skillsError) {
         throw new Error(
@@ -364,6 +497,54 @@ export default function Leads() {
         mergedSkills
       );
 
+      /*
+       * Load the existing global skill
+       * hierarchy. We use this to understand
+       * what broader category a saved skill
+       * belongs to.
+       */
+      const {
+        data: allSkills,
+        error:
+          allSkillsError,
+      } =
+        await supabase
+          .from("skills")
+          .select(
+            "name, category, subcategory"
+          );
+
+      if (
+        allSkillsError
+      ) {
+        throw new Error(
+          `Unable to load skill categories: ${allSkillsError.message}`
+        );
+      }
+
+      const loadedSkillInfos =
+        Array.isArray(allSkills)
+          ? allSkills.map(
+              (row: any) => ({
+                name: String(
+                  row?.name || ""
+                ).trim(),
+                category: String(
+                  row?.category || ""
+                ).trim(),
+                subcategory:
+                  String(
+                    row?.subcategory ||
+                      ""
+                  ).trim(),
+              })
+            )
+          : [];
+
+      setSkillInfos(
+        loadedSkillInfos
+      );
+
       console.log(
         "LEAD PREFERENCES:",
         {
@@ -378,8 +559,7 @@ export default function Leads() {
       setPreferencesLoading(
         false
       );
-
-      const response =
+            const response =
         await fetch(
           "/api/leads"
         );
@@ -414,18 +594,29 @@ export default function Leads() {
             ),
 
             leadType:
-              row.lead_type ||
-              row.leadType ||
-              "Demand",
+              row.lead_type ===
+                "Demand" ||
+              row.type === "Demand"
+                ? "Demand"
+                : row.lead_type ===
+                    "Supply" ||
+                  row.type ===
+                    "Supply"
+                ? "Supply"
+                : "SaaS",
 
             title:
-              row.title ||
-              row.name ||
-              "Opportunity",
+              String(
+                row.title ||
+                  row.job_title ||
+                  row.name ||
+                  "Opportunity"
+              ),
 
             name:
-              row.contact_name ||
               row.name ||
+              row.client_name ||
+              row.contact_name ||
               "",
 
             company:
@@ -435,11 +626,12 @@ export default function Leads() {
 
             description:
               row.description ||
-              row.content ||
               "",
 
             skill:
               row.skill ||
+              row.skill_needed ||
+              row.required_skill ||
               "",
 
             category:
@@ -452,7 +644,7 @@ export default function Leads() {
 
             country:
               row.country ||
-              "",
+              "Global",
 
             city:
               row.city ||
@@ -464,6 +656,8 @@ export default function Leads() {
 
             salary:
               row.salary ??
+              row.salary_range ??
+              row.salary_min ??
               "",
 
             currency:
@@ -471,47 +665,50 @@ export default function Leads() {
               "",
 
             email:
-              row.contact_email ||
               row.email ||
+              row.contact_email ||
               "",
 
             phone:
-              row.contact_phone ||
               row.phone ||
+              row.contact_phone ||
               "",
 
             contact:
               row.contact ||
+              row.contact_url ||
               "",
 
             source:
+              row.source_url ||
               row.source ||
               "",
 
             openUrl:
+              row.openUrl ||
+              row.open_url ||
+              row.contact_url ||
               row.apply_url ||
               row.landing_url ||
-              row.company_website ||
+              row.source_url ||
               "",
 
             createdAt:
+              row.createdAt ||
               row.created_at ||
               "",
           })
         );
 
       setLeads(mapped);
-          } catch (error: any) {
-      console.error(
-        "Leads page error:",
-        error
-      );
-
+    } catch (error: any) {
       const message =
         error?.message ||
         "Unable to load leads.";
 
-      setErrorMsg(message);
+      setErrorMsg(
+        message
+      );
 
       if (
         message
@@ -580,11 +777,26 @@ export default function Leads() {
           }
 
           return preferredSkills.some(
-            (preferredSkill) =>
-              skillMatches(
+            (preferredSkill) => {
+              const info =
+                skillInfos.find(
+                  (item) =>
+                    normalizeText(
+                      item.name
+                    ) ===
+                    normalizeText(
+                      preferredSkill
+                    )
+                );
+
+              return skillMatches(
                 preferredSkill,
-                lead.skill || ""
-              )
+                lead.skill || "",
+                lead.category || "",
+                lead.subcategory || "",
+                info
+              );
+            }
           );
         }
       );
@@ -593,6 +805,7 @@ export default function Leads() {
       preferredCountry,
       preferredSkills,
       typeFilter,
+      skillInfos,
     ]);
 
   const needsPreferences =
@@ -600,29 +813,18 @@ export default function Leads() {
     preferredSkills.length ===
       0;
 
-  const buttonStyle: React.CSSProperties =
-    {
-      padding: "9px 13px",
-      borderRadius: 7,
-      border: "1px solid #444",
-      background: "#222",
-      color: "#fff",
-      cursor: "pointer",
-    };
-
   return (
     <div
       style={{
         minHeight: "100vh",
-        background: "#0b0b0b",
+        background: "#000",
         color: "#fff",
-        padding: "20px",
-        boxSizing: "border-box",
+        padding: 20,
       }}
     >
       <div
         style={{
-          maxWidth: "1000px",
+          maxWidth: 1000,
           margin: "0 auto",
         }}
       >
@@ -634,30 +836,40 @@ export default function Leads() {
             )
           }
           style={{
-            background:
-              "transparent",
-            color: "#fff",
-            border: "none",
-            cursor: "pointer",
             display: "flex",
-            alignItems:
-              "center",
-            gap: 6,
+            alignItems: "center",
+            gap: 8,
+            marginBottom: 20,
+            padding: "9px 14px",
+            borderRadius: 8,
+            border:
+              "1px solid #444",
+            background: "#1a1a1a",
+            color: "#fff",
+            cursor: "pointer",
+            fontWeight: 600,
+          }}
+        >
+          <ArrowLeft
+            size={16}
+          />
+          Back
+        </button>
+
+        <h1
+          style={{
+            marginTop: 0,
             marginBottom: 20,
           }}
         >
-          <ArrowLeft size={18} />
-          Back to Dashboard
-        </button>
-
-        <h1>Leads</h1>
+          Leads
+        </h1>
 
         <div
           style={{
             display: "flex",
-            flexWrap: "wrap",
             gap: 8,
-            marginTop: 20,
+            flexWrap: "wrap",
             marginBottom: 20,
           }}
         >
@@ -775,11 +987,13 @@ export default function Leads() {
             </p>
           )}
         </div>
-                {errorMsg && (
+
+        {errorMsg && (
           <div
             style={{
               background: "#2a1111",
-              border: "1px solid #662222",
+              border:
+                "1px solid #662222",
               borderRadius: 10,
               padding: 15,
               marginBottom: 20,
@@ -789,21 +1003,23 @@ export default function Leads() {
             {errorMsg}
           </div>
         )}
-
-        {loading ? (
+                {loading ? (
           <div
             style={{
               textAlign: "center",
               padding: 30,
             }}
           >
-            <p>Loading leads...</p>
+            <p>
+              Loading leads...
+            </p>
           </div>
         ) : needsPreferences ? (
           <div
             style={{
               background: "#151515",
-              border: "1px solid #333",
+              border:
+                "1px solid #333",
               borderRadius: 10,
               padding: 20,
               textAlign: "center",
@@ -848,7 +1064,8 @@ export default function Leads() {
           <div
             style={{
               background: "#151515",
-              border: "1px solid #333",
+              border:
+                "1px solid #333",
               borderRadius: 10,
               padding: 20,
               textAlign: "center",
@@ -868,7 +1085,7 @@ export default function Leads() {
               {typeFilter === "All"
                 ? ""
                 : typeFilter.toLowerCase() +
-                  " "}
+                  " "} 
               leads matching your
               selected country and
               skills.
@@ -1086,8 +1303,7 @@ export default function Leads() {
                       </div>
                     )}
                   </div>
-
-                  <div
+                                    <div
                     style={{
                       display:
                         "flex",
@@ -1189,4 +1405,4 @@ export default function Leads() {
       </div>
     </div>
   );
-            }
+}
