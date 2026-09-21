@@ -118,6 +118,7 @@ function addDays(
  * We deliberately do NOT select users.active here.
  * Status is calculated from trial_end/subscription_end.
  */
+
 function getStatus(user: any) {
   const now = new Date();
 
@@ -273,8 +274,7 @@ async function getUsers(
       };
     }
   );
-}
-
+      }
 export default async function handler(
   req: any,
   res: any
@@ -334,7 +334,7 @@ export default async function handler(
         count: demandCount,
         error: demandError,
       } = await supabase
-        .from("demand_lead")
+        .from("demand_leads")
         .select("*", {
           count: "exact",
           head: true,
@@ -447,7 +447,7 @@ export default async function handler(
         supplyResult,
       ] = await Promise.all([
         supabase
-          .from("demand_lead")
+          .from("demand_leads")
           .select("*")
           .order(
             "created_at",
@@ -567,9 +567,8 @@ export default async function handler(
 
       if (error) {
         throw error;
-      }
-
-      return sendJson(
+        }
+            return sendJson(
         res,
         200,
         {
@@ -705,10 +704,10 @@ export default async function handler(
     }
 
     /*
-     * USER PLAN / ACCESS CONTROL
+     * USER ACTIONS
      */
     if (
-      action === "set_user"
+      action === "user_action"
     ) {
       const body =
         req.body || {};
@@ -720,13 +719,8 @@ export default async function handler(
 
       const userAction =
         String(
-          body.action || ""
+          body.userAction || ""
         ).trim();
-
-      const plan =
-        body.plan
-          ? String(body.plan)
-          : null;
 
       if (!id) {
         return sendJson(
@@ -740,97 +734,25 @@ export default async function handler(
         );
       }
 
-      const {
-        data: user,
-        error: userError,
-      } = await supabase
-        .from("users")
-        .select(
-          "id,name,plan,trial_start,trial_end,subscription_end"
-        )
-        .eq("id", id)
-        .single();
-
-      if (userError) {
-        throw userError;
+      if (!userAction) {
+        return sendJson(
+          res,
+          400,
+          {
+            success: false,
+            error:
+              "User action is required.",
+          }
+        );
       }
 
-      const now =
-        new Date();
+      let updates: any = {};
 
-      let updates: Record<
-        string,
-        any
-      > = {};
+      const now = new Date();
 
       if (
-        userAction === "trial"
-      ) {
-        updates = {
-          trial_start:
-            now.toISOString(),
-          trial_end:
-            addDays(now, 14),
-          subscription_end:
-            null,
-        };
-      } else if (
-        userAction === "renew"
-      ) {
-        const start =
-          user.subscription_end &&
-          new Date(
-            user.subscription_end
-          ) > now
-            ? new Date(
-                user.subscription_end
-              )
-            : now;
-
-        updates = {
-          subscription_end:
-            addDays(start, 30),
-        };
-      } else if (
-        userAction === "upgrade"
-      ) {
-        if (
-          !plan ||
-          !validPlan(plan)
-        ) {
-          return sendJson(
-            res,
-            400,
-            {
-              success: false,
-              error:
-                "Valid plan is required.",
-            }
-          );
-        }
-
-        updates = {
-          plan,
-          subscription_end:
-            addDays(now, 30),
-        };
-      } else if (
         userAction === "cancel"
       ) {
-        updates = {
-          subscription_end:
-            null,
-        };
-      } else if (
-        userAction === "deactivate"
-      ) {
-        /*
-         * We don't touch users.active because
-         * the database/API currently reports that
-         * column as unavailable.
-         *
-         * Expiring access is represented by dates.
-         */
         updates = {
           trial_end:
             now.toISOString(),
@@ -854,9 +776,8 @@ export default async function handler(
               "Unknown user action.",
           }
         );
-      }
-
-      const {
+    }
+          const {
         data: updatedUser,
         error: updateError,
       } = await supabase
