@@ -465,7 +465,7 @@ function extractPersonName(
   }
 
   return null;
-    }
+  }
 function isDemand(
   text: string
 ): boolean {
@@ -669,7 +669,7 @@ async function alreadyExists(
     .from(table)
     .select("id")
     .eq(
-      "source",
+      "source_url",
       source
     )
     .limit(1);
@@ -754,7 +754,7 @@ async function insertLead(
   }
 
   return true;
-  }
+      }
 function uniqueStrings(
   values: string[]
 ): string[] {
@@ -814,12 +814,6 @@ function getSkillSearchTerms(
     terms.join(" ")
   );
 
-  /*
-   * Add broader parent skills.
-   *
-   * This lets the collector search for
-   * both specialized and broader wording.
-   */
   if (
     /tajweed|qiraat|hifz|tafseer|tafsir|quran/.test(
       text
@@ -948,14 +942,8 @@ function getAllSkillSearchTerms(
 function quoteSearchTerm(
   term: string
 ): string {
-  const value =
-    clean(term)
-      .replace(
-        /"/g,
-        ""
-      );
-
-  return `"${value}"`;
+  return `"${clean(term)
+    .replace(/"/g, "")}"`;
 }
 
 function buildSkillGroups(
@@ -1122,29 +1110,21 @@ function buildQueries(
         )
         .join(" OR ");
 
-    const query =
-      `(${skillPart}) (${signalPart})`;
-
     queries.push(
-      query
+      `(${skillPart}) (${signalPart})`
     );
   }
 
-  /*
-   * Make sure every lead type gets
-   * at least one search even when the
-   * skills table is temporarily empty.
-   */
   if (
     queries.length === 0
   ) {
     queries.push(
-      `(${signals
+      signals
         .slice(0, 6)
         .map(
           quoteSearchTerm
         )
-        .join(" OR ")})`
+        .join(" OR ")
     );
   }
 
@@ -1162,14 +1142,6 @@ function findMatchingSkill(
   const value =
     lower(text);
 
-  /*
-   * Pass 1:
-   * exact skill names first.
-   *
-   * This prevents a broad skill such as
-   * "Math" from hiding a more specific
-   * skill such as "Calculus".
-   */
   for (
     const skill of skills
   ) {
@@ -1196,10 +1168,6 @@ function findMatchingSkill(
     }
   }
 
-  /*
-   * Pass 2:
-   * category / subcategory / tags.
-   */
   for (
     const skill of skills
   ) {
@@ -1272,9 +1240,7 @@ function getContactValue(
     (isActionableUrl(
       clean(result.link)
     )
-      ? clean(
-          result.link
-        )
+      ? clean(result.link)
       : null);
 
   return {
@@ -1282,8 +1248,7 @@ function getContactValue(
     phone,
     contact,
   };
-}
-
+          }
 async function processDemand(
   result: SearchResult,
   skills: SkillRow[]
@@ -1399,23 +1364,30 @@ async function processDemand(
         contact.phone,
       contact:
         contact.contact,
-      status: "new",
+      status:
+        "new",
       category:
         matchedSkill.category,
       subcategory:
         matchedSkill.subcategory,
       country:
         findCountry(text),
-      city: null,
-      budget: null,
-      currency: null,
-      lead_type: "Demand",
-      gold_score: score,
+      city:
+        null,
+      budget:
+        null,
+      currency:
+        null,
+      lead_type:
+        "Demand",
+      gold_score:
+        score,
       posted_at:
         date.toISOString(),
     }
   );
-        }
+}
+
 async function processSupply(
   result: SearchResult,
   skills: SkillRow[]
@@ -1536,24 +1508,29 @@ async function processSupply(
         contact.phone,
       contact:
         contact.contact,
-      status: "new",
+      status:
+        "new",
       category:
         matchedSkill.category,
       subcategory:
         matchedSkill.subcategory,
       country:
         findCountry(text),
-      city: null,
-      salary: null,
-      currency: null,
-      lead_type: "Supply",
-      gold_score: score,
+      city:
+        null,
+      salary:
+        null,
+      currency:
+        null,
+      lead_type:
+        "Supply",
+      gold_score:
+        score,
       posted_at:
         date.toISOString(),
     }
   );
-}
-
+        }
 async function processSaas(
   result: SearchResult,
   skills: SkillRow[]
@@ -1612,26 +1589,16 @@ async function processSaas(
     return false;
   }
 
-  /*
-   * SaaS prospects do not have to be
-   * looking for work.
-   *
-   * We first try to map them to one
-   * of the user's supported skills.
-   */
   const matchedSkill =
     findMatchingSkill(
       text,
       skills
     );
 
-  const fallbackSkill =
-    matchedSkill || {
-      name: "Professional Services",
-      category:
-        "Freelancing & Business",
-      subcategory: "",
-    };
+  const niche =
+    matchedSkill
+      ? matchedSkill.name
+      : "Professional Services";
 
   if (
     await alreadyExists(
@@ -1642,56 +1609,54 @@ async function processSaas(
     return false;
   }
 
-  const date =
-    getResultDate(
-      result
-    );
-
-  const score =
-    calculateScore(
-      "SaaS",
-      title,
-      snippet,
-      link,
-      date,
-      Boolean(
-        contact.contact
-      )
-    );
-
+  /*
+   * saas_leads has its own schema.
+   * Only existing columns are inserted.
+   */
   return insertLead(
     "saas_leads",
     {
-      source: link,
-      source_url: link,
-      title,
       name:
         extractPersonName(
           title,
           snippet
-        ),
-      skill:
-        fallbackSkill.name,
-      description:
-        snippet,
-      contact_email:
-        contact.email,
-      contact_phone:
-        contact.phone,
+        ) ||
+        title,
+
+      platform:
+        link,
+
+      niche,
+
       contact:
         contact.contact,
-      status: "new",
-      category:
-        fallbackSkill.category,
-      subcategory:
-        fallbackSkill.subcategory,
+
+      status:
+        "new",
+
+      description:
+        snippet,
+
+      commission:
+        null,
+
+      trial_days:
+        14,
+
+      landing_url:
+        link,
+
+      source_url:
+        link,
+
+      contact_url:
+        contact.contact,
+
       country:
         findCountry(text),
-      city: null,
-      lead_type: "SaaS",
-      gold_score: score,
-      posted_at:
-        date.toISOString(),
+
+      city:
+        null,
     }
   );
       }
@@ -1736,6 +1701,10 @@ async function runSearches(
         await searchSerper(
           query
         );
+
+      console.log(
+        `${type}: Serper returned ${results.length} results`
+      );
 
       for (
         const result of results
@@ -1791,6 +1760,10 @@ async function runSearches(
       );
     }
   }
+
+  console.log(
+    `${type}: added ${added} leads`
+  );
 
   return added;
 }
@@ -1848,6 +1821,10 @@ async function runCollector(): Promise<{
       "SaaS",
       skills
     );
+
+  console.log(
+    `Collector complete — Demand: ${demand}, Supply: ${supply}, SaaS: ${saas}`
+  );
 
   return {
     demand,
@@ -1908,5 +1885,230 @@ export default async function handler(
             : "Lead collector failed",
       });
   }
+      }
+async function runSearches(
+  type:
+    | "Demand"
+    | "Supply"
+    | "SaaS",
+  skills: SkillRow[]
+): Promise<number> {
+  const queries =
+    type === "Demand"
+      ? buildQueries(
+          skills,
+          DEMAND_SIGNALS,
+          "Demand"
+        )
+      : type === "Supply"
+      ? buildQueries(
+          skills,
+          SUPPLY_SIGNALS,
+          "Supply"
+        )
+      : buildQueries(
+          skills,
+          SAAS_PROVIDER_SIGNALS,
+          "SaaS"
+        );
+
+  let added = 0;
+
+  for (
+    const query of queries
+  ) {
+    try {
+      console.log(
+        `Searching ${type}:`,
+        query
+      );
+
+      const results =
+        await searchSerper(
+          query
+        );
+
+      console.log(
+        `${type}: Serper returned ${results.length} results`
+      );
+
+      for (
+        const result of results
+      ) {
+        try {
+          let inserted =
+            false;
+
+          if (
+            type === "Demand"
+          ) {
+            inserted =
+              await processDemand(
+                result,
+                skills
+              );
+          } else if (
+            type === "Supply"
+          ) {
+            inserted =
+              await processSupply(
+                result,
+                skills
+              );
+          } else {
+            inserted =
+              await processSaas(
+                result,
+                skills
+              );
+          }
+
+          if (
+            inserted
+          ) {
+            added++;
+          }
+        } catch (
+          error
+        ) {
+          console.error(
+            `Processing ${type} result failed:`,
+            error
+          );
+        }
+      }
+    } catch (
+      error
+    ) {
+      console.error(
+        `${type} search failed:`,
+        error
+      );
+    }
+  }
+
+  console.log(
+    `${type}: added ${added} leads`
+  );
+
+  return added;
 }
 
+async function runCollector(): Promise<{
+  demand: number;
+  supply: number;
+  saas: number;
+}> {
+  if (
+    !supabaseUrl
+  ) {
+    throw new Error(
+      "SUPABASE_URL is missing"
+    );
+  }
+
+  if (
+    !supabaseServiceKey
+  ) {
+    throw new Error(
+      "SUPABASE_SERVICE_ROLE_KEY is missing"
+    );
+  }
+
+  if (
+    !serperApiKey
+  ) {
+    throw new Error(
+      "SERPER_API_KEY is missing"
+    );
+  }
+
+  const skills =
+    await loadSkills();
+
+  console.log(
+    `Loaded ${skills.length} skills`
+  );
+
+  const demand =
+    await runSearches(
+      "Demand",
+      skills
+    );
+
+  const supply =
+    await runSearches(
+      "Supply",
+      skills
+    );
+
+  const saas =
+    await runSearches(
+      "SaaS",
+      skills
+    );
+
+  console.log(
+    `Collector complete — Demand: ${demand}, Supply: ${supply}, SaaS: ${saas}`
+  );
+
+  return {
+    demand,
+    supply,
+    saas,
+  };
+}
+
+export default async function handler(
+  req: any,
+  res: any
+) {
+  if (
+    req.method !== "POST"
+  ) {
+    return res
+      .status(405)
+      .json({
+        error:
+          "Method not allowed",
+      });
+  }
+
+  try {
+    const result =
+      await runCollector();
+
+    return res
+      .status(200)
+      .json({
+        success: true,
+        added:
+          result.demand +
+          result.supply +
+          result.saas,
+        demand:
+          result.demand,
+        supply:
+          result.supply,
+        saas:
+          result.saas,
+      });
+  } catch (
+    error
+  ) {
+    console.error(
+      "Lead collector failed:",
+      error
+    );
+
+    return res
+      .status(500)
+      .json({
+        success: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Lead collector failed",
+      });
+  }
+    }
