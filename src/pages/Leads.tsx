@@ -138,13 +138,6 @@ function skillMatches(
 
   /*
    * Specialized skill -> broader category.
-   *
-   * Example:
-   * User skill = Calculus
-   * Skill category = Math
-   *
-   * A lead saying "Need Math teacher"
-   * should therefore match.
    */
   if (
     parentCategory &&
@@ -159,9 +152,7 @@ function skillMatches(
 
   /*
    * Match the saved skill against the lead's
-   * subcategory. This catches opportunities
-   * where the lead is organized by hierarchy
-   * instead of putting the skill in lead.skill.
+   * subcategory.
    */
   if (
     parentSubcategory &&
@@ -405,8 +396,7 @@ export default function Leads() {
 
       const oldPreference =
         userData?.skill_preference;
-
-      if (
+            if (
         Array.isArray(
           oldPreference
         )
@@ -559,7 +549,8 @@ export default function Leads() {
       setPreferencesLoading(
         false
       );
-            const response =
+
+      const response =
         await fetch(
           "/api/leads"
         );
@@ -585,8 +576,7 @@ export default function Leads() {
             )
           ? result.data
           : [];
-
-      const mapped: Lead[] =
+            const mapped: Lead[] =
         rows.map(
           (row: any) => ({
             id: String(
@@ -733,9 +723,9 @@ export default function Leads() {
         false
       );
     }
-  }
-
-  const filteredLeads =
+            }
+  
+        const filteredLeads =
     useMemo(() => {
       if (!preferredCountry) {
         return [];
@@ -776,6 +766,38 @@ export default function Leads() {
             return false;
           }
 
+          /*
+           * SaaS DISPLAY RULE:
+           *
+           * SaaS leads use the user's country
+           * as the display filter.
+           *
+           * We intentionally do NOT require
+           * SaaS niche/skill wording to match
+           * the saved skill exactly.
+           *
+           * Example:
+           * Professional Coach
+           * can still see a SaaS prospect
+           * described as coach, mentor, guide,
+           * career mentor, etc.
+           *
+           * IMPORTANT:
+           * This changes DISPLAY matching only.
+           * It does not change /api/leads,
+           * Supabase fetching, or Gold rules.
+           */
+          if (
+            lead.leadType ===
+            "SaaS"
+          ) {
+            return true;
+          }
+
+          /*
+           * Demand and Supply keep their
+           * existing skill matching rules.
+           */
           return preferredSkills.some(
             (preferredSkill) => {
               const info =
@@ -812,58 +834,79 @@ export default function Leads() {
     !preferredCountry ||
     preferredSkills.length ===
       0;
-
-  return (
+    return (
     <div
       style={{
         minHeight: "100vh",
         background: "#000",
         color: "#fff",
-        padding: 20,
+        padding: "24px",
       }}
     >
       <div
         style={{
-          maxWidth: 1000,
+          maxWidth: 1100,
           margin: "0 auto",
         }}
       >
         <button
-          type="button"
           onClick={() =>
-            navigate(
-              "/dashboard"
-            )
+            navigate("/dashboard")
           }
           style={{
-            display: "flex",
+            ...buttonStyle,
+            display: "inline-flex",
             alignItems: "center",
             gap: 8,
             marginBottom: 20,
-            padding: "9px 14px",
-            borderRadius: 8,
-            border:
-              "1px solid #444",
-            background: "#1a1a1a",
-            color: "#fff",
-            cursor: "pointer",
-            fontWeight: 600,
           }}
         >
-          <ArrowLeft
-            size={16}
-          />
+          <ArrowLeft size={17} />
           Back
         </button>
 
-        <h1
+        <div
           style={{
-            marginTop: 0,
+            display: "flex",
+            justifyContent:
+              "space-between",
+            alignItems: "center",
+            gap: 16,
+            flexWrap: "wrap",
             marginBottom: 20,
           }}
         >
-          Leads
-        </h1>
+          <div>
+            <h1
+              style={{
+                margin: 0,
+                fontSize: 30,
+              }}
+            >
+              Leads
+            </h1>
+
+            <p
+              style={{
+                color: "#aaa",
+                marginTop: 8,
+              }}
+            >
+              Real opportunities matched
+              to your preferences.
+            </p>
+          </div>
+
+          <button
+            onClick={loadLeads}
+            style={buttonStyle}
+            disabled={loading}
+          >
+            {loading
+              ? "Refreshing..."
+              : "Refresh"}
+          </button>
+        </div>
 
         <div
           style={{
@@ -883,31 +926,19 @@ export default function Leads() {
           ).map((filter) => (
             <button
               key={filter}
-              type="button"
               onClick={() =>
-                setTypeFilter(
-                  filter
-                )
+                setTypeFilter(filter)
               }
               style={{
-                padding:
-                  "10px 16px",
-                borderRadius: 8,
-                border:
-                  "1px solid #444",
+                ...buttonStyle,
                 background:
-                  typeFilter ===
-                  filter
-                    ? "#00ffae"
+                  typeFilter === filter
+                    ? "#fff"
                     : "#1a1a1a",
                 color:
-                  typeFilter ===
-                  filter
+                  typeFilter === filter
                     ? "#000"
                     : "#fff",
-                cursor:
-                  "pointer",
-                fontWeight: 600,
               }}
             >
               {filter}
@@ -917,185 +948,146 @@ export default function Leads() {
 
         <div
           style={{
-            background: "#151515",
             border:
               "1px solid #333",
-            borderRadius: 10,
-            padding: 18,
-            marginBottom: 20,
+            borderRadius: 12,
+            padding: 16,
+            marginBottom: 24,
+            background: "#0b0b0b",
           }}
         >
-          <h2>
-            Your Lead Preferences
-          </h2>
+          <div
+            style={{
+              fontWeight: 700,
+              marginBottom: 10,
+            }}
+          >
+            Your lead preferences
+          </div>
 
           {preferencesLoading ? (
-            <p
-              style={{
-                color: "#aaa",
-              }}
-            >
-              Loading your
-              preferences...
-            </p>
-          ) : needsPreferences ? (
-            <p
-              style={{
-                color: "#ffcc66",
-              }}
-            >
-              Please select at least
-              one skill and your
-              country in My Skills,
-              then save your
-              preferences before
-              viewing leads.
-            </p>
-          ) : (
             <div
               style={{
                 color: "#aaa",
-                lineHeight: 1.6,
               }}
             >
-              <div>
-                <strong>
-                  Country:
-                </strong>{" "}
-                {preferredCountry}
+              Loading preferences...
+            </div>
+          ) : (
+            <>
+              <div
+                style={{
+                  color: "#ccc",
+                  marginBottom: 6,
+                }}
+              >
+                Country:{" "}
+                <strong
+                  style={{
+                    color: "#fff",
+                  }}
+                >
+                  {preferredCountry ||
+                    "Not selected"}
+                </strong>
               </div>
 
-              <div>
-                <strong>
-                  Skills:
-                </strong>{" "}
-                {preferredSkills.join(
-                  ", "
-                )}
+              <div
+                style={{
+                  color: "#ccc",
+                }}
+              >
+                Skills:{" "}
+                <strong
+                  style={{
+                    color: "#fff",
+                  }}
+                >
+                  {preferredSkills.length
+                    ? preferredSkills.join(
+                        ", "
+                      )
+                    : "Not selected"}
+                </strong>
               </div>
-            </div>
+            </>
           )}
 
           {preferencesError && (
-            <p
+            <div
               style={{
-                color: "#ff8888",
+                color: "#ff8a8a",
                 marginTop: 10,
               }}
             >
               {preferencesError}
-            </p>
+            </div>
           )}
         </div>
 
         {errorMsg && (
           <div
             style={{
-              background: "#2a1111",
               border:
                 "1px solid #662222",
+              background: "#180909",
+              color: "#ffaaaa",
               borderRadius: 10,
-              padding: 15,
+              padding: 14,
               marginBottom: 20,
-              color: "#ff8888",
             }}
           >
             {errorMsg}
           </div>
         )}
-                {loading ? (
+
+        {loading ? (
           <div
             style={{
-              textAlign: "center",
               padding: 30,
+              textAlign: "center",
+              color: "#aaa",
             }}
           >
-            <p>
-              Loading leads...
-            </p>
+            Loading leads...
           </div>
         ) : needsPreferences ? (
           <div
             style={{
-              background: "#151515",
               border:
                 "1px solid #333",
-              borderRadius: 10,
-              padding: 20,
+              borderRadius: 12,
+              padding: 30,
               textAlign: "center",
+              color: "#aaa",
+              background: "#0b0b0b",
             }}
           >
-            <p
-              style={{
-                color: "#aaa",
-              }}
-            >
-              Go to My Skills and save
-              your country and at least
-              one skill.
-            </p>
-
-            <button
-              type="button"
-              onClick={() =>
-                navigate(
-                  "/dashboard/skills"
-                )
-              }
-              style={{
-                marginTop: 10,
-                padding:
-                  "10px 18px",
-                borderRadius: 8,
-                border: "none",
-                background:
-                  "#00ffae",
-                color: "#000",
-                cursor:
-                  "pointer",
-                fontWeight: 600,
-              }}
-            >
-              Go to My Skills
-            </button>
+            Please select your country
+            and at least one skill to view
+            leads.
           </div>
         ) : filteredLeads.length ===
           0 ? (
           <div
             style={{
-              background: "#151515",
               border:
                 "1px solid #333",
-              borderRadius: 10,
-              padding: 20,
+              borderRadius: 12,
+              padding: 30,
               textAlign: "center",
+              color: "#aaa",
+              background: "#0b0b0b",
             }}
           >
-            <h2>
-              No matching leads
-            </h2>
-
-            <p
-              style={{
-                color: "#aaa",
-                lineHeight: 1.5,
-              }}
-            >
-              There are currently no{" "}
-              {typeFilter === "All"
-                ? ""
-                : typeFilter.toLowerCase() +
-                  " "} 
-              leads matching your
-              selected country and
-              skills.
-            </p>
+            No matching leads found for
+            your selected preferences.
           </div>
         ) : (
           <div
             style={{
               display: "grid",
-              gap: 15,
+              gap: 16,
             }}
           >
             {filteredLeads.map(
@@ -1103,64 +1095,70 @@ export default function Leads() {
                 <div
                   key={lead.id}
                   style={{
-                    background:
-                      "#151515",
                     border:
                       "1px solid #333",
-                    borderRadius:
-                      10,
-                    padding: 18,
+                    borderRadius: 12,
+                    padding: 20,
+                    background:
+                      "#0b0b0b",
                   }}
                 >
                   <div
                     style={{
-                      display:
-                        "flex",
+                      display: "flex",
                       justifyContent:
                         "space-between",
-                      gap: 10,
-                      flexWrap:
-                        "wrap",
-                      marginBottom:
-                        10,
+                      alignItems:
+                        "flex-start",
+                      gap: 14,
+                      flexWrap: "wrap",
                     }}
                   >
-                    <h2
-                      style={{
-                        margin: 0,
-                      }}
-                    >
-                      {lead.title}
-                    </h2>
+                    <div>
+                      <div
+                        style={{
+                          fontSize: 12,
+                          color: "#aaa",
+                          marginBottom: 6,
+                        }}
+                      >
+                        {lead.leadType}
+                      </div>
 
-                    <span
-                      style={{
-                        padding:
-                          "4px 8px",
-                        borderRadius:
-                          6,
-                        background:
-                          "#333",
-                        fontSize:
-                          12,
-                      }}
-                    >
-                      {lead.leadType}
-                    </span>
+                      <h2
+                        style={{
+                          margin: 0,
+                          fontSize: 21,
+                        }}
+                      >
+                        {lead.title}
+                      </h2>
+                    </div>
+
+                    {lead.country && (
+                      <div
+                        style={{
+                          border:
+                            "1px solid #444",
+                          borderRadius: 20,
+                          padding:
+                            "5px 10px",
+                          color: "#ccc",
+                          fontSize: 12,
+                        }}
+                      >
+                        {lead.country}
+                      </div>
+                    )}
                   </div>
 
                   {lead.company && (
                     <div
                       style={{
-                        color:
-                          "#ddd",
-                        marginBottom:
-                          6,
+                        marginTop: 10,
+                        color: "#ddd",
                       }}
                     >
-                      <strong>
-                        Company:
-                      </strong>{" "}
                       {lead.company}
                     </div>
                   )}
@@ -1168,157 +1166,97 @@ export default function Leads() {
                   {lead.name && (
                     <div
                       style={{
-                        color:
-                          "#ddd",
-                        marginBottom:
-                          6,
+                        marginTop: 5,
+                        color: "#aaa",
                       }}
                     >
-                      <strong>
-                        Contact:
-                      </strong>{" "}
-                      {lead.name}
+                      Contact: {lead.name}
                     </div>
                   )}
 
                   {lead.description && (
-                    <div
+                    <p
                       style={{
-                        color:
-                          "#ccc",
-                        lineHeight:
-                          1.5,
-                        marginBottom:
-                          10,
+                        color: "#ccc",
+                        lineHeight: 1.6,
+                        marginTop: 14,
                       }}
                     >
-                      {
-                        lead.description
-                      }
-                    </div>
+                      {lead.description}
+                    </p>
                   )}
 
                   <div
                     style={{
-                      display:
-                        "grid",
-                      gap: 5,
-                      color:
-                        "#bbb",
-                      fontSize:
-                        14,
-                      marginBottom:
-                        12,
+                      display: "flex",
+                      gap: 14,
+                      flexWrap: "wrap",
+                      marginTop: 12,
+                      color: "#aaa",
+                      fontSize: 14,
                     }}
                   >
                     {lead.skill && (
-                      <div>
-                        <strong>
-                          Skill:
-                        </strong>{" "}
-                        {lead.skill}
-                      </div>
-                    )}
-
-                    {lead.category && (
-                      <div>
-                        <strong>
-                          Category:
-                        </strong>{" "}
-                        {lead.category}
-                      </div>
-                    )}
-
-                    {lead.subcategory && (
-                      <div>
-                        <strong>
-                          Subcategory:
-                        </strong>{" "}
-                        {
-                          lead.subcategory
-                        }
-                      </div>
-                    )}
-
-                    {lead.country && (
-                      <div>
-                        <strong>
-                          Country:
-                        </strong>{" "}
-                        {lead.country}
-                      </div>
+                      <span>
+                        Skill: {lead.skill}
+                      </span>
                     )}
 
                     {lead.city && (
-                      <div>
-                        <strong>
-                          City:
-                        </strong>{" "}
-                        {lead.city}
-                      </div>
+                      <span>
+                        City: {lead.city}
+                      </span>
                     )}
 
                     {lead.budget !==
-                      "" &&
+                        undefined &&
                       lead.budget !==
-                        undefined && (
-                        <div>
-                          <strong>
-                            Budget:
-                          </strong>{" "}
+                        "" && (
+                        <span>
+                          Budget:{" "}
                           {lead.currency
                             ? `${lead.currency} `
                             : ""}
-                          {String(
-                            lead.budget
-                          )}
-                        </div>
+                          {lead.budget}
+                        </span>
                       )}
 
                     {lead.salary !==
-                      "" &&
+                        undefined &&
                       lead.salary !==
-                        undefined && (
-                        <div>
-                          <strong>
-                            Salary:
-                          </strong>{" "}
+                        "" && (
+                        <span>
+                          Salary:{" "}
                           {lead.currency
                             ? `${lead.currency} `
                             : ""}
-                          {String(
-                            lead.salary
-                          )}
-                        </div>
+                          {lead.salary}
+                        </span>
                       )}
 
                     {lead.createdAt && (
-                      <div>
-                        <strong>
-                          Date:
-                        </strong>{" "}
+                      <span>
+                        Posted:{" "}
                         {formatDate(
                           lead.createdAt
                         )}
-                      </div>
+                      </span>
                     )}
                   </div>
-                                    <div
+
+                  <div
                     style={{
-                      display:
-                        "flex",
-                      gap: 8,
-                      flexWrap:
-                        "wrap",
+                      display: "flex",
+                      gap: 10,
+                      flexWrap: "wrap",
+                      marginTop: 18,
                     }}
                   >
                     {lead.phone && (
                       <button
-                        type="button"
                         onClick={() =>
                           callPhone(
-                            lead.phone ||
-                              ""
+                            lead.phone!
                           )
                         }
                         style={
@@ -1331,11 +1269,9 @@ export default function Leads() {
 
                     {lead.email && (
                       <button
-                        type="button"
                         onClick={() =>
                           sendEmail(
-                            lead.email ||
-                              ""
+                            lead.email!
                           )
                         }
                         style={
@@ -1348,11 +1284,9 @@ export default function Leads() {
 
                     {lead.contact && (
                       <button
-                        type="button"
                         onClick={() =>
                           openLink(
-                            lead.contact ||
-                              ""
+                            lead.contact!
                           )
                         }
                         style={
@@ -1365,37 +1299,38 @@ export default function Leads() {
 
                     {lead.openUrl && (
                       <button
-                        type="button"
                         onClick={() =>
                           openLink(
-                            lead.openUrl ||
-                              ""
+                            lead.openUrl!
                           )
                         }
-                        style={
-                          buttonStyle
-                        }
+                        style={{
+                          ...buttonStyle,
+                          background:
+                            "#fff",
+                          color: "#000",
+                        }}
                       >
                         Open Opportunity
                       </button>
                     )}
 
-                    {lead.source && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          openLink(
-                            lead.source ||
-                              ""
-                          )
-                        }
-                        style={
-                          buttonStyle
-                        }
-                      >
-                        Source
-                      </button>
-                    )}
+                    {lead.source &&
+                      lead.source !==
+                        lead.openUrl && (
+                        <button
+                          onClick={() =>
+                            openLink(
+                              lead.source!
+                            )
+                          }
+                          style={
+                            buttonStyle
+                          }
+                        >
+                          Source
+                        </button>
+                      )}
                   </div>
                 </div>
               )
@@ -1405,4 +1340,4 @@ export default function Leads() {
       </div>
     </div>
   );
-}
+ }
