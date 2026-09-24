@@ -988,4 +988,25 @@ function Placeholder({
       </div>
     </div>
   );
-          }
+   }
+function Placeholder({
+  section,
+}: {
+  section: "referrals" | "resellers";
+}) {
+  return (
+    <div className="rounded-xl border border-[#222] bg-[#111] p-6 text-center">
+      <div className="font-semibold">
+        {section === "referrals"
+          ? "Referrals"
+          : "Resellers"}
+      </div>
+
+      <div className="text-sm text-[#777] mt-2">
+        This section is ready for the
+        existing referral/reseller data
+        integration.
+      </div>
+    </div>
+  );
+}
