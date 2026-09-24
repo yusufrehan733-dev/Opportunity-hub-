@@ -1,37 +1,60 @@
+import { Router, Request, Response } from "express";
 import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = process.env.SUPABASE_URL || "";
-const supabaseServiceKey =
+const router = Router();
+
+const SUPABASE_URL =
+  process.env.SUPABASE_URL || "";
+
+const SUPABASE_SERVICE_ROLE_KEY =
   process.env.SUPABASE_SERVICE_ROLE_KEY || "";
-const serperApiKey = process.env.SERPER_API_KEY || "";
 
-const supabase = createClient(
-  supabaseUrl,
-  supabaseServiceKey
-);
-
-export const config = {
-  runtime: "nodejs",
-};
+const SERPER_API_KEY =
+  process.env.SERPER_API_KEY || "";
 
 const MAX_AGE_HOURS = 72;
-const RESULTS_PER_SEARCH = 10;
+
 const MAX_QUERIES_PER_TYPE = 6;
+
+const RESULTS_PER_SEARCH = 10;
+
+type LeadType =
+  | "Demand"
+  | "Supply"
+  | "SaaS";
+
+type SkillRow = {
+  id?: string | null;
+  name?: string | null;
+  skill?: string | null;
+  category?: string | null;
+  subcategory?: string | null;
+  tags?: string[] | string | null;
+};
+
+type SearchResult = {
+  title?: string;
+  snippet?: string;
+  link?: string;
+  date?: string;
+};
+
+const supabase = createClient(
+  SUPABASE_URL,
+  SUPABASE_SERVICE_ROLE_KEY
+);
 
 const COUNTRIES = [
   "United States",
-  "USA",
   "Canada",
   "United Kingdom",
-  "UK",
-  "United Arab Emirates",
   "UAE",
-  "Australia",
   "Qatar",
   "Saudi Arabia",
   "Kuwait",
   "Oman",
   "Bahrain",
+  "Australia",
   "Sweden",
   "Norway",
   "Denmark",
@@ -44,20 +67,135 @@ const COUNTRIES = [
   "Netherlands",
 ];
 
+const COUNTRY_ALIASES: Record<
+  string,
+  string[]
+> = {
+  "United States": [
+    "united states",
+    "usa",
+    "u.s.a.",
+    "u.s.",
+    "america",
+  ],
+
+  Canada: [
+    "canada",
+    "canadian",
+  ],
+
+  "United Kingdom": [
+    "united kingdom",
+    "uk",
+    "u.k.",
+    "britain",
+    "england",
+    "scotland",
+    "wales",
+  ],
+
+  UAE: [
+    "uae",
+    "u.a.e.",
+    "united arab emirates",
+    "dubai",
+    "abu dhabi",
+  ],
+
+  Qatar: [
+    "qatar",
+    "doha",
+  ],
+
+  "Saudi Arabia": [
+    "saudi arabia",
+    "saudi",
+    "riyadh",
+    "jeddah",
+  ],
+
+  Kuwait: [
+    "kuwait",
+  ],
+
+  Oman: [
+    "oman",
+    "muscat",
+  ],
+
+  Bahrain: [
+    "bahrain",
+    "manama",
+  ],
+
+  Australia: [
+    "australia",
+    "australian",
+  ],
+
+  Sweden: [
+    "sweden",
+    "swedish",
+  ],
+
+  Norway: [
+    "norway",
+    "norwegian",
+  ],
+
+  Denmark: [
+    "denmark",
+    "danish",
+  ],
+
+  Finland: [
+    "finland",
+    "finnish",
+  ],
+
+  Pakistan: [
+    "pakistan",
+    "pakistani",
+  ],
+
+  India: [
+    "india",
+    "indian",
+  ],
+
+  Bangladesh: [
+    "bangladesh",
+    "bangladeshi",
+  ],
+
+  Germany: [
+    "germany",
+    "german",
+  ],
+
+  France: [
+    "france",
+    "french",
+  ],
+
+  Netherlands: [
+    "netherlands",
+    "dutch",
+    "holland",
+  ],
+};
+
 const BLOCKED_DOMAINS = [
   "upwork.com",
   "fiverr.com",
   "freelancer.com",
-  "toptal.com",
   "peopleperhour.com",
   "guru.com",
-];
-
-const JOB_BOARD_DOMAINS = [
+  "toptal.com",
+  "workana.com",
   "indeed.com",
   "ziprecruiter.com",
   "glassdoor.com",
-  "linkedin.com/jobs",
   "monster.com",
   "careerbuilder.com",
   "simplyhired.com",
@@ -73,31 +211,6 @@ const GENERIC_TERMS = [
   "free trial",
 ];
 
-const PROVIDER_TERMS = [
-  "we offer",
-  "we provide",
-  "our services",
-  "book a session",
-  "book your session",
-  "join our class",
-  "join our course",
-  "join our academy",
-  "our academy",
-  "our school",
-  "our tutors",
-  "our teachers",
-  "our coaches",
-  "students wanted",
-  "students required",
-  "accepting students",
-  "new students",
-  "enrollment open",
-  "admissions open",
-  "classes available",
-  "learn with us",
-  "learn from us",
-];
-
 const DEMAND_SIGNALS = [
   "looking for",
   "need a",
@@ -108,10 +221,10 @@ const DEMAND_SIGNALS = [
   "want a",
   "i need",
   "we need",
-  "my daughter needs",
-  "my son needs",
-  "my child needs",
-  "my children need",
+  "my daughter",
+  "my son",
+  "my child",
+  "my children",
   "our company needs",
   "client needs",
   "can anyone recommend",
@@ -134,7 +247,6 @@ const SUPPLY_SIGNALS = [
   "position open",
   "applications open",
   "apply now",
-  "apply for",
   "recruiting",
   "recruitment",
   "opportunity",
@@ -152,39 +264,70 @@ const PROFESSIONAL_TERMS = [
   "researcher",
   "author",
   "virtual assistant",
-  "translator",
   "trainer",
   "educator",
   "instructor",
   "therapist",
   "accountant",
   "marketer",
+  "mentor",
 ];
 
-type LeadType = "Demand" | "Supply" | "SaaS";
+const SAAS_REJECT_TERMS = [
+  "dictionary",
+  "meaning",
+  "definition",
+  "wikipedia",
+  "resource",
+  "resources",
+  "job",
+  "jobs",
+  "vacancy",
+  "vacancies",
+  "hiring",
+  "application",
+  "course",
+  "courses",
+  "webinar",
+  "seminar",
+  "article",
+  "blog",
+  "news",
+];
 
-type SkillRow = {
-  name?: string | null;
-  category?: string | null;
-  subcategory?: string | null;
-  tags?: string[] | string | null;
-};
-
-type SearchResult = {
-  title?: string;
-  snippet?: string;
-  link?: string;
-  date?: string;
-};
-
-function lower(value: unknown): string {
-  return String(value ?? "").trim().toLowerCase();
-}
+const SAAS_IDENTITY_TERMS = [
+  "profile",
+  "portfolio",
+  "about me",
+  "my services",
+  "my coaching",
+  "my consulting",
+  "work with me",
+  "hire me",
+  "contact me",
+  "book me",
+  "personal website",
+  "professional",
+  "consultant",
+  "coach",
+  "mentor",
+  "teacher",
+  "tutor",
+  "trainer",
+];
 
 function clean(value: unknown): string {
   return String(value ?? "").trim();
-  }
-function hasAny(text: string, terms: string[]): boolean {
+}
+
+function lower(value: unknown): string {
+  return clean(value).toLowerCase();
+}
+
+function hasAny(
+  text: string,
+  terms: string[]
+): boolean {
   const value = lower(text);
 
   return terms.some((term) =>
@@ -192,205 +335,376 @@ function hasAny(text: string, terms: string[]): boolean {
   );
 }
 
-function isBlocked(url: string): boolean {
-  const value = lower(url);
+function isBlocked(link: string): boolean {
+  const value = lower(link);
 
   return BLOCKED_DOMAINS.some((domain) =>
     value.includes(domain)
   );
 }
 
-function isJobBoard(url: string): boolean {
-  const value = lower(url);
+function isValidHttpUrl(
+  value: string
+): boolean {
+  try {
+    const url = new URL(value);
 
-  return JOB_BOARD_DOMAINS.some((domain) =>
-    value.includes(domain)
+    return (
+      url.protocol === "http:" ||
+      url.protocol === "https:"
+    );
+  } catch {
+    return false;
+  }
+    }
+function escapeRegExp(
+  value: string
+): string {
+  return value.replace(
+    /[.*+?^${}()|[\]\\]/g,
+    "\\$&"
   );
 }
 
-function findCountry(text: string): string {
+function containsCountryAlias(
+  text: string,
+  alias: string
+): boolean {
   const value = lower(text);
+  const term = lower(alias);
+
+  if (term.length <= 3) {
+    const pattern = new RegExp(
+      `\\b${escapeRegExp(term)}\\b`,
+      "i"
+    );
+
+    return pattern.test(value);
+  }
+
+  return value.includes(term);
+}
+
+function findCountry(
+  text: string,
+  link: string = ""
+): string {
+  const combined =
+    `${text} ${link}`;
 
   for (const country of COUNTRIES) {
-    if (value.includes(lower(country))) {
-      if (country === "USA") return "United States";
-      if (country === "UK") return "United Kingdom";
-      if (country === "UAE") {
-        return "United Arab Emirates";
-      }
+    const aliases =
+      COUNTRY_ALIASES[country] ||
+      [country];
 
+    if (
+      aliases.some((alias) =>
+        containsCountryAlias(
+          combined,
+          alias
+        )
+      )
+    ) {
       return country;
     }
   }
 
-  return "Global";
+  return "";
 }
 
-function extractEmail(text: string): string | null {
+function extractEmail(
+  text: string
+): string {
   const match = text.match(
     /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i
   );
 
-  return match ? match[0] : null;
+  return match?.[0] || "";
 }
 
-function extractPhone(text: string): string | null {
+function extractPhone(
+  text: string
+): string {
   const match = text.match(
     /(?:\+?\d[\d\s().-]{7,}\d)/
   );
 
-  return match ? match[0].trim() : null;
+  return match?.[0]?.trim() || "";
 }
 
-function isValidHttpUrl(url: string): boolean {
-  return /^https?:\/\//i.test(url);
+function extractPersonName(
+  title: string,
+  snippet: string
+): string {
+  const text =
+    `${clean(title)} ${clean(snippet)}`;
+
+  const patterns = [
+    /(?:by|from|with)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})/,
+    /^([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})\s*[-|–]/,
+  ];
+
+  for (const pattern of patterns) {
+    const match =
+      text.match(pattern);
+
+    if (match?.[1]) {
+      return match[1].trim();
+    }
+  }
+
+  return "";
 }
 
-function isSocialOrProfessionalProfile(url: string): boolean {
-  const value = lower(url);
+function isSpecificSocialOrProfileUrl(
+  link: string
+): boolean {
+  const value = lower(link);
 
-  return (
-    value.includes("linkedin.com/in/") ||
-    value.includes("linkedin.com/company/") ||
-    value.includes("facebook.com/") ||
-    value.includes("instagram.com/") ||
-    value.includes("x.com/") ||
-    value.includes("twitter.com/") ||
-    value.includes("youtube.com/@") ||
-    value.includes("tiktok.com/@")
+  if (!value) {
+    return false;
+  }
+
+  const socialPatterns = [
+    "linkedin.com/in/",
+    "linkedin.com/pub/",
+    "instagram.com/",
+    "facebook.com/",
+    "x.com/",
+    "twitter.com/",
+    "youtube.com/@",
+    "tiktok.com/@",
+    "threads.net/@",
+  ];
+
+  return socialPatterns.some(
+    (pattern) =>
+      value.includes(pattern)
   );
 }
 
-function looksLikeContactPage(url: string): boolean {
-  const value = lower(url);
-
-  return (
-    value.includes("/contact") ||
-    value.includes("/contact-us") ||
-    value.includes("/about") ||
-    value.includes("/team") ||
-    value.includes("/profile") ||
-    value.includes("/consultant") ||
-    value.includes("/teacher") ||
-    value.includes("/tutor") ||
-    value.includes("/coach")
-  );
-}
-
-function getContactFromResult(
+function isGenericSaasPage(
   result: SearchResult
-): {
-  contact: string | null;
-  email: string | null;
-  phone: string | null;
-  contactUrl: string | null;
-} {
-  const title = clean(result.title);
-  const snippet = clean(result.snippet);
-  const link = clean(result.link);
+): boolean {
+  const title = lower(result.title);
+  const snippet =
+    lower(result.snippet);
+  const link = lower(result.link);
 
   const combined =
     `${title} ${snippet} ${link}`;
 
-  const email = extractEmail(combined);
-  const phone = extractPhone(combined);
-
-  if (email) {
-    return {
-      contact: email,
-      email,
-      phone,
-      contactUrl: link || null,
-    };
+  if (
+    hasAny(
+      combined,
+      SAAS_REJECT_TERMS
+    )
+  ) {
+    return true;
   }
 
-  if (phone) {
-    return {
-      contact: phone,
-      email,
-      phone,
-      contactUrl: link || null,
-    };
+  const blockedPageDomains = [
+    "dictionary.cambridge.org",
+    "wikipedia.org",
+    "indeed.com",
+    "higheredjobs.com",
+    "myworkdayjobs.com",
+  ];
+
+  if (
+    blockedPageDomains.some(
+      (domain) =>
+        link.includes(domain)
+    )
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+function hasSaasIdentitySignal(
+  result: SearchResult
+): boolean {
+  const title =
+    clean(result.title);
+
+  const snippet =
+    clean(result.snippet);
+
+  const link =
+    clean(result.link);
+
+  const text =
+    `${title} ${snippet}`;
+
+  if (
+    isSpecificSocialOrProfileUrl(
+      link
+    )
+  ) {
+    return true;
+  }
+
+  return hasAny(
+    text,
+    SAAS_IDENTITY_TERMS
+  );
+}
+
+function isSaasProfessional(
+  result: SearchResult
+): boolean {
+  const title =
+    clean(result.title);
+
+  const snippet =
+    clean(result.snippet);
+
+  const link =
+    clean(result.link);
+
+  if (
+    !title ||
+    !link ||
+    !snippet
+  ) {
+    return false;
   }
 
   if (
-    isValidHttpUrl(link) &&
-    (
-      isSocialOrProfessionalProfile(link) ||
-      looksLikeContactPage(link)
+    isBlocked(link)
+  ) {
+    return false;
+  }
+
+  if (
+    isGenericSaasPage(result)
+  ) {
+    return false;
+  }
+
+  const combined =
+    `${title} ${snippet}`;
+
+  if (
+    !hasAny(
+      combined,
+      PROFESSIONAL_TERMS
     )
   ) {
-    return {
-      contact: link,
-      email,
-      phone,
-      contactUrl: link,
-    };
+    return false;
   }
 
-  return {
-    contact: null,
-    email,
-    phone,
-    contactUrl: null,
-  };
-}
-
-function parseDate(value?: string): Date | null {
-  if (!value) return null;
-
-  const raw = value.trim().toLowerCase();
-
-  const relative = raw.match(
-    /^(\d+)\s+(minute|minutes|hour|hours|day|days)\s+ago$/
+  return hasSaasIdentitySignal(
+    result
   );
-
-  if (relative) {
-    const amount = Number(relative[1]);
-    const unit = relative[2];
-
-    let milliseconds = 0;
-
-    if (unit.startsWith("minute")) {
-      milliseconds = amount * 60 * 1000;
-    } else if (unit.startsWith("hour")) {
-      milliseconds = amount * 60 * 60 * 1000;
-    } else {
-      milliseconds = amount * 24 * 60 * 60 * 1000;
-    }
-
-    return new Date(Date.now() - milliseconds);
-  }
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return null;
-  }
-
-  return date;
 }
 
-function getResultDate(result: SearchResult): Date {
-  return parseDate(result.date) || new Date();
-}
+function isIndividualSaasProfile(
+  result: SearchResult
+): boolean {
+  const title =
+    clean(result.title);
 
-function isFresh(date: Date): boolean {
-  const ageHours =
-    (Date.now() - date.getTime()) /
-    (1000 * 60 * 60);
+  const snippet =
+    clean(result.snippet);
 
-  return ageHours >= 0 && ageHours <= MAX_AGE_HOURS;
-}
-function uniqueStrings(
-  values: string[]
-): string[] {
-  return Array.from(
-    new Set(
-      values
-        .map((value) => clean(value))
-        .filter(Boolean)
+  const link =
+    clean(result.link);
+
+  const combined =
+    `${title} ${snippet}`;
+
+  if (
+    isSpecificSocialOrProfileUrl(
+      link
     )
+  ) {
+    return true;
+  }
+
+  /*
+   * Generic organization/resource pages
+   * are not accepted as individual SaaS
+   * prospects.
+   */
+  const genericPageTerms = [
+    "resources",
+    "resource center",
+    "directory",
+    "marketplace",
+    "education resources",
+    "teacher resources",
+    "teaching resources",
+    "lesson plans",
+    "lesson resources",
+    "community",
+    "forum",
+    "organization",
+    "association",
+    "school",
+    "university",
+    "college",
+    "institute",
+    "platform",
+    "company",
+    "agency",
+    "corporation",
+  ];
+
+  if (
+    hasAny(
+      combined,
+      genericPageTerms
+    )
+  ) {
+    return false;
+  }
+
+  /*
+   * A named person is a strong identity
+   * signal. We require a plausible person
+   * name unless the URL itself is a specific
+   * individual social/profile URL.
+   */
+  const personName =
+    extractPersonName(
+      title,
+      snippet
+    );
+
+  if (personName) {
+    return true;
+  }
+
+  /*
+   * Personal-service wording can also
+   * identify an individual professional.
+   */
+  return hasAny(
+    combined,
+    [
+      "about me",
+      "my services",
+      "my coaching",
+      "my consulting",
+      "work with me",
+      "hire me",
+      "contact me",
+      "book me",
+      "personal website",
+    ]
+  );
+}
+function getSkillName(
+  skill: SkillRow
+): string {
+  return (
+    clean(skill.name) ||
+    clean(skill.skill) ||
+    clean(skill.subcategory) ||
+    clean(skill.category)
   );
 }
 
@@ -399,110 +713,170 @@ function getSkillSearchTerms(
 ): string[] {
   const terms: string[] = [];
 
-  if (skill.name) {
-    terms.push(clean(skill.name));
-  }
+  const add = (value: unknown) => {
+    const text = clean(value);
 
-  if (skill.category) {
-    terms.push(clean(skill.category));
-  }
+    if (
+      text &&
+      !terms.some(
+        (item) =>
+          lower(item) === lower(text)
+      )
+    ) {
+      terms.push(text);
+    }
+  };
 
-  if (skill.subcategory) {
-    terms.push(clean(skill.subcategory));
-  }
+  add(skill.name);
+  add(skill.skill);
+  add(skill.category);
+  add(skill.subcategory);
 
   if (Array.isArray(skill.tags)) {
-    terms.push(
-      ...skill.tags.map((tag) => clean(tag))
-    );
-  } else if (typeof skill.tags === "string") {
-    terms.push(
-      ...skill.tags
-        .split(",")
-        .map((tag) => clean(tag))
-    );
+    skill.tags.forEach(add);
+  } else if (
+    typeof skill.tags === "string"
+  ) {
+    skill.tags
+      .split(",")
+      .forEach(add);
   }
 
-  const text = lower(terms.join(" "));
+  const combined =
+    lower(terms.join(" "));
 
-  // Specialized skill -> broader skill.
   if (
-    /tajweed|qiraat|hifz|tafseer|tafsir|quran/.test(
-      text
+    combined.includes("tajweed") ||
+    combined.includes("qiraat") ||
+    combined.includes("hifz") ||
+    combined.includes("tafseer") ||
+    combined.includes("tafsir") ||
+    combined.includes("quran")
+  ) {
+    add("Quran");
+  }
+
+  if (
+    combined.includes("math") ||
+    combined.includes("mathematics")
+  ) {
+    add("Math");
+    add("Mathematics");
+  }
+
+  if (
+    combined.includes(
+      "sociology"
+    ) ||
+    combined.includes(
+      "social research"
     )
   ) {
-    terms.push("Quran");
+    add("Social Research");
+    add("Research");
   }
 
   if (
-    /calculus|algebra|geometry|trigonometry|statistics|mathematics|math/.test(
-      text
+    combined.includes(
+      "psychology"
     )
   ) {
-    terms.push("Math");
-    terms.push("Mathematics");
-  }
-
-  if (/sociology|social research/.test(text)) {
-    terms.push("Social Research");
-    terms.push("Research");
-  }
-
-  if (/psychology|psychological/.test(text)) {
-    terms.push("Psychology");
-    terms.push("Social Science");
-  }
-
-  if (/anthropology/.test(text)) {
-    terms.push("Anthropology");
-    terms.push("Social Science");
-  }
-
-  if (/economics|economic/.test(text)) {
-    terms.push("Economics");
-    terms.push("Social Science");
-  }
-
-  if (/physics/.test(text)) {
-    terms.push("Physics");
-    terms.push("Science");
-  }
-
-  if (/chemistry/.test(text)) {
-    terms.push("Chemistry");
-    terms.push("Science");
-  }
-
-  if (/biology/.test(text)) {
-    terms.push("Biology");
-    terms.push("Science");
-  }
-
-  if (/fiqh/.test(text)) {
-    terms.push("Fiqh");
-    terms.push("Islamic Studies");
+    add("Psychology");
+    add("Social Science");
   }
 
   if (
-    /islamiyat|islamic studies|islamic/.test(text)
+    combined.includes(
+      "anthropology"
+    )
   ) {
-    terms.push("Islamiyat");
-    terms.push("Islamic Studies");
+    add("Anthropology");
+    add("Social Science");
   }
 
-  return uniqueStrings(terms);
+  if (
+    combined.includes(
+      "economics"
+    )
+  ) {
+    add("Economics");
+    add("Social Science");
+  }
+
+  if (
+    combined.includes(
+      "physics"
+    )
+  ) {
+    add("Physics");
+    add("Science");
+  }
+
+  if (
+    combined.includes(
+      "chemistry"
+    )
+  ) {
+    add("Chemistry");
+    add("Science");
+  }
+
+  if (
+    combined.includes(
+      "biology"
+    )
+  ) {
+    add("Biology");
+    add("Science");
+  }
+
+  if (
+    combined.includes("fiqh")
+  ) {
+    add("Fiqh");
+    add("Islamic Studies");
+  }
+
+  if (
+    combined.includes(
+      "islamiyat"
+    ) ||
+    combined.includes(
+      "islamic studies"
+    ) ||
+    combined === "islamic"
+  ) {
+    add("Islamiyat");
+    add("Islamic Studies");
+  }
+
+  return terms;
 }
 
 function getAllSkillSearchTerms(
   skills: SkillRow[]
 ): string[] {
-  const all: string[] = [];
+  const terms: string[] = [];
 
   for (const skill of skills) {
-    all.push(...getSkillSearchTerms(skill));
+    for (
+      const term of getSkillSearchTerms(
+        skill
+      )
+    ) {
+      if (
+        !terms.some(
+          (item) =>
+            lower(item) ===
+            lower(term)
+        )
+      ) {
+        terms.push(term);
+      }
+    }
   }
 
-  return uniqueStrings(all);
+  return terms;
 }
 
 function findMatchingSkill(
@@ -515,38 +889,46 @@ function findMatchingSkill(
 } | null {
   const value = lower(text);
 
-  // First check the actual saved skill.
   for (const skill of skills) {
-    const name = clean(skill.name);
+    const name =
+      getSkillName(skill);
 
     if (
       name &&
-      value.includes(lower(name))
+      value.includes(
+        lower(name)
+      )
     ) {
       return {
         name,
-        category: clean(skill.category),
-        subcategory: clean(skill.subcategory),
+        category:
+          clean(skill.category),
+        subcategory:
+          clean(skill.subcategory),
       };
     }
   }
 
-  // Then check broader/related terms.
   for (const skill of skills) {
-    const terms = getSkillSearchTerms(skill);
+    const terms =
+      getSkillSearchTerms(skill);
 
-    const matchingTerm = terms.find(
-      (term) =>
-        value.includes(lower(term))
-    );
+    const matchingTerm =
+      terms.find((term) =>
+        value.includes(
+          lower(term)
+        )
+      );
 
     if (matchingTerm) {
       return {
         name:
           clean(skill.name) ||
           matchingTerm,
-        category: clean(skill.category),
-        subcategory: clean(skill.subcategory),
+        category:
+          clean(skill.category),
+        subcategory:
+          clean(skill.subcategory),
       };
     }
   }
@@ -557,7 +939,10 @@ function findMatchingSkill(
 function getSearchSkillTerms(
   skills: SkillRow[]
 ): string[] {
-  const terms = getAllSkillSearchTerms(skills);
+  const terms =
+    getAllSkillSearchTerms(
+      skills
+    );
 
   if (terms.length > 0) {
     return terms;
@@ -570,7 +955,18 @@ function getSearchSkillTerms(
     "freelancer",
     "consultant",
   ];
-     }
+}
+
+function uniqueStrings(
+  values: string[]
+): string[] {
+  return Array.from(
+    new Set(
+      values.filter(Boolean)
+    )
+  );
+}
+
 function buildQueries(
   skills: SkillRow[],
   type: LeadType
@@ -580,37 +976,47 @@ function buildQueries(
 
   const queries: string[] = [];
 
-  if (type === "Demand") {
+  if (
+    type === "Demand"
+  ) {
     for (
       let i = 0;
-      i < Math.min(
-        MAX_QUERIES_PER_TYPE,
-        skillTerms.length
-      );
+      i <
+        Math.min(
+          MAX_QUERIES_PER_TYPE,
+          skillTerms.length
+        );
       i++
     ) {
-      const skill = skillTerms[i];
+      const skill =
+        skillTerms[i];
 
       queries.push(
         `"${skill}" ("looking for" OR "need a" OR "need someone" OR "seeking" OR "wanted")`
       );
     }
 
-    queries.push(
-      `"${skillTerms[0]}" ("can anyone recommend" OR "help me find")`
-    );
+    if (skillTerms[0]) {
+      queries.push(
+        `"${skillTerms[0]}" ("can anyone recommend" OR "help me find")`
+      );
+    }
   }
 
-  if (type === "Supply") {
+  if (
+    type === "Supply"
+  ) {
     for (
       let i = 0;
-      i < Math.min(
-        MAX_QUERIES_PER_TYPE,
-        skillTerms.length
-      );
+      i <
+        Math.min(
+          MAX_QUERIES_PER_TYPE,
+          skillTerms.length
+        );
       i++
     ) {
-      const skill = skillTerms[i];
+      const skill =
+        skillTerms[i];
 
       queries.push(
         `"${skill}" ("hiring" OR "vacancy" OR "position available" OR "recruiting")`
@@ -618,7 +1024,9 @@ function buildQueries(
     }
   }
 
-  if (type === "SaaS") {
+  if (
+    type === "SaaS"
+  ) {
     const professionalSearches = [
       "teacher",
       "tutor",
@@ -636,8 +1044,10 @@ function buildQueries(
 
     for (
       let i = 0;
-      i < professionalSearches.length &&
-      queries.length < MAX_QUERIES_PER_TYPE;
+      i <
+        professionalSearches.length &&
+        queries.length <
+          MAX_QUERIES_PER_TYPE;
       i++
     ) {
       const professional =
@@ -650,8 +1060,10 @@ function buildQueries(
 
     for (
       let i = 0;
-      i < skillTerms.length &&
-      queries.length < MAX_QUERIES_PER_TYPE;
+      i <
+        skillTerms.length &&
+        queries.length <
+          MAX_QUERIES_PER_TYPE;
       i++
     ) {
       queries.push(
@@ -660,54 +1072,526 @@ function buildQueries(
     }
   }
 
-  return uniqueStrings(queries);
-}
+  return uniqueStrings(
+    queries
+  );
+    }
+const PROVIDER_TERMS = [
+  "my services",
+  "hire me",
+  "book me",
+  "we offer",
+  "i offer",
+  "i provide",
+  "our services",
+  "portfolio",
+  "available for hire",
+];
 
-async function loadSkills(): Promise<SkillRow[]> {
-  const { data, error } =
-    await supabase
-      .from("skills")
-      .select(
-        "name, category, subcategory, tags"
-      );
+function parseResultDate(
+  value: string
+): Date | null {
+  const text = clean(value);
 
-  if (error) {
-    console.error(
-      "Skills load error:",
-      error
-    );
-
-    return [];
+  if (!text) {
+    return null;
   }
 
-  return (data || []) as SkillRow[];
+  const directDate =
+    new Date(text);
+
+  if (
+    !Number.isNaN(
+      directDate.getTime()
+    )
+  ) {
+    return directDate;
+  }
+
+  const relative =
+    lower(text).match(
+      /(\d+)\s*(minute|minutes|hour|hours|day|days)\s*ago/
+    );
+
+  if (relative) {
+    const amount =
+      Number(relative[1]);
+
+    const unit =
+      relative[2];
+
+    const milliseconds =
+      unit.startsWith("minute")
+        ? amount * 60 * 1000
+        : unit.startsWith("hour")
+        ? amount * 60 * 60 * 1000
+        : amount * 24 * 60 * 60 * 1000;
+
+    return new Date(
+      Date.now() - milliseconds
+    );
+  }
+
+  return null;
+}
+
+function isFresh(
+  value: string
+): boolean {
+  /*
+   * Serper searches are already restricted
+   * to the last 72 hours. If Serper does not
+   * return a readable date, we accept the
+   * result because the query itself uses the
+   * freshness window.
+   */
+  const parsed =
+    parseResultDate(value);
+
+  if (!parsed) {
+    return true;
+  }
+
+  const age =
+    Date.now() -
+    parsed.getTime();
+
+  const maxAge =
+    MAX_AGE_HOURS *
+    60 *
+    60 *
+    1000;
+
+  return (
+    age >= 0 &&
+    age <= maxAge
+  );
+}
+
+function getDirectContact(
+  result: SearchResult
+): {
+  contact: string;
+  contactEmail: string;
+  contactPhone: string;
+  contactUrl: string;
+} {
+  const title =
+    clean(result.title);
+
+  const snippet =
+    clean(result.snippet);
+
+  const link =
+    clean(result.link);
+
+  const combined =
+    `${title} ${snippet} ${link}`;
+
+  const email =
+    extractEmail(combined);
+
+  const phone =
+    extractPhone(combined);
+
+  if (email) {
+    return {
+      contact: email,
+      contactEmail: email,
+      contactPhone: phone,
+      contactUrl: link,
+    };
+  }
+
+  if (phone) {
+    return {
+      contact: phone,
+      contactEmail: "",
+      contactPhone: phone,
+      contactUrl: link,
+    };
+  }
+
+  if (
+    isSpecificSocialOrProfileUrl(
+      link
+    )
+  ) {
+    return {
+      contact: link,
+      contactEmail: "",
+      contactPhone: "",
+      contactUrl: link,
+    };
+  }
+
+  const contactPageTerms = [
+    "/contact",
+    "/contact-us",
+    "/get-in-touch",
+    "/reach-me",
+    "/book",
+    "/booking",
+  ];
+
+  if (
+    contactPageTerms.some(
+      (term) =>
+        lower(link).includes(term)
+    )
+  ) {
+    return {
+      contact: link,
+      contactEmail: "",
+      contactPhone: "",
+      contactUrl: link,
+    };
+  }
+
+  return {
+    contact: "",
+    contactEmail: "",
+    contactPhone: "",
+    contactUrl: "",
+  };
+}
+
+function isDemandLead(
+  result: SearchResult
+): boolean {
+  const combined =
+    `${clean(result.title)} ${clean(
+      result.snippet
+    )}`;
+
+  if (
+    !hasAny(
+      combined,
+      DEMAND_SIGNALS
+    )
+  ) {
+    return false;
+  }
+
+  if (
+    hasAny(
+      combined,
+      PROVIDER_TERMS
+    )
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+function isSupplyLead(
+  result: SearchResult
+): boolean {
+  const combined =
+    `${clean(result.title)} ${clean(
+      result.snippet
+    )}`;
+
+  if (
+    !hasAny(
+      combined,
+      SUPPLY_SIGNALS
+    )
+  ) {
+    return false;
+  }
+
+  /*
+   * A demand post should not be classified
+   * as an opportunity simply because it also
+   * contains a professional term.
+   */
+  if (
+    hasAny(
+      combined,
+      DEMAND_SIGNALS
+    )
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+function isSaasJobSeeker(
+  result: SearchResult
+): boolean {
+  const combined =
+    `${clean(result.title)} ${clean(
+      result.snippet
+    )}`;
+
+  const jobSeekerTerms = [
+    "looking for work",
+    "looking for a job",
+    "seeking employment",
+    "seeking a job",
+    "open to work",
+    "available for work",
+    "available for employment",
+    "resume",
+    "cv",
+    "curriculum vitae",
+  ];
+
+  return hasAny(
+    combined,
+    jobSeekerTerms
+  );
+}
+
+function hasSaasPersonIdentity(
+  result: SearchResult,
+  pageText: string = ""
+): string {
+  const title =
+    clean(result.title);
+
+  const snippet =
+    clean(result.snippet);
+
+  const link =
+    clean(result.link);
+
+  if (
+    isSpecificSocialOrProfileUrl(
+      link
+    )
+  ) {
+    return (
+      extractPersonName(
+        title,
+        snippet
+      ) || "Professional"
+    );
+  }
+
+  const resultName =
+    extractPersonName(
+      title,
+      snippet
+    );
+
+  if (resultName) {
+    return resultName;
+  }
+
+  return extractPersonName(
+    pageText,
+    ""
+  );
+}
+
+function extractHtmlText(
+  html: string
+): string {
+  return html
+    .replace(
+      /<script[\s\S]*?<\/script>/gi,
+      " "
+    )
+    .replace(
+      /<style[\s\S]*?<\/style>/gi,
+      " "
+    )
+    .replace(
+      /<noscript[\s\S]*?<\/noscript>/gi,
+      " "
+    )
+    .replace(
+      /<[^>]+>/g,
+      " "
+    )
+    .replace(
+      /&nbsp;/gi,
+      " "
+    )
+    .replace(
+      /&amp;/gi,
+      "&"
+    )
+    .replace(
+      /\s+/g,
+      " "
+    )
+    .trim();
+}
+
+function extractContactUrlFromHtml(
+  html: string,
+  baseUrl: string
+): string {
+  const matches =
+    html.match(
+      /href\s*=\s*["']([^"']+)["']/gi
+    ) || [];
+
+  const contactTerms = [
+    "contact",
+    "get-in-touch",
+    "reach-me",
+    "book",
+    "booking",
+    "hire",
+  ];
+
+  for (const raw of matches) {
+    const match =
+      raw.match(
+        /href\s*=\s*["']([^"']+)["']/i
+      );
+
+    const href =
+      match?.[1] || "";
+
+    if (!href) {
+      continue;
+    }
+
+    if (
+      !hasAny(
+        href,
+        contactTerms
+      )
+    ) {
+      continue;
+    }
+
+    try {
+      return new URL(
+        href,
+        baseUrl
+      ).toString();
+    } catch {
+      continue;
+    }
+  }
+
+  return "";
+}
+
+async function inspectSaasSource(
+  link: string
+): Promise<{
+  pageText: string;
+  email: string;
+  phone: string;
+  contactUrl: string;
+}> {
+  if (
+    !isValidHttpUrl(link)
+  ) {
+    return {
+      pageText: "",
+      email: "",
+      phone: "",
+      contactUrl: "",
+    };
+  }
+
+  try {
+    const controller =
+      new AbortController();
+
+    const timeout =
+      setTimeout(
+        () =>
+          controller.abort(),
+        6000
+      );
+
+    const response =
+      await fetch(link, {
+        method: "GET",
+        redirect: "follow",
+        signal:
+          controller.signal,
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 OpportunityHubLeadCollector/1.0",
+        },
+      });
+
+    clearTimeout(timeout);
+
+    if (!response.ok) {
+      return {
+        pageText: "",
+        email: "",
+        phone: "",
+        contactUrl: "",
+      };
+    }
+
+    const html =
+      await response.text();
+
+    const pageText =
+      extractHtmlText(html);
+
+    const email =
+      extractEmail(
+        `${html} ${pageText}`
+      );
+
+    const phone =
+      extractPhone(pageText);
+
+    const contactUrl =
+      extractContactUrlFromHtml(
+        html,
+        link
+      );
+
+    return {
+      pageText,
+      email,
+      phone,
+      contactUrl,
+    };
+  } catch {
+    return {
+      pageText: "",
+      email: "",
+      phone: "",
+      contactUrl: "",
+    };
+  }
 }
 
 async function searchSerper(
   query: string
 ): Promise<SearchResult[]> {
-  if (!serperApiKey) {
+  if (!SERPER_API_KEY) {
     throw new Error(
       "SERPER_API_KEY is missing"
     );
   }
 
-  const response = await fetch(
-    "https://google.serper.dev/search",
-    {
-      method: "POST",
-      headers: {
-        "X-API-KEY": serperApiKey,
-        "Content-Type":
-          "application/json",
-      },
-      body: JSON.stringify({
-        q: query,
-        num: RESULTS_PER_SEARCH,
-        tbs: "qdr:d3",
-      }),
-    }
-  );
+  const response =
+    await fetch(
+      "https://google.serper.dev/search",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type":
+            "application/json",
+          "X-API-KEY":
+            SERPER_API_KEY,
+        },
+        body: JSON.stringify({
+          q: query,
+          num: RESULTS_PER_SEARCH,
+          tbs: "qdr:d3",
+        }),
+      }
+    );
 
   if (!response.ok) {
     throw new Error(
@@ -715,466 +1599,652 @@ async function searchSerper(
     );
   }
 
-  const data = await response.json();
+  const data =
+    (await response.json()) as {
+      organic?: SearchResult[];
+    };
 
-  return (data?.organic || []) as SearchResult[];
+  return Array.isArray(
+    data.organic
+  )
+    ? data.organic
+    : [];
 }
 
-async function alreadyExists(
-  table: string,
-  sourceUrl: string
-): Promise<boolean> {
-  if (!sourceUrl) {
-    return false;
+async function loadSkills(): Promise<
+  SkillRow[]
+> {
+  const { data, error } =
+    await supabase
+      .from("skills")
+      .select(
+        "id,name,skill,category,subcategory,tags"
+      );
+
+  if (error) {
+    throw new Error(
+      `Failed to load skills: ${error.message}`
+    );
   }
 
+  return Array.isArray(data)
+    ? data
+    : [];
+}
+
+async function leadAlreadyExists(
+  table: string,
+  title: string,
+  source: string
+): Promise<boolean> {
   const { data, error } =
     await supabase
       .from(table)
       .select("id")
-      .eq("source_url", sourceUrl)
+      .eq("title", title)
+      .eq("source", source)
       .limit(1);
 
   if (error) {
-    console.error(
-      `Duplicate check failed for ${table}:`,
-      error
-    );
-
     return false;
   }
 
-  return Boolean(
-    data && data.length > 0
-  );
-}
-function validBaseResult(
-  result: SearchResult
-): boolean {
-  const title = clean(result.title);
-  const link = clean(result.link);
-
-  if (!title || !link) {
-    return false;
-  }
-
-  if (!isValidHttpUrl(link)) {
-    return false;
-  }
-
-  if (isBlocked(link)) {
-    return false;
-  }
-
-  if (!isFresh(getResultDate(result))) {
-    return false;
-  }
-
-  return true;
-}
-
-function isDemandLead(
-  result: SearchResult
-): boolean {
-  const text =
-    `${clean(result.title)} ${clean(result.snippet)}`;
-
-  if (hasAny(text, GENERIC_TERMS)) {
-    return false;
-  }
-
-  if (hasAny(text, PROVIDER_TERMS)) {
-    return false;
-  }
-
-  return hasAny(
-    text,
-    DEMAND_SIGNALS
+  return (
+    Array.isArray(data) &&
+    data.length > 0
   );
 }
 
-function isSupplyLead(
-  result: SearchResult
-): boolean {
-  const text =
-    `${clean(result.title)} ${clean(result.snippet)}`;
-
-  if (hasAny(text, GENERIC_TERMS)) {
-    return false;
-  }
-
-  if (
-    hasAny(text, [
-      "students wanted",
-      "students required",
-      "accepting students",
-      "enrollment",
-      "admissions",
-      "free class",
-      "free lesson",
-    ])
-  ) {
-    return false;
-  }
-
-  return hasAny(
-    text,
-    SUPPLY_SIGNALS
-  );
-}
-
-function isSaasProfessional(
-  result: SearchResult
-): boolean {
-  const title = clean(result.title);
-  const snippet = clean(result.snippet);
-  const link = clean(result.link);
-
-  const text =
-    `${title} ${snippet} ${link}`;
-
-  if (hasAny(text, GENERIC_TERMS)) {
-    return false;
-  }
-
-  if (isJobBoard(link)) {
-    return false;
-  }
-
-  if (
-    hasAny(text, [
-      "looking for a job",
-      "looking for work",
-      "seeking employment",
-      "open to work",
-    ])
-  ) {
-    return false;
-  }
-
-  return hasAny(
-    text,
-    PROFESSIONAL_TERMS
-  );
-}
-
-function buildLead(
-  result: SearchResult,
-  skills: SkillRow[],
-  type: LeadType
-): Record<string, unknown> | null {
-  const title = clean(result.title);
-  const snippet = clean(result.snippet);
-  const link = clean(result.link);
-
-  if (!validBaseResult(result)) {
-    return null;
-  }
-
-  const contact =
-    getContactFromResult(result);
-
-  // Absolutely mandatory.
-  if (!contact.contact) {
-    return null;
-  }
-
-  const combinedText =
-    `${title} ${snippet} ${link}`;
-
-  const matchedSkill =
-    findMatchingSkill(
-      combinedText,
-      skills
-    );
-
-  if (!matchedSkill) {
-    return null;
-  }
-
-  const country =
-    findCountry(combinedText);
-
-  let niche =
-    matchedSkill.name ||
-    matchedSkill.category ||
-    "Professional Services";
-
-  if (type === "Demand") {
-    niche =
-      `${matchedSkill.name || niche} Demand`;
-  }
-
-  if (type === "Supply") {
-    niche =
-      `${matchedSkill.name || niche} Supply`;
-  }
-
-  return {
-    name: title,
-    platform: link,
-    niche,
-    contact: contact.contact,
-    status: "new",
-    description:
-      snippet ||
-      `${type} opportunity related to ${matchedSkill.name}`,
-    commission: null,
-    trial_days: 14,
-    landing_url: link,
-    source_url: link,
-    contact_url:
-      contact.contactUrl || link,
-    country,
-    city: null,
-  };
-  }
-async function processLead(
+async function insertLead(
   table: string,
-  result: SearchResult,
-  skills: SkillRow[],
-  type: LeadType
-): Promise<boolean> {
-  if (type === "Demand") {
-    if (!isDemandLead(result)) {
-      return false;
-    }
-  }
-
-  if (type === "Supply") {
-    if (!isSupplyLead(result)) {
-      return false;
-    }
-  }
-
-  if (type === "SaaS") {
-    if (!isSaasProfessional(result)) {
-      return false;
-    }
-  }
-
-  const link = clean(result.link);
-
-  if (
-    await alreadyExists(
-      table,
-      link
-    )
-  ) {
-    return false;
-  }
-
-  const lead =
-    buildLead(
-      result,
-      skills,
-      type
-    );
-
-  if (!lead) {
-    return false;
-  }
-
+  lead: Record<string, unknown>
+): Promise<void> {
   const { error } =
     await supabase
       .from(table)
       .insert(lead);
 
   if (error) {
-    console.error(
-      `Insert failed for ${type}:`,
-      error
+    throw new Error(
+      `Supabase insert failed for ${table}: ${error.message}`
+    );
+  }
+}
+function getLeadTable(
+  type: LeadType
+): string {
+  if (type === "Demand") {
+    return "demand_leads";
+  }
+
+  if (type === "Supply") {
+    return "supply_leads";
+  }
+
+  return "saas_leads";
+}
+
+function buildLead(
+  result: SearchResult,
+  type: LeadType,
+  skills: SkillRow[],
+  saasEvidence?: {
+    pageText: string;
+    email: string;
+    phone: string;
+    contactUrl: string;
+    personName: string;
+  }
+): Record<string, unknown> | null {
+  const title =
+    clean(result.title);
+
+  const snippet =
+    clean(result.snippet);
+
+  const link =
+    clean(result.link);
+
+  if (
+    !title ||
+    !snippet ||
+    !link ||
+    !isValidHttpUrl(link)
+  ) {
+    return null;
+  }
+
+  if (
+    isBlocked(link)
+  ) {
+    return null;
+  }
+
+  if (
+    !isFresh(
+      clean(result.date)
+    )
+  ) {
+    return null;
+  }
+
+  const combined =
+    `${title} ${snippet}`;
+
+  let matchedSkill:
+    | {
+        name: string;
+        category: string;
+        subcategory: string;
+      }
+    | null = null;
+
+  if (
+    type === "Demand" ||
+    type === "Supply"
+  ) {
+    matchedSkill =
+      findMatchingSkill(
+        combined,
+        skills
+      );
+
+    if (!matchedSkill) {
+      return null;
+    }
+  }
+
+  let contact =
+    getDirectContact(result);
+
+  if (type === "SaaS") {
+    if (
+      !saasEvidence
+    ) {
+      return null;
+    }
+
+    if (
+      !saasEvidence.personName
+    ) {
+      return null;
+    }
+
+    if (
+      !saasEvidence.email &&
+      !saasEvidence.phone &&
+      !saasEvidence.contactUrl &&
+      !contact.contact
+    ) {
+      return null;
+    }
+
+    if (
+      saasEvidence.email
+    ) {
+      contact = {
+        contact:
+          saasEvidence.email,
+        contactEmail:
+          saasEvidence.email,
+        contactPhone:
+          saasEvidence.phone,
+        contactUrl:
+          saasEvidence.contactUrl ||
+          link,
+      };
+    } else if (
+      saasEvidence.phone
+    ) {
+      contact = {
+        contact:
+          saasEvidence.phone,
+        contactEmail: "",
+        contactPhone:
+          saasEvidence.phone,
+        contactUrl:
+          saasEvidence.contactUrl ||
+          link,
+      };
+    } else if (
+      saasEvidence.contactUrl
+    ) {
+      contact = {
+        contact:
+          saasEvidence.contactUrl,
+        contactEmail: "",
+        contactPhone: "",
+        contactUrl:
+          saasEvidence.contactUrl,
+      };
+    }
+  }
+
+  /*
+   * Gold rule:
+   * every saved lead must have a real
+   * direct contact path.
+   */
+  if (!contact.contact) {
+    return null;
+  }
+
+  const country =
+    findCountry(
+      `${title} ${snippet} ${
+        saasEvidence?.pageText || ""
+      }`,
+      link
     );
 
+  /*
+   * SaaS leads are country-based.
+   * We do not require an exact skill-name
+   * match for SaaS.
+   */
+  if (
+    type === "SaaS" &&
+    !country
+  ) {
+    return null;
+  }
+
+  let name =
+    clean(
+      saasEvidence?.personName
+    );
+
+  if (!name) {
+    name =
+      extractPersonName(
+        title,
+        snippet
+      );
+  }
+
+  if (!name) {
+    name = title;
+  }
+
+  const category =
+    matchedSkill?.category ||
+    "Professional Services";
+
+  const subcategory =
+    matchedSkill?.subcategory ||
+    "";
+
+  const skillNeeded =
+    matchedSkill?.name ||
+    (type === "SaaS"
+      ? "Professional Services"
+      : "");
+
+  const description =
+    type === "SaaS"
+      ? [
+          name !== title
+            ? `${name} — ${title}`
+            : title,
+          snippet,
+          saasEvidence?.pageText
+            ? saasEvidence.pageText.slice(
+                0,
+                500
+              )
+            : "",
+        ]
+          .filter(Boolean)
+          .join(" ")
+      : snippet;
+
+  return {
+    type,
+    source: link,
+    client_name: name,
+    skill_needed:
+      skillNeeded,
+    description,
+    contact_email:
+      contact.contactEmail,
+    contact_phone:
+      contact.contactPhone,
+    contact_name:
+      name,
+    contact_url:
+      contact.contactUrl ||
+      link,
+    status: "new",
+    title,
+    category,
+    subcategory,
+    country,
+    city: "",
+    budget: "",
+    currency: "",
+    created_at:
+      new Date().toISOString(),
+  };
+}
+
+async function processResult(
+  result: SearchResult,
+  type: LeadType,
+  skills: SkillRow[]
+): Promise<boolean> {
+  const title =
+    clean(result.title);
+
+  const link =
+    clean(result.link);
+
+  if (
+    !title ||
+    !link
+  ) {
     return false;
   }
 
-  console.log(
-    `Added ${type} lead:`,
-    clean(result.title)
+  if (
+    await leadAlreadyExists(
+      getLeadTable(type),
+      title,
+      link
+    )
+  ) {
+    return false;
+  }
+
+  if (
+    type === "Demand" &&
+    !isDemandLead(result)
+  ) {
+    return false;
+  }
+
+  if (
+    type === "Supply" &&
+    !isSupplyLead(result)
+  ) {
+    return false;
+  }
+
+  let saasEvidence:
+    | {
+        pageText: string;
+        email: string;
+        phone: string;
+        contactUrl: string;
+        personName: string;
+      }
+    | undefined;
+
+  if (
+    type === "SaaS"
+  ) {
+    if (
+      isGenericSaasPage(
+        result
+      )
+    ) {
+      return false;
+    }
+
+    if (
+      isSaasJobSeeker(
+        result
+      )
+    ) {
+      return false;
+    }
+
+    if (
+      !isSaasProfessional(
+        result
+      )
+    ) {
+      return false;
+    }
+
+    if (
+      !isIndividualSaasProfile(
+        result
+      )
+    ) {
+      return false;
+    }
+
+    const inspection =
+      await inspectSaasSource(
+        link
+      );
+
+    const personName =
+      hasSaasPersonIdentity(
+        result,
+        inspection.pageText
+      );
+
+    /*
+     * A SaaS prospect must represent
+     * an identifiable individual professional,
+     * not a generic resource or organization.
+     */
+    if (!personName) {
+      return false;
+    }
+
+    const sourceCountry =
+      findCountry(
+        `${clean(
+          result.title
+        )} ${clean(
+          result.snippet
+        )} ${inspection.pageText}`,
+        link
+      );
+
+    /*
+     * Country is mandatory for SaaS.
+     * This prevents "global" / unknown-country
+     * records from becoming user leads.
+     */
+    if (!sourceCountry) {
+      return false;
+    }
+
+    saasEvidence = {
+      pageText:
+        inspection.pageText,
+      email:
+        inspection.email,
+      phone:
+        inspection.phone,
+      contactUrl:
+        inspection.contactUrl,
+      personName,
+    };
+  }
+
+  const lead =
+    buildLead(
+      result,
+      type,
+      skills,
+      saasEvidence
+    );
+
+  if (!lead) {
+    return false;
+  }
+
+  await insertLead(
+    getLeadTable(type),
+    lead
   );
 
   return true;
 }
 
-async function runSearches(
+async function runType(
   type: LeadType,
-  table: string,
   skills: SkillRow[]
-): Promise<number> {
+): Promise<{
+  searched: number;
+  added: number;
+}> {
   const queries =
     buildQueries(
       skills,
       type
     );
 
+  let searched = 0;
   let added = 0;
 
-  console.log(
-    `${type}: running ${queries.length} searches`
-  );
+  const seen =
+    new Set<string>();
 
   for (const query of queries) {
+    if (
+      searched >=
+      MAX_QUERIES_PER_TYPE
+    ) {
+      break;
+    }
+
+    searched++;
+
+    let results:
+      SearchResult[] = [];
+
     try {
-      console.log(
-        `${type} search:`,
-        query
-      );
+      results =
+        await searchSerper(
+          query
+        );
+    } catch {
+      continue;
+    }
 
-      const results =
-        await searchSerper(query);
+    for (const result of results) {
+      const key =
+        lower(
+          clean(result.link)
+        );
 
-      console.log(
-        `${type}: ${results.length} results`
-      );
-
-      for (const result of results) {
-        try {
-          const inserted =
-            await processLead(
-              table,
-              result,
-              skills,
-              type
-            );
-
-          if (inserted) {
-            added++;
-          }
-        } catch (error) {
-          console.error(
-            `${type} result processing error:`,
-            error
-          );
-        }
+      if (
+        !key ||
+        seen.has(key)
+      ) {
+        continue;
       }
-    } catch (error) {
-      console.error(
-        `${type} search error:`,
-        error
-      );
+
+      seen.add(key);
+
+      try {
+        const inserted =
+          await processResult(
+            result,
+            type,
+            skills
+          );
+
+        if (inserted) {
+          added++;
+        }
+      } catch {
+        /*
+         * One bad result must never stop
+         * the remaining lead collection.
+         */
+        continue;
+      }
     }
   }
 
-  console.log(
-    `${type}: added ${added}`
-  );
+  return {
+    searched,
+    added,
+  };
+}
 
-  return added;
-    }
 async function runCollector(): Promise<{
-  demand: number;
-  supply: number;
-  saas: number;
+  Demand: {
+    searched: number;
+    added: number;
+  };
+  Supply: {
+    searched: number;
+    added: number;
+  };
+  SaaS: {
+    searched: number;
+    added: number;
+  };
 }> {
-  if (!supabaseUrl) {
-    throw new Error(
-      "SUPABASE_URL is missing"
-    );
-  }
-
-  if (!supabaseServiceKey) {
-    throw new Error(
-      "SUPABASE_SERVICE_ROLE_KEY is missing"
-    );
-  }
-
-  if (!serperApiKey) {
-    throw new Error(
-      "SERPER_API_KEY is missing"
-    );
-  }
-
   const skills =
     await loadSkills();
 
-  console.log(
-    `Loaded ${skills.length} skills`
-  );
-
+  /*
+   * Keep all three lead categories active.
+   * Demand/Supply use exact skill matching.
+   * SaaS uses country + individual-professional
+   * matching instead of exact skill matching.
+   */
   const demand =
-    await runSearches(
+    await runType(
       "Demand",
-      "demand_leads",
       skills
     );
 
   const supply =
-    await runSearches(
+    await runType(
       "Supply",
-      "supply_leads",
       skills
     );
 
   const saas =
-    await runSearches(
+    await runType(
       "SaaS",
-      "saas_leads",
       skills
     );
 
-  console.log(
-    `COLLECTOR COMPLETE — Demand: ${demand}, Supply: ${supply}, SaaS: ${saas}`
-  );
-
   return {
-    demand,
-    supply,
-    saas,
+    Demand: demand,
+    Supply: supply,
+    SaaS: saas,
   };
 }
 
-export default async function handler(
-  req: any,
-  res: any
-) {
-  if (req.method !== "POST") {
-    return res
-      .status(405)
-      .json({
-        success: false,
-        error: "Method not allowed",
-      });
-  }
+router.post(
+  "/fetchLeads",
+  async (
+    _req: Request,
+    res: Response
+  ) => {
+    try {
+      const result =
+        await runCollector();
 
-  try {
-    const result =
-      await runCollector();
-
-    const total =
-      result.demand +
-      result.supply +
-      result.saas;
-
-    return res
-      .status(200)
-      .json({
+      return res.status(200).json({
         success: true,
-        added: total,
-        demand: result.demand,
-        supply: result.supply,
-        saas: result.saas,
         message:
-          `Real lead collection completed. ${total} leads added.`,
+          "Lead collection completed",
+        result,
       });
-  } catch (error) {
-    console.error(
-      "Lead collector failed:",
-      error
-    );
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Lead collection failed";
 
-    return res
-      .status(500)
-      .json({
+      return res.status(500).json({
         success: false,
-        added: 0,
-        demand: 0,
-        supply: 0,
-        saas: 0,
-        error:
-          error instanceof Error
-            ? error.message
-            : "Lead collector failed",
+        error: message,
       });
+    }
   }
-      }
+);
+
+export default router;
