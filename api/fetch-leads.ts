@@ -13,9 +13,7 @@ const SERPER_API_KEY =
   process.env.SERPER_API_KEY || "";
 
 const MAX_AGE_HOURS = 72;
-
 const MAX_QUERIES_PER_TYPE = 6;
-
 const RESULTS_PER_SEARCH = 10;
 
 type LeadType =
@@ -315,7 +313,6 @@ const SAAS_IDENTITY_TERMS = [
   "tutor",
   "trainer",
 ];
-
 function clean(value: unknown): string {
   return String(value ?? "").trim();
 }
@@ -356,7 +353,8 @@ function isValidHttpUrl(
   } catch {
     return false;
   }
-    }
+}
+
 function escapeRegExp(
   value: string
 ): string {
@@ -624,13 +622,7 @@ function isIndividualSaasProfile(
     return true;
   }
 
-  /*
-   * Generic organization/resource pages
-   * are not accepted as individual SaaS
-   * prospects.
-   */
   const genericPageTerms = [
-    "resources",
     "resource center",
     "directory",
     "marketplace",
@@ -662,12 +654,6 @@ function isIndividualSaasProfile(
     return false;
   }
 
-  /*
-   * A named person is a strong identity
-   * signal. We require a plausible person
-   * name unless the URL itself is a specific
-   * individual social/profile URL.
-   */
   const personName =
     extractPersonName(
       title,
@@ -678,10 +664,6 @@ function isIndividualSaasProfile(
     return true;
   }
 
-  /*
-   * Personal-service wording can also
-   * identify an individual professional.
-   */
   return hasAny(
     combined,
     [
@@ -765,196 +747,49 @@ function getSkillSearchTerms(
   }
 
   if (
-    combined.includes(
-      "sociology"
-    ) ||
-    combined.includes(
-      "social research"
-    )
+    combined.includes("sociology") ||
+    combined.includes("social research")
   ) {
     add("Social Research");
     add("Research");
   }
 
   if (
-    combined.includes(
-      "psychology"
-    )
+    combined.includes("psychology")
   ) {
     add("Psychology");
     add("Social Science");
   }
 
   if (
-    combined.includes(
-      "anthropology"
-    )
+    combined.includes("anthropology")
   ) {
     add("Anthropology");
     add("Social Science");
   }
 
   if (
-    combined.includes(
-      "economics"
-    )
+    combined.includes("economics")
   ) {
     add("Economics");
     add("Social Science");
   }
 
   if (
-    combined.includes(
-      "physics"
-    )
+    combined.includes("physics")
   ) {
     add("Physics");
     add("Science");
   }
 
   if (
-    combined.includes(
-      "chemistry"
-    )
+    combined.includes("chemistry")
   ) {
     add("Chemistry");
     add("Science");
   }
 
-  if (
-    combined.includes(
-      "biology"
-    )
-  ) {
-    add("Biology");
-    add("Science");
-  }
-
-  if (
-    combined.includes("fiqh")
-  ) {
-    add("Fiqh");
-    add("Islamic Studies");
-  }
-
-  if (
-    combined.includes(
-      "islamiyat"
-    ) ||
-    combined.includes(
-      "islamic studies"
-    ) ||
-    combined === "islamic"
-  ) {
-    add("Islamiyat");
-    add("Islamic Studies");
-  }
-
   return terms;
-}
-
-function getAllSkillSearchTerms(
-  skills: SkillRow[]
-): string[] {
-  const terms: string[] = [];
-
-  for (const skill of skills) {
-    for (
-      const term of getSkillSearchTerms(
-        skill
-      )
-    ) {
-      if (
-        !terms.some(
-          (item) =>
-            lower(item) ===
-            lower(term)
-        )
-      ) {
-        terms.push(term);
-      }
-    }
-  }
-
-  return terms;
-}
-
-function findMatchingSkill(
-  text: string,
-  skills: SkillRow[]
-): {
-  name: string;
-  category: string;
-  subcategory: string;
-} | null {
-  const value = lower(text);
-
-  for (const skill of skills) {
-    const name =
-      getSkillName(skill);
-
-    if (
-      name &&
-      value.includes(
-        lower(name)
-      )
-    ) {
-      return {
-        name,
-        category:
-          clean(skill.category),
-        subcategory:
-          clean(skill.subcategory),
-      };
-    }
-  }
-
-  for (const skill of skills) {
-    const terms =
-      getSkillSearchTerms(skill);
-
-    const matchingTerm =
-      terms.find((term) =>
-        value.includes(
-          lower(term)
-        )
-      );
-
-    if (matchingTerm) {
-      return {
-        name:
-          clean(skill.name) ||
-          matchingTerm,
-        category:
-          clean(skill.category),
-        subcategory:
-          clean(skill.subcategory),
-      };
-    }
-  }
-
-  return null;
-}
-
-function getSearchSkillTerms(
-  skills: SkillRow[]
-): string[] {
-  const terms =
-    getAllSkillSearchTerms(
-      skills
-    );
-
-  if (terms.length > 0) {
-    return terms;
-  }
-
-  return [
-    "teacher",
-    "tutor",
-    "coach",
-    "freelancer",
-    "consultant",
-  ];
 }
 
 function uniqueStrings(
@@ -972,7 +807,11 @@ function buildQueries(
   type: LeadType
 ): string[] {
   const skillTerms =
-    getSearchSkillTerms(skills);
+    uniqueStrings(
+      skills.flatMap((skill) =>
+        getSkillSearchTerms(skill)
+      )
+    );
 
   const queries: string[] = [];
 
@@ -1075,7 +914,8 @@ function buildQueries(
   return uniqueStrings(
     queries
   );
-    }
+}
+
 const PROVIDER_TERMS = [
   "my services",
   "hire me",
@@ -1138,13 +978,6 @@ function parseResultDate(
 function isFresh(
   value: string
 ): boolean {
-  /*
-   * Serper searches are already restricted
-   * to the last 72 hours. If Serper does not
-   * return a readable date, we accept the
-   * result because the query itself uses the
-   * freshness window.
-   */
   const parsed =
     parseResultDate(value);
 
@@ -1167,7 +1000,6 @@ function isFresh(
     age <= maxAge
   );
 }
-
 function getDirectContact(
   result: SearchResult
 ): {
@@ -1302,11 +1134,6 @@ function isSupplyLead(
     return false;
   }
 
-  /*
-   * A demand post should not be classified
-   * as an opportunity simply because it also
-   * contains a professional term.
-   */
   if (
     hasAny(
       combined,
@@ -1609,8 +1436,7 @@ async function searchSerper(
   )
     ? data.organic
     : [];
-}
-
+  }
 async function loadSkills(): Promise<
   SkillRow[]
 > {
@@ -1670,6 +1496,7 @@ async function insertLead(
     );
   }
 }
+
 function getLeadTable(
   type: LeadType
 ): string {
@@ -1707,154 +1534,89 @@ function buildLead(
 
   if (
     !title ||
-    !snippet ||
-    !link ||
-    !isValidHttpUrl(link)
+    !link
   ) {
-    return null;
-  }
-
-  if (
-    isBlocked(link)
-  ) {
-    return null;
-  }
-
-  if (
-    !isFresh(
-      clean(result.date)
-    )
-  ) {
-    return null;
-  }
-
-  const combined =
-    `${title} ${snippet}`;
-
-  let matchedSkill:
-    | {
-        name: string;
-        category: string;
-        subcategory: string;
-      }
-    | null = null;
-
-  if (
-    type === "Demand" ||
-    type === "Supply"
-  ) {
-    matchedSkill =
-      findMatchingSkill(
-        combined,
-        skills
-      );
-
-    if (!matchedSkill) {
-      return null;
-    }
-  }
-
-  let contact =
-    getDirectContact(result);
-
-  if (type === "SaaS") {
-    if (
-      !saasEvidence
-    ) {
-      return null;
-    }
-
-    if (
-      !saasEvidence.personName
-    ) {
-      return null;
-    }
-
-    if (
-      !saasEvidence.email &&
-      !saasEvidence.phone &&
-      !saasEvidence.contactUrl &&
-      !contact.contact
-    ) {
-      return null;
-    }
-
-    if (
-      saasEvidence.email
-    ) {
-      contact = {
-        contact:
-          saasEvidence.email,
-        contactEmail:
-          saasEvidence.email,
-        contactPhone:
-          saasEvidence.phone,
-        contactUrl:
-          saasEvidence.contactUrl ||
-          link,
-      };
-    } else if (
-      saasEvidence.phone
-    ) {
-      contact = {
-        contact:
-          saasEvidence.phone,
-        contactEmail: "",
-        contactPhone:
-          saasEvidence.phone,
-        contactUrl:
-          saasEvidence.contactUrl ||
-          link,
-      };
-    } else if (
-      saasEvidence.contactUrl
-    ) {
-      contact = {
-        contact:
-          saasEvidence.contactUrl,
-        contactEmail: "",
-        contactPhone: "",
-        contactUrl:
-          saasEvidence.contactUrl,
-      };
-    }
-  }
-
-  /*
-   * Gold rule:
-   * every saved lead must have a real
-   * direct contact path.
-   */
-  if (!contact.contact) {
     return null;
   }
 
   const country =
     findCountry(
-      `${title} ${snippet} ${
-        saasEvidence?.pageText || ""
-      }`,
+      `${title} ${snippet}`,
       link
     );
 
-  /*
-   * SaaS leads are country-based.
-   * We do not require an exact skill-name
-   * match for SaaS.
-   */
-  if (
-    type === "SaaS" &&
-    !country
-  ) {
+  if (!country) {
     return null;
   }
 
-  let name =
-    clean(
-      saasEvidence?.personName
-    );
+  let skillNeeded = "";
+  let category = "";
+  let subcategory = "";
+  let name = "";
 
-  if (!name) {
+  if (
+    type === "SaaS" &&
+    saasEvidence
+  ) {
+    name =
+      saasEvidence.personName;
+
+    skillNeeded =
+      getSkillName(
+        skills[0] || {}
+      );
+
+    category =
+      clean(
+        skills[0]?.category
+      );
+
+    subcategory =
+      clean(
+        skills[0]?.subcategory
+      );
+  } else {
+    const combined =
+      lower(
+        `${title} ${snippet}`
+      );
+
+    const matchingSkill =
+      skills.find(
+        (skill) => {
+          const terms =
+            getSkillSearchTerms(
+              skill
+            );
+
+          return terms.some(
+            (term) =>
+              combined.includes(
+                lower(term)
+              )
+          );
+        }
+      );
+
+    if (!matchingSkill) {
+      return null;
+    }
+
+    skillNeeded =
+      getSkillName(
+        matchingSkill
+      );
+
+    category =
+      clean(
+        matchingSkill.category
+      );
+
+    subcategory =
+      clean(
+        matchingSkill.subcategory
+      );
+
     name =
       extractPersonName(
         title,
@@ -1862,41 +1624,53 @@ function buildLead(
       );
   }
 
-  if (!name) {
-    name = title;
+  const contact =
+    getDirectContact(
+      result
+    );
+
+  let finalContactEmail =
+    contact.contactEmail;
+
+  let finalContactPhone =
+    contact.contactPhone;
+
+  let finalContactUrl =
+    contact.contactUrl;
+
+  if (
+    type === "SaaS" &&
+    saasEvidence
+  ) {
+    finalContactEmail =
+      finalContactEmail ||
+      saasEvidence.email;
+
+    finalContactPhone =
+      finalContactPhone ||
+      saasEvidence.phone;
+
+    finalContactUrl =
+      finalContactUrl ||
+      saasEvidence.contactUrl ||
+      link;
   }
 
-  const category =
-    matchedSkill?.category ||
-    "Professional Services";
-
-  const subcategory =
-    matchedSkill?.subcategory ||
-    "";
-
-  const skillNeeded =
-    matchedSkill?.name ||
-    (type === "SaaS"
-      ? "Professional Services"
-      : "");
+  /*
+   * Every lead must have a real
+   * direct contact path.
+   */
+  if (
+    !finalContactEmail &&
+    !finalContactPhone &&
+    !finalContactUrl
+  ) {
+    return null;
+  }
 
   const description =
-    type === "SaaS"
-      ? [
-          name !== title
-            ? `${name} — ${title}`
-            : title,
-          snippet,
-          saasEvidence?.pageText
-            ? saasEvidence.pageText.slice(
-                0,
-                500
-              )
-            : "",
-        ]
-          .filter(Boolean)
-          .join(" ")
-      : snippet;
+    snippet ||
+    title;
 
   return {
     type,
@@ -1906,13 +1680,13 @@ function buildLead(
       skillNeeded,
     description,
     contact_email:
-      contact.contactEmail,
+      finalContactEmail,
     contact_phone:
-      contact.contactPhone,
+      finalContactPhone,
     contact_name:
       name,
     contact_url:
-      contact.contactUrl ||
+      finalContactUrl ||
       link,
     status: "new",
     title,
@@ -1941,6 +1715,20 @@ async function processResult(
   if (
     !title ||
     !link
+  ) {
+    return false;
+  }
+
+  if (
+    isBlocked(link)
+  ) {
+    return false;
+  }
+
+  if (
+    !isFresh(
+      clean(result.date)
+    )
   ) {
     return false;
   }
@@ -2025,30 +1813,18 @@ async function processResult(
         inspection.pageText
       );
 
-    /*
-     * A SaaS prospect must represent
-     * an identifiable individual professional,
-     * not a generic resource or organization.
-     */
     if (!personName) {
       return false;
     }
 
     const sourceCountry =
       findCountry(
-        `${clean(
-          result.title
-        )} ${clean(
+        `${clean(result.title)} ${clean(
           result.snippet
         )} ${inspection.pageText}`,
         link
       );
 
-    /*
-     * Country is mandatory for SaaS.
-     * This prevents "global" / unknown-country
-     * records from becoming user leads.
-     */
     if (!sourceCountry) {
       return false;
     }
@@ -2154,10 +1930,6 @@ async function runType(
           added++;
         }
       } catch {
-        /*
-         * One bad result must never stop
-         * the remaining lead collection.
-         */
         continue;
       }
     }
@@ -2186,12 +1958,6 @@ async function runCollector(): Promise<{
   const skills =
     await loadSkills();
 
-  /*
-   * Keep all three lead categories active.
-   * Demand/Supply use exact skill matching.
-   * SaaS uses country + individual-professional
-   * matching instead of exact skill matching.
-   */
   const demand =
     await runType(
       "Demand",
