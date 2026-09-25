@@ -923,7 +923,7 @@ function LinksSection({
                 Existing Invites
               </div>
 
-              <div className="space-y-2">
+               className="space-y-2">
                 {invites.length === 0 ? (
                   <div className="text-sm text-[#777]">
                     No invites yet.
@@ -937,13 +937,20 @@ function LinksSection({
                       <div className="text-sm">
                         {invite.email}
                       </div>
-
-                      <div className="text-xs text-[#777] mt-1">
-                        {invite.plan} ·{" "}
-                        {invite.used_at
-                          ? "Used"
-                          : "Unused"}
-                      </div
-                        </div>
-  );
+                    <div className="text-xs text-[#777] mt-1">
+  {invite.plan} ·{" "}
+  {invite.used_at
+    ? "Used"
+    : "Unused"}
+</div>
+</div>
+))
+)}
+</div>
+</div>
+</div>
+)}
+</div>
+</div>
+);
 }
