@@ -919,38 +919,33 @@ function LinksSection({
                 className="min-w-0 flex-1 rounded-lg bg-[#0a0a0a] border border-[#333] px-3 py-3 text-xs"
               />
               <div className="rounded-xl border border-[#222] bg-[#111] p-4">
-              <div className="font-semibold mb-3">
-                Existing Invites
-              </div>
+  <div className="font-semibold mb-3">
+    Existing Invites
+  </div>
 
-               className="space-y-2">
-                {invites.length === 0 ? (
-                  <div className="text-sm text-[#777]">
-                    No invites yet.
-                  </div>
-                ) : (
-                  invites.map((invite) => (
-                    <div
-                      key={invite.id}
-                      className="rounded-lg border border-[#222] p-3"
-                    >
-                      <div className="text-sm">
-                        {invite.email}
-                      </div>
-                    <div className="text-xs text-[#777] mt-1">
-  {invite.plan} ·{" "}
-  {invite.used_at
-    ? "Used"
-    : "Unused"}
+  <div className="space-y-2">
+    {invites.length === 0 ? (
+      <div className="text-sm text-[#777]">
+        No invites yet.
+      </div>
+    ) : (
+      invites.map((invite) => (
+        <div
+          key={invite.id}
+          className="rounded-lg border border-[#222] p-3"
+        >
+          <div className="text-sm">
+            {invite.email}
+          </div>
+
+          <div className="text-xs text-[#777] mt-1">
+            {invite.plan} ·{" "}
+            {invite.used_at
+              ? "Used"
+              : "Unused"}
+          </div>
+        </div>
+      ))
+    )}
+  </div>
 </div>
-</div>
-))
-)}
-</div>
-</div>
-</div>
-)}
-</div>
-</div>
-);
-}
