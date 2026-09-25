@@ -943,15 +943,7 @@ function LinksSection({
                         {invite.used_at
                           ? "Used"
                           : "Unused"}
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
+                      </div
+                        </div>
   );
 }
