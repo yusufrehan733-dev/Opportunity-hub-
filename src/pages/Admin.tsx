@@ -977,7 +977,4 @@ function LinksSection({
           </div>
         </div>
       ))
-    )}
-  </div>
-</div>
-  )}    
+    )} 
