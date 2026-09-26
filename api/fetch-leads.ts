@@ -1,7 +1,4 @@
-import { Router, Request, Response } from "express";
 import { createClient } from "@supabase/supabase-js";
-
-const router = Router();
 
 const SUPABASE_URL =
   process.env.SUPABASE_URL ||
@@ -28,7 +25,6 @@ type LeadType =
 type SkillRow = {
   id?: string | null;
   name?: string | null;
-  skill?: string | null;
   category?: string | null;
   subcategory?: string | null;
   tags?: string[] | string | null;
@@ -59,6 +55,16 @@ type CollectedLead = {
   openUrl: string;
   budget: string;
   currency: string;
+};
+
+type VercelRequest = {
+  method?: string;
+  body?: unknown;
+};
+
+type VercelResponse = {
+  status: (code: number) => VercelResponse;
+  json: (body: unknown) => VercelResponse;
 };
 
 function clean(value: unknown): string {
@@ -99,9 +105,7 @@ function uniqueStrings(
   values: string[]
 ): string[] {
   return Array.from(
-    new Set(
-      values.filter(Boolean)
-    )
+    new Set(values.filter(Boolean))
   );
 }
 
@@ -732,7 +736,6 @@ function getSkillName(
 ): string {
   return (
     clean(skill.name) ||
-    clean(skill.skill) ||
     clean(skill.subcategory) ||
     clean(skill.category)
   );
@@ -759,7 +762,6 @@ function getSkillSearchTerms(
   };
 
   add(skill.name);
-  add(skill.skill);
   add(skill.category);
   add(skill.subcategory);
 
@@ -1104,7 +1106,7 @@ function getDirectContact(
     contactPhone: "",
     contactUrl: "",
   };
-    }
+      }
 function isDemandLead(
   result: SearchResult
 ): boolean {
@@ -1415,318 +1417,7 @@ async function inspectSaasSource(
       contactUrl: "",
     };
   }
-        }
-function isDemandLead(
-  result: SearchResult
-): boolean {
-  const combined =
-    `${clean(result.title)} ${clean(
-      result.snippet
-    )}`;
-
-  if (
-    !hasAny(
-      combined,
-      DEMAND_SIGNALS
-    )
-  ) {
-    return false;
-  }
-
-  if (
-    hasAny(
-      combined,
-      PROVIDER_TERMS
-    )
-  ) {
-    return false;
-  }
-
-  return true;
-}
-
-function isSupplyLead(
-  result: SearchResult
-): boolean {
-  const combined =
-    `${clean(result.title)} ${clean(
-      result.snippet
-    )}`;
-
-  if (
-    !hasAny(
-      combined,
-      SUPPLY_SIGNALS
-    )
-  ) {
-    return false;
-  }
-
-  if (
-    hasAny(
-      combined,
-      DEMAND_SIGNALS
-    )
-  ) {
-    return false;
-  }
-
-  return true;
-}
-
-function isSaasJobSeeker(
-  result: SearchResult
-): boolean {
-  const combined =
-    `${clean(result.title)} ${clean(
-      result.snippet
-    )}`;
-
-  const jobSeekerTerms = [
-    "looking for work",
-    "looking for a job",
-    "seeking employment",
-    "seeking a job",
-    "open to work",
-    "available for work",
-    "available for employment",
-    "resume",
-    "cv",
-    "curriculum vitae",
-  ];
-
-  return hasAny(
-    combined,
-    jobSeekerTerms
-  );
-}
-
-function hasSaasPersonIdentity(
-  result: SearchResult,
-  pageText = ""
-): string {
-  const title =
-    clean(result.title);
-
-  const snippet =
-    clean(result.snippet);
-
-  const link =
-    clean(result.link);
-
-  if (
-    isSpecificSocialOrProfileUrl(
-      link
-    )
-  ) {
-    return (
-      extractPersonName(
-        title,
-        snippet
-      ) ||
-      "Professional"
-    );
-  }
-
-  const resultName =
-    extractPersonName(
-      title,
-      snippet
-    );
-
-  if (resultName) {
-    return resultName;
-  }
-
-  return extractPersonName(
-    pageText,
-    ""
-  );
-}
-
-function extractHtmlText(
-  html: string
-): string {
-  return html
-    .replace(
-      /<script[\s\S]*?<\/script>/gi,
-      " "
-    )
-    .replace(
-      /<style[\s\S]*?<\/style>/gi,
-      " "
-    )
-    .replace(
-      /<noscript[\s\S]*?<\/noscript>/gi,
-      " "
-    )
-    .replace(
-      /<[^>]+>/g,
-      " "
-    )
-    .replace(
-      /&nbsp;/gi,
-      " "
-    )
-    .replace(
-      /&amp;/gi,
-      "&"
-    )
-    .replace(
-      /\s+/g,
-      " "
-    )
-    .trim();
-}
-
-function extractContactUrlFromHtml(
-  html: string,
-  baseUrl: string
-): string {
-  const matches =
-    html.match(
-      /href\s*=\s*["']([^"']+)["']/gi
-    ) || [];
-
-  const contactTerms = [
-    "contact",
-    "get-in-touch",
-    "reach-me",
-    "book",
-    "booking",
-    "hire",
-  ];
-
-  for (const raw of matches) {
-    const match =
-      raw.match(
-        /href\s*=\s*["']([^"']+)["']/i
-      );
-
-    const href =
-      match?.[1] || "";
-
-    if (!href) {
-      continue;
-    }
-
-    if (
-      !hasAny(
-        href,
-        contactTerms
-      )
-    ) {
-      continue;
-    }
-
-    try {
-      const resolved =
-        new URL(
-          href,
-          baseUrl
-        ).toString();
-
-      if (
-        isValidHttpUrl(
-          resolved
-        )
-      ) {
-        return resolved;
       }
-    } catch {
-      continue;
-    }
-  }
-
-  return "";
-}
-
-async function inspectSaasSource(
-  link: string
-): Promise<{
-  pageText: string;
-  email: string;
-  phone: string;
-  contactUrl: string;
-}> {
-  if (!isValidHttpUrl(link)) {
-    return {
-      pageText: "",
-      email: "",
-      phone: "",
-      contactUrl: "",
-    };
-  }
-
-  try {
-    const controller =
-      new AbortController();
-
-    const timeout =
-      setTimeout(
-        () =>
-          controller.abort(),
-        6000
-      );
-
-    const response =
-      await fetch(link, {
-        method: "GET",
-        redirect: "follow",
-        signal:
-          controller.signal,
-        headers: {
-          "User-Agent":
-            "Mozilla/5.0 OpportunityHubLeadCollector/1.0",
-        },
-      });
-
-    clearTimeout(timeout);
-
-    if (!response.ok) {
-      return {
-        pageText: "",
-        email: "",
-        phone: "",
-        contactUrl: "",
-      };
-    }
-
-    const html =
-      await response.text();
-
-    const pageText =
-      extractHtmlText(html);
-
-    const email =
-      extractEmail(
-        `${html} ${pageText}`
-      );
-
-    const phone =
-      extractPhone(pageText);
-
-    const contactUrl =
-      extractContactUrlFromHtml(
-        html,
-        link
-      );
-
-    return {
-      pageText,
-      email,
-      phone,
-      contactUrl,
-    };
-  } catch {
-    return {
-      pageText: "",
-      email: "",
-      phone: "",
-      contactUrl: "",
-    };
-  }
-}
 async function searchSerper(
   query: string
 ): Promise<SearchResult[]> {
@@ -1808,7 +1499,7 @@ async function loadSkills(): Promise<
     await supabase
       .from("skills")
       .select(
-        "id,name,skill,category,subcategory,tags"
+        "id,name,category,subcategory,tags"
       );
 
   if (error) {
@@ -1849,13 +1540,6 @@ async function leadAlreadyExists(
 
   const safeSource =
     clean(source);
-
-  if (
-    !safeTitle &&
-    !safeSource
-  ) {
-    return false;
-  }
 
   if (safeTitle) {
     const {
@@ -2009,45 +1693,6 @@ function matchesSkill(
   );
 }
 
-function normalizeLeadForInsert(
-  lead: CollectedLead
-): Record<string, unknown> {
-  return {
-    title: lead.title,
-    name: lead.name,
-    client_name: lead.name,
-    skill_needed: lead.skill,
-    description:
-      lead.description,
-    content:
-      lead.description,
-    skill: lead.skill,
-    category:
-      lead.category,
-    subcategory:
-      lead.subcategory,
-    country:
-      lead.country,
-    city: lead.city,
-    contact_email:
-      lead.contactEmail,
-    contact_phone:
-      lead.contactPhone,
-    contact:
-      lead.contact,
-    source:
-      lead.source,
-    open_url:
-      lead.openUrl,
-    contact_url:
-      lead.contactUrl,
-    budget:
-      lead.budget,
-    currency:
-      lead.currency,
-    status: "new",
-  };
-  }
 async function insertLead(
   type: LeadType,
   lead: CollectedLead
@@ -2097,14 +1742,6 @@ async function insertLead(
   const supabase =
     getSupabase();
 
-  /*
-   * Keep the insert payload limited
-   * to the fields used by the
-   * existing Opportunity Hub leads.
-   *
-   * This avoids sending arbitrary
-   * fields that could break Supabase.
-   */
   const payload = {
     title: lead.title,
     name: lead.name,
@@ -2152,8 +1789,7 @@ async function insertLead(
   return {
     inserted: true,
   };
-}
-
+                       }
 async function collectDemand(
   skills: SkillRow[]
 ): Promise<{
@@ -2217,12 +1853,25 @@ async function collectDemand(
           result
         );
 
-      if (
-        !contact.contact &&
-        !contact.contactEmail &&
-        !contact.contactPhone &&
-        !contact.contactUrl
-      ) {
+      if (!hasRequiredContact({
+        leadType: "Demand",
+        title: clean(result.title),
+        name: "",
+        description: clean(result.snippet),
+        skill: "",
+        category: "",
+        subcategory: "",
+        country: "",
+        city: "",
+        contact: contact.contact,
+        contactEmail: contact.contactEmail,
+        contactPhone: contact.contactPhone,
+        contactUrl: contact.contactUrl,
+        source: link,
+        openUrl: link,
+        budget: "",
+        currency: "",
+      })) {
         skipped++;
         continue;
       }
@@ -2343,12 +1992,7 @@ async function collectSupply(
           result
         );
 
-      if (
-        !contact.contact &&
-        !contact.contactEmail &&
-        !contact.contactPhone &&
-        !contact.contactUrl
-      ) {
+      if (!contact.contact) {
         skipped++;
         continue;
       }
@@ -2589,202 +2233,216 @@ async function collectSaas(
   };
 }
 
-function sendJsonError(
-  res: Response,
-  status: number,
-  message: string
+function json(
+  res: VercelResponse,
+  body: unknown
 ) {
-  return res.status(status).json({
-    success: false,
-    message: clean(message) ||
-      "Lead collection failed",
-  });
+  return res
+    .status(200)
+    .json(body);
 }
 
-router.post(
-  "/",
-  async (
-    req: Request,
-    res: Response
-  ) => {
-    try {
-      if (!SUPABASE_URL) {
-        return sendJsonError(
-          res,
-          500,
-          "SUPABASE_URL is missing"
-        );
-      }
+export default async function handler(
+  req: VercelRequest,
+  res: VercelResponse
+) {
+  try {
+    if (
+      req.method !== "POST" &&
+      req.method !== "GET"
+    ) {
+      return json(res, {
+        success: false,
+        message:
+          "Method not allowed",
+      });
+    }
 
-      if (
-        !SUPABASE_SERVICE_ROLE_KEY
-      ) {
-        return sendJsonError(
-          res,
-          500,
-          "SUPABASE_SERVICE_ROLE_KEY is missing"
-        );
-      }
-
-      if (!SERPER_API_KEY) {
-        return sendJsonError(
-          res,
-          500,
-          "SERPER_API_KEY is missing"
-        );
-      }
-
-      const skills =
-        await loadSkills();
-
-      if (!skills.length) {
-        return res.status(200).json({
-          success: true,
-          message:
-            "No skills found for lead collection",
-          results: {
-            Demand: {
-              found: 0,
-              inserted: 0,
-              skipped: 0,
-            },
-            Supply: {
-              found: 0,
-              inserted: 0,
-              skipped: 0,
-            },
-            SaaS: {
-              found: 0,
-              inserted: 0,
-              skipped: 0,
-            },
-          },
-        });
-      }
-
-      const requestedTypes =
-        Array.isArray(
-          req.body?.types
-        )
-          ? req.body.types
-          : [
-              "Demand",
-              "Supply",
-              "SaaS",
-            ];
-
-      const types: LeadType[] =
-        requestedTypes.filter(
-          (
-            type: unknown
-          ): type is LeadType =>
-            type === "Demand" ||
-            type === "Supply" ||
-            type === "SaaS"
-        );
-
-      const results: Record<
-        LeadType,
-        {
-          found: number;
-          inserted: number;
-          skipped: number;
-        }
-      > = {
-        Demand: {
-          found: 0,
-          inserted: 0,
-          skipped: 0,
-        },
-        Supply: {
-          found: 0,
-          inserted: 0,
-          skipped: 0,
-        },
-        SaaS: {
-          found: 0,
-          inserted: 0,
-          skipped: 0,
-        },
-      };
-
-      if (
-        types.includes("Demand")
-      ) {
-        results.Demand =
-          await collectDemand(
-            skills
-          );
-      }
-
-      if (
-        types.includes("Supply")
-      ) {
-        results.Supply =
-          await collectSupply(
-            skills
-          );
-      }
-
-      if (
-        types.includes("SaaS")
-      ) {
-        results.SaaS =
-          await collectSaas(
-            skills
-          );
-      }
-
-      const totalInserted =
-        results.Demand.inserted +
-        results.Supply.inserted +
-        results.SaaS.inserted;
-
-      const totalFound =
-        results.Demand.found +
-        results.Supply.found +
-        results.SaaS.found;
-
-      return res.status(200).json({
+    if (req.method === "GET") {
+      return json(res, {
         success: true,
         message:
-          "Real lead collection completed",
-        totalFound,
-        totalInserted,
-        results,
+          "Real lead collection API is running",
       });
-    } catch (error) {
-      console.error(
-        "Real lead collection failed:",
-        error
-      );
-
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Lead collection failed";
-
-      return sendJsonError(
-        res,
-        500,
-        message
-      );
     }
-  }
-);
 
-router.get(
-  "/",
-  (
-    _req: Request,
-    res: Response
-  ) => {
-    return res.status(200).json({
+    if (!SUPABASE_URL) {
+      return json(res, {
+        success: false,
+        message:
+          "SUPABASE_URL is missing",
+      });
+    }
+
+    if (
+      !SUPABASE_SERVICE_ROLE_KEY
+    ) {
+      return json(res, {
+        success: false,
+        message:
+          "SUPABASE_SERVICE_ROLE_KEY is missing",
+      });
+    }
+
+    if (!SERPER_API_KEY) {
+      return json(res, {
+        success: false,
+        message:
+          "SERPER_API_KEY is missing",
+      });
+    }
+
+    const skills =
+      await loadSkills();
+
+    if (!skills.length) {
+      return json(res, {
+        success: true,
+        message:
+          "No skills found for lead collection",
+        totalFound: 0,
+        totalInserted: 0,
+        results: {
+          Demand: {
+            found: 0,
+            inserted: 0,
+            skipped: 0,
+          },
+          Supply: {
+            found: 0,
+            inserted: 0,
+            skipped: 0,
+          },
+          SaaS: {
+            found: 0,
+            inserted: 0,
+            skipped: 0,
+          },
+        },
+      });
+    }
+
+    let requestedTypes:
+      unknown[] = [
+        "Demand",
+        "Supply",
+        "SaaS",
+      ];
+
+    if (
+      req.body &&
+      typeof req.body === "object" &&
+      !Array.isArray(req.body)
+    ) {
+      const body =
+        req.body as {
+          types?: unknown;
+        };
+
+      if (
+        Array.isArray(body.types)
+      ) {
+        requestedTypes =
+          body.types;
+      }
+    }
+
+    const types: LeadType[] =
+      requestedTypes.filter(
+        (
+          type: unknown
+        ): type is LeadType =>
+          type === "Demand" ||
+          type === "Supply" ||
+          type === "SaaS"
+      );
+
+    const results: Record<
+      LeadType,
+      {
+        found: number;
+        inserted: number;
+        skipped: number;
+      }
+    > = {
+      Demand: {
+        found: 0,
+        inserted: 0,
+        skipped: 0,
+      },
+      Supply: {
+        found: 0,
+        inserted: 0,
+        skipped: 0,
+      },
+      SaaS: {
+        found: 0,
+        inserted: 0,
+        skipped: 0,
+      },
+    };
+
+    if (
+      types.includes("Demand")
+    ) {
+      results.Demand =
+        await collectDemand(
+          skills
+        );
+    }
+
+    if (
+      types.includes("Supply")
+    ) {
+      results.Supply =
+        await collectSupply(
+          skills
+        );
+    }
+
+    if (
+      types.includes("SaaS")
+    ) {
+      results.SaaS =
+        await collectSaas(
+          skills
+        );
+    }
+
+    const totalInserted =
+      results.Demand.inserted +
+      results.Supply.inserted +
+      results.SaaS.inserted;
+
+    const totalFound =
+      results.Demand.found +
+      results.Supply.found +
+      results.SaaS.found;
+
+    return json(res, {
       success: true,
       message:
-        "Real lead collection API is running",
+        "Real lead collection completed",
+      totalFound,
+      totalInserted,
+      results,
+    });
+  } catch (error) {
+    console.error(
+      "Real lead collection failed:",
+      error
+    );
+
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Lead collection failed";
+
+    return json(res, {
+      success: false,
+      message: clean(message),
+      totalFound: 0,
+      totalInserted: 0,
     });
   }
-);
-
-export default router;
+    }
