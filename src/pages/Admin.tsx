@@ -210,8 +210,7 @@ export default function Admin() {
 
       setOverview({
         users: data.users ?? 0,
-        activeUsers:
-          data.activeUsers ?? 0,
+        activeUsers: data.activeUsers ?? 0,
         demand: data.demand ?? 0,
         supply: data.supply ?? 0,
         saas: data.saas ?? 0,
@@ -252,14 +251,8 @@ export default function Admin() {
         const inviteData =
           await adminRequest("invites");
 
-        if (
-          Array.isArray(
-            inviteData.invites
-          )
-        ) {
-          setInvites(
-            inviteData.invites
-          );
+        if (Array.isArray(inviteData.invites)) {
+          setInvites(inviteData.invites);
         }
       }
     } catch (err: any) {
@@ -295,7 +288,8 @@ export default function Admin() {
           headers: {
             "Content-Type":
               "application/json",
-            Authorization: `Bearer ${session.access_token}`,
+            Authorization:
+              `Bearer ${session.access_token}`,
           },
         }
       );
@@ -392,8 +386,34 @@ export default function Admin() {
       icon: Users,
     },
     {
-      id: "leads" as Admin
-        return (
+      id: "leads" as AdminSection,
+      label: "Leads",
+      icon: Target,
+    },
+    {
+      id: "referrals" as AdminSection,
+      label: "Referrals",
+      icon: UserPlus,
+    },
+    {
+      id: "resellers" as AdminSection,
+      label: "Resellers",
+      icon: Store,
+    },
+    {
+      id: "subscription" as AdminSection,
+      label: "Subscription",
+      icon: CreditCard,
+    },
+    {
+      id: "links" as AdminSection,
+      label: "Referral Links",
+      icon: Link2,
+    },
+  ];
+
+  return (
+      return (
     <div className="min-h-screen bg-black text-white">
       <div className="border-b border-[#222] bg-black">
         <div className="max-w-7xl mx-auto px-4 py-4">
@@ -642,7 +662,7 @@ function SimpleSection({
       </p>
     </div>
   );
-}
+   }
 function UsersSection({
   users,
   updateUser,
@@ -918,7 +938,7 @@ function LeadsSection({
       )}
     </div>
   );
-        }
+  }
 function LinksSection({
   invites,
   reload,
@@ -1138,4 +1158,5 @@ function LinksSection({
       </div>
     </div>
   );
-}
+              }
+    
