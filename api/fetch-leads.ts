@@ -121,7 +121,13 @@ const COUNTRY_ALIASES: Record<string, string[]> = {
   Norway: ["norway", "norwegian"],
   Denmark: ["denmark", "danish"],
   Finland: ["finland", "finnish"],
-  Pakistan: ["pakistan", "pakistani", "karachi", "lahore", "islamabad"],
+  Pakistan: [
+    "pakistan",
+    "pakistani",
+    "karachi",
+    "lahore",
+    "islamabad",
+  ],
   India: ["india", "indian"],
   Bangladesh: ["bangladesh", "bangladeshi"],
   Germany: ["germany", "german"],
@@ -227,7 +233,6 @@ const SAAS_REJECT_TERMS = [
   "blog",
   "news",
 ];
-
 function createSupabase() {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
     throw new Error(
@@ -270,7 +275,8 @@ function tableForType(type: LeadType): string {
   }
 
   return "saas_leads";
-  }
+}
+
 function domainFromUrl(url?: string): string {
   if (!url) return "";
 
@@ -325,9 +331,8 @@ function parseResultDate(
 }
 
 /*
- * Gold rule:
- * a lead must have a real, verifiable recent date.
- * Results without a usable date are not treated as fresh.
+ * Demand and Supply freshness rule.
+ * SaaS intentionally does NOT use this function.
  */
 function isFresh(result: SearchResult): boolean {
   const date = parseResultDate(result);
@@ -337,10 +342,14 @@ function isFresh(result: SearchResult): boolean {
   }
 
   const ageMs = Date.now() - date.getTime();
+
   const maxAgeMs =
     MAX_AGE_HOURS * 60 * 60 * 1000;
 
-  return ageMs >= 0 && ageMs <= maxAgeMs;
+  return (
+    ageMs >= 0 &&
+    ageMs <= maxAgeMs
+  );
 }
 
 function extractEmails(
@@ -421,8 +430,7 @@ function isDirectContactUrl(
     value.includes("/team") ||
     value.includes("/faculty")
   );
-}
-
+  }
 function extractPersonName(
   text: string
 ): string | undefined {
@@ -590,7 +598,8 @@ function detectSkill(
   }
 
   return undefined;
-  }
+}
+
 function getSearchText(
   result: SearchResult
 ): string {
@@ -672,9 +681,7 @@ function isIndividualSaasProfile(
     return false;
   }
 
-  if (
-    !isSaasProfessional(text)
-  ) {
+  if (!isSaasProfessional(text)) {
     return false;
   }
 
@@ -691,11 +698,6 @@ function isIndividualSaasProfile(
     return true;
   }
 
-  /*
-   * A professional result can also qualify when
-   * the search result itself identifies a person
-   * and provides a direct contact path.
-   */
   const title = normalize(
     result.title
   );
@@ -707,7 +709,6 @@ function isIndividualSaasProfile(
 
   return hasNamePattern;
 }
-
 async function improveContact(
   result: SearchResult
 ): Promise<{
@@ -756,7 +757,10 @@ async function improveContact(
 
     const phones =
       extractPhones(
-        html.replace(/<[^>]*>/g, " ")
+        html.replace(
+          /<[^>]*>/g,
+          " "
+        )
       );
 
     if (
@@ -867,6 +871,7 @@ function buildSkillSearchTerms(
     ),
   ];
 }
+
 function buildQueries(
   type: LeadType,
   skills: SkillRow[]
@@ -905,7 +910,8 @@ function buildQueries(
 }
 
 async function searchSerper(
-  query: string
+  query: string,
+  type: LeadType
 ): Promise<SearchResult[]> {
   if (!SERPER_API_KEY) {
     throw new Error(
@@ -926,7 +932,9 @@ async function searchSerper(
       body: JSON.stringify({
         q: query,
         num: RESULTS_PER_SEARCH,
-        tbs: "qdr:d3",
+        ...(type !== "SaaS"
+          ? { tbs: "qdr:d3" }
+          : {}),
       }),
     }
   );
@@ -975,8 +983,7 @@ async function loadSkills(
   return Array.isArray(data)
     ? data
     : [];
-}
-
+      }
 function leadInsertPayload(
   lead: CollectedLead
 ) {
@@ -1057,7 +1064,8 @@ async function leadAlreadyExists(
     Array.isArray(data) &&
     data.length > 0
   );
-    }
+}
+
 function resultMatchesType(
   result: SearchResult,
   type: LeadType
@@ -1100,7 +1108,17 @@ async function processResult(
     return null;
   }
 
-  if (!isFresh(result)) {
+  /*
+   * Demand and Supply use the
+   * 72-hour freshness rule.
+   *
+   * SaaS intentionally does NOT
+   * use a freshness restriction.
+   */
+  if (
+    type !== "SaaS" &&
+    !isFresh(result)
+  ) {
     stats.stale++;
     return null;
   }
@@ -1160,6 +1178,18 @@ async function processResult(
 
   const country =
     detectCountry(text);
+
+  /*
+   * SaaS must have an identifiable
+   * supported country.
+   */
+  if (
+    type === "SaaS" &&
+    !country
+  ) {
+    stats.wrongType++;
+    return null;
+  }
 
   const lead: CollectedLead = {
     leadType: type,
@@ -1234,7 +1264,8 @@ async function collectType(
     try {
       results =
         await searchSerper(
-          query
+          query,
+          type
         );
     } catch {
       continue;
@@ -1367,7 +1398,7 @@ async function collectSaas(
     "SaaS",
     skills
   );
-    }
+             }
 function emptyStats(): CollectionStats {
   return {
     found: 0,
@@ -1393,7 +1424,6 @@ export default async function handler(
       message:
         "Real lead collection API is running",
     });
-
     return;
   }
 
@@ -1402,7 +1432,6 @@ export default async function handler(
       success: false,
       error: "Method not allowed.",
     });
-
     return;
   }
 
@@ -1413,9 +1442,7 @@ export default async function handler(
       );
     }
 
-    if (
-      !SUPABASE_SERVICE_ROLE_KEY
-    ) {
+    if (!SUPABASE_SERVICE_ROLE_KEY) {
       throw new Error(
         "Supabase service role key is missing."
       );
@@ -1435,11 +1462,6 @@ export default async function handler(
         supabase
       );
 
-    /*
-     * IMPORTANT:
-     * Each category is collected independently
-     * and inserted into its own table.
-     */
     const [
       demand,
       supply,
@@ -1514,4 +1536,4 @@ export default async function handler(
         "Real lead collection failed.",
     });
   }
-}
+    }
