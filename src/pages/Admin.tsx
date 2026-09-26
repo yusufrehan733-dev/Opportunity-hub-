@@ -64,6 +64,25 @@ type OverviewData = {
   invites: number;
 };
 
+type LeadStats = {
+  found: number;
+  accepted: number;
+  inserted: number;
+  duplicate: number;
+  stale: number;
+  wrongType: number;
+  noContact: number;
+  noSkillMatch: number;
+  blocked: number;
+  insertErrors: number;
+};
+
+type LeadFetchDiagnostics = {
+  Demand: LeadStats;
+  Supply: LeadStats;
+  SaaS: LeadStats;
+};
+
 async function adminRequest(
   action: string,
   options: RequestInit = {}
@@ -163,6 +182,7 @@ function getStatusClass(status: string) {
 
   return "text-[#aaa]";
 }
+
 export default function Admin() {
   const navigate = useNavigate();
 
@@ -199,6 +219,9 @@ export default function Admin() {
 
   const [fetchResult, setFetchResult] =
     useState("");
+
+  const [fetchDiagnostics, setFetchDiagnostics] =
+    useState<LeadFetchDiagnostics | null>(null);
 
   async function loadData() {
     try {
@@ -269,6 +292,7 @@ export default function Admin() {
     try {
       setFetchingLeads(true);
       setFetchResult("");
+      setFetchDiagnostics(null);
       setError("");
 
       const {
@@ -319,14 +343,58 @@ export default function Admin() {
       }
 
       setFetchResult(
-  `Added ${data.totalInserted ?? 0} leads — Demand: ${
-    data.results?.Demand?.inserted ?? 0
-  }, Supply: ${
-    data.results?.Supply?.inserted ?? 0
-  }, SaaS: ${
-    data.results?.SaaS?.inserted ?? 0
-  }`
-);
+        `Added ${data.totalInserted ?? 0} leads — Demand: ${
+          data.results?.Demand?.inserted ?? 0
+        }, Supply: ${
+          data.results?.Supply?.inserted ?? 0
+        }, SaaS: ${
+          data.results?.SaaS?.inserted ?? 0
+        }`
+      );
+
+      if (data.results) {
+        setFetchDiagnostics({
+          Demand:
+            data.results.Demand?.stats ?? {
+              found: 0,
+              accepted: 0,
+              inserted: 0,
+              duplicate: 0,
+              stale: 0,
+              wrongType: 0,
+              noContact: 0,
+              noSkillMatch: 0,
+              blocked: 0,
+              insertErrors: 0,
+            },
+          Supply:
+            data.results.Supply?.stats ?? {
+              found: 0,
+              accepted: 0,
+              inserted: 0,
+              duplicate: 0,
+              stale: 0,
+              wrongType: 0,
+              noContact: 0,
+              noSkillMatch: 0,
+              blocked: 0,
+              insertErrors: 0,
+            },
+          SaaS:
+            data.results.SaaS?.stats ?? {
+              found: 0,
+              accepted: 0,
+              inserted: 0,
+              duplicate: 0,
+              stale: 0,
+              wrongType: 0,
+              noContact: 0,
+              noSkillMatch: 0,
+              blocked: 0,
+              insertErrors: 0,
+            },
+        });
+      }
 
       await loadData();
     } catch (err: any) {
@@ -372,9 +440,8 @@ export default function Admin() {
       );
       setLoading(false);
     }
-  }
-
-  const sections = [
+    }
+    const sections = [
     {
       id: "overview" as AdminSection,
       label: "Overview",
@@ -411,14 +478,17 @@ export default function Admin() {
       icon: Link2,
     },
   ];
-    return (
+
+  return (
     <div className="min-h-screen bg-black text-white">
       <div className="border-b border-[#222] bg-black">
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <button
-                onClick={() => navigate("/dashboard")}
+                onClick={() =>
+                  navigate("/dashboard")
+                }
                 className="p-2 rounded-lg border border-[#333] bg-[#111]"
               >
                 <ArrowLeft size={18} />
@@ -507,6 +577,9 @@ export default function Admin() {
             fetchRealLeads={fetchRealLeads}
             fetchingLeads={fetchingLeads}
             fetchResult={fetchResult}
+            fetchDiagnostics={
+              fetchDiagnostics
+            }
           />
         )}
 
@@ -660,7 +733,7 @@ function SimpleSection({
       </p>
     </div>
   );
-   }
+            }
 function UsersSection({
   users,
   updateUser,
@@ -858,11 +931,13 @@ function LeadsSection({
   fetchRealLeads,
   fetchingLeads,
   fetchResult,
+  fetchDiagnostics,
 }: {
   leads: AdminLead[];
   fetchRealLeads: () => Promise<void>;
   fetchingLeads: boolean;
   fetchResult: string;
+  fetchDiagnostics: LeadFetchDiagnostics | null;
 }) {
   return (
     <div className="space-y-3">
@@ -889,6 +964,108 @@ function LeadsSection({
         {fetchResult && (
           <div className="mt-3 rounded-lg border border-[#333] bg-[#0a0a0a] p-3 text-xs text-[#aaa]">
             {fetchResult}
+          </div>
+        )}
+
+        {fetchDiagnostics && (
+          <div className="mt-3 rounded-lg border border-[#333] bg-[#0a0a0a] p-3">
+            <div className="text-xs font-semibold text-white mb-3">
+              Collector Diagnostics
+            </div>
+
+            {(
+              [
+                "Demand",
+                "Supply",
+                "SaaS",
+              ] as const
+            ).map((type) => {
+              const stats =
+                fetchDiagnostics[type];
+
+              return (
+                <div
+                  key={type}
+                  className="mb-4 last:mb-0"
+                >
+                  <div className="text-xs font-semibold text-[#ddd] mb-2">
+                    {type}
+                  </div>
+
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-[11px]">
+                    <div className="text-[#aaa]">
+                      Found:{" "}
+                      <span className="text-white">
+                        {stats.found}
+                      </span>
+                    </div>
+
+                    <div className="text-[#aaa]">
+                      Accepted:{" "}
+                      <span className="text-white">
+                        {stats.accepted}
+                      </span>
+                    </div>
+
+                    <div className="text-[#aaa]">
+                      Inserted:{" "}
+                      <span className="text-[#00c98b]">
+                        {stats.inserted}
+                      </span>
+                    </div>
+
+                    <div className="text-[#aaa]">
+                      Duplicate:{" "}
+                      <span className="text-white">
+                        {stats.duplicate}
+                      </span>
+                    </div>
+
+                    <div className="text-[#aaa]">
+                      Stale:{" "}
+                      <span className="text-yellow-400">
+                        {stats.stale}
+                      </span>
+                    </div>
+
+                    <div className="text-[#aaa]">
+                      Wrong Type:{" "}
+                      <span className="text-white">
+                        {stats.wrongType}
+                      </span>
+                    </div>
+
+                    <div className="text-[#aaa]">
+                      No Contact:{" "}
+                      <span className="text-yellow-400">
+                        {stats.noContact}
+                      </span>
+                    </div>
+
+                    <div className="text-[#aaa]">
+                      No Skill:{" "}
+                      <span className="text-yellow-400">
+                        {stats.noSkillMatch}
+                      </span>
+                    </div>
+
+                    <div className="text-[#aaa]">
+                      Blocked:{" "}
+                      <span className="text-white">
+                        {stats.blocked}
+                      </span>
+                    </div>
+
+                    <div className="text-[#aaa]">
+                      Insert Errors:{" "}
+                      <span className="text-red-400">
+                        {stats.insertErrors}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -936,7 +1113,7 @@ function LeadsSection({
       )}
     </div>
   );
-  }
+}
 function LinksSection({
   invites,
   reload,
@@ -1078,17 +1255,17 @@ function LinksSection({
         {inviteUrl && (
           <div className="rounded-lg border border-[#333] bg-black p-3">
             <div className="text-xs text-[#777] mb-2">
-              Generated link
+              Referral URL
             </div>
 
             <div className="flex items-center gap-2">
-              <div className="flex-1 break-all text-xs text-[#aaa]">
+              <div className="flex-1 text-xs text-white break-all">
                 {inviteUrl}
               </div>
 
               <button
                 onClick={copyInvite}
-                className="shrink-0 rounded-lg border border-[#333] bg-[#111] p-2"
+                className="shrink-0 p-2 rounded-lg border border-[#333] bg-[#111]"
               >
                 {copied ? (
                   <Check size={15} />
@@ -1157,4 +1334,3 @@ function LinksSection({
     </div>
   );
               }
-    
