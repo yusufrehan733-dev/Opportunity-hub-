@@ -980,3 +980,172 @@ function LinksSection({
     )}
   </div>
 </div>
+              async function insertLead(
+  supabase: ReturnType<typeof getSupabase>,
+  type: LeadType,
+  lead: Record<string, any>
+) {
+  const table = getLeadTable(type);
+
+  const { error } = await supabase
+    .from(table)
+    .insert(lead);
+
+  if (error) {
+    throw new Error(
+      `${type} lead insert failed: ${error.message}`
+    );
+  }
+
+  return true;
+}
+
+function cleanValue(value: unknown): string {
+  if (value === undefined || value === null) {
+    return "";
+  }
+
+  return String(value).trim();
+}
+
+function buildDemandLead(
+  result: SearchResult,
+  skill: SkillRow | null,
+  contactUrl: string,
+  contactEmail: string,
+  contactPhone: string,
+  country: string,
+  city: string
+) {
+  const title = cleanValue(
+    (result as any).title
+  );
+
+  const description = cleanValue(
+    (result as any).snippet
+  );
+
+  const source = cleanValue(
+    (result as any).link
+  );
+
+  return {
+    type: "Demand",
+    source,
+    title,
+    client_name: extractPersonName(
+      title,
+      description
+    ),
+    skill_needed: skill?.name || "",
+    description,
+    contact_email: contactEmail || null,
+    contact_phone: contactPhone || null,
+    contact_url: contactUrl || null,
+    contact_name: null,
+    status: "new",
+    category: skill?.category || null,
+    subcategory: skill?.subcategory || null,
+    country: country || null,
+    city: city || null,
+    budget: null,
+    currency: null,
+    content: description,
+    name: extractPersonName(
+      title,
+      description
+    ),
+  };
+}
+
+function buildSupplyLead(
+  result: SearchResult,
+  skill: SkillRow | null,
+  contactUrl: string,
+  contactEmail: string,
+  contactPhone: string,
+  country: string,
+  city: string
+) {
+  const title = cleanValue(
+    (result as any).title
+  );
+
+  const description = cleanValue(
+    (result as any).snippet
+  );
+
+  const source = cleanValue(
+    (result as any).link
+  );
+
+  return {
+    company_name: extractPersonName(
+      title,
+      description
+    ),
+    description,
+    position: title,
+    required_skill: skill?.name || "",
+    category: skill?.category || null,
+    subcategory: skill?.subcategory || null,
+    country: country || null,
+    city: city || null,
+    salary_range: null,
+    contact_email: contactEmail || null,
+    contact_phone: contactPhone || null,
+    job_title: title,
+    salary_min: null,
+    salary_max: null,
+    company_website: source || null,
+    apply_url: source || null,
+    source_url: source || null,
+    contact_url: contactUrl || null,
+    contact_name: null,
+    source,
+  };
+}
+
+function buildSaasLead(
+  result: SearchResult,
+  contactUrl: string,
+  contactEmail: string,
+  contactPhone: string,
+  country: string,
+  city: string
+) {
+  const title = cleanValue(
+    (result as any).title
+  );
+
+  const description = cleanValue(
+    (result as any).snippet
+  );
+
+  const source = cleanValue(
+    (result as any).link
+  );
+
+  return {
+    name: extractPersonName(
+      title,
+      description
+    ),
+    platform: source || null,
+    niche: "Professional services",
+    contact:
+      contactEmail ||
+      contactPhone ||
+      contactUrl ||
+      null,
+    status: "new",
+    description,
+    commission: null,
+    trial_days: null,
+    landing_url: source || null,
+    source_url: source || null,
+    contact_url: contactUrl || null,
+    country: country || null,
+    city: city || null,
+  };
+    }
