@@ -20,7 +20,10 @@ const MAX_AGE_HOURS = 72;
 const MAX_QUERIES_PER_TYPE = 6;
 const RESULTS_PER_SEARCH = 10;
 
-type LeadType = "Demand" | "Supply" | "SaaS";
+type LeadType =
+  | "Demand"
+  | "Supply"
+  | "SaaS";
 
 type SkillRow = {
   id?: string | null;
@@ -38,6 +41,26 @@ type SearchResult = {
   date?: string;
 };
 
+type CollectedLead = {
+  leadType: LeadType;
+  title: string;
+  name: string;
+  description: string;
+  skill: string;
+  category: string;
+  subcategory: string;
+  country: string;
+  city: string;
+  contact: string;
+  contactEmail: string;
+  contactPhone: string;
+  contactUrl: string;
+  source: string;
+  openUrl: string;
+  budget: string;
+  currency: string;
+};
+
 function clean(value: unknown): string {
   return String(value ?? "").trim();
 }
@@ -46,14 +69,20 @@ function lower(value: unknown): string {
   return clean(value).toLowerCase();
 }
 
-function hasAny(text: string, terms: string[]): boolean {
+function hasAny(
+  text: string,
+  terms: string[]
+): boolean {
   const value = lower(text);
+
   return terms.some((term) =>
     value.includes(lower(term))
   );
 }
 
-function isValidHttpUrl(value: string): boolean {
+function isValidHttpUrl(
+  value: string
+): boolean {
   try {
     const url = new URL(value);
 
@@ -66,17 +95,22 @@ function isValidHttpUrl(value: string): boolean {
   }
 }
 
-function isBlocked(link: string): boolean {
-  const value = lower(link);
-
-  return BLOCKED_DOMAINS.some((domain) =>
-    value.includes(domain)
+function uniqueStrings(
+  values: string[]
+): string[] {
+  return Array.from(
+    new Set(
+      values.filter(Boolean)
+    )
   );
 }
 
-function uniqueStrings(values: string[]): string[] {
-  return Array.from(
-    new Set(values.filter(Boolean))
+function escapeRegExp(
+  value: string
+): string {
+  return value.replace(
+    /[.*+?^${}()|[\]\\]/g,
+    "\\$&"
   );
 }
 
@@ -103,7 +137,10 @@ const COUNTRIES = [
   "Netherlands",
 ];
 
-const COUNTRY_ALIASES: Record<string, string[]> = {
+const COUNTRY_ALIASES: Record<
+  string,
+  string[]
+> = {
   "United States": [
     "united states",
     "usa",
@@ -111,10 +148,12 @@ const COUNTRY_ALIASES: Record<string, string[]> = {
     "u.s.",
     "america",
   ],
+
   Canada: [
     "canada",
     "canadian",
   ],
+
   "United Kingdom": [
     "united kingdom",
     "uk",
@@ -124,6 +163,7 @@ const COUNTRY_ALIASES: Record<string, string[]> = {
     "scotland",
     "wales",
   ],
+
   UAE: [
     "uae",
     "u.a.e.",
@@ -131,67 +171,83 @@ const COUNTRY_ALIASES: Record<string, string[]> = {
     "dubai",
     "abu dhabi",
   ],
+
   Qatar: [
     "qatar",
     "doha",
   ],
+
   "Saudi Arabia": [
     "saudi arabia",
     "saudi",
     "riyadh",
     "jeddah",
   ],
+
   Kuwait: [
     "kuwait",
   ],
+
   Oman: [
     "oman",
     "muscat",
   ],
+
   Bahrain: [
     "bahrain",
     "manama",
   ],
+
   Australia: [
     "australia",
     "australian",
   ],
+
   Sweden: [
     "sweden",
     "swedish",
   ],
+
   Norway: [
     "norway",
     "norwegian",
   ],
+
   Denmark: [
     "denmark",
     "danish",
   ],
+
   Finland: [
     "finland",
     "finnish",
   ],
+
   Pakistan: [
     "pakistan",
     "pakistani",
   ],
+
   India: [
     "india",
     "indian",
   ],
+
   Bangladesh: [
     "bangladesh",
     "bangladeshi",
   ],
+
   Germany: [
     "germany",
     "german",
   ],
+
   France: [
     "france",
     "french",
   ],
+
   Netherlands: [
     "netherlands",
     "dutch",
@@ -297,13 +353,18 @@ const SAAS_REJECT_TERMS = [
   "blog",
   "news",
 ];
-function escapeRegExp(value: string): string {
-  return value.replace(
-    /[.*+?^${}()|[\]\\]/g,
-    "\\$&"
-  );
-}
 
+const PROVIDER_TERMS = [
+  "my services",
+  "hire me",
+  "book me",
+  "we offer",
+  "i offer",
+  "i provide",
+  "our services",
+  "portfolio",
+  "available for hire",
+];
 function containsCountryAlias(
   text: string,
   alias: string
@@ -394,6 +455,17 @@ function extractPersonName(
   return "";
 }
 
+function isBlocked(
+  link: string
+): boolean {
+  const value = lower(link);
+
+  return BLOCKED_DOMAINS.some(
+    (domain) =>
+      value.includes(domain)
+  );
+}
+
 function isSpecificSocialOrProfileUrl(
   link: string
 ): boolean {
@@ -449,7 +521,8 @@ function isDirectContactUrl(
   ];
 
   return contactTerms.some(
-    (term) => value.includes(term)
+    (term) =>
+      value.includes(term)
   );
 }
 
@@ -653,7 +726,7 @@ function isIndividualSaasProfile(
     "book me",
     "personal website",
   ]);
-}
+  }
 function getSkillName(
   skill: SkillRow
 ): string {
@@ -879,18 +952,6 @@ function buildQueries(
   );
 }
 
-const PROVIDER_TERMS = [
-  "my services",
-  "hire me",
-  "book me",
-  "we offer",
-  "i offer",
-  "i provide",
-  "our services",
-  "portfolio",
-  "available for hire",
-];
-
 function parseResultDate(
   value: string
 ): Date | null {
@@ -967,7 +1028,8 @@ function isFresh(
     age >= 0 &&
     age <= maxAge
   );
-    }
+}
+
 function getDirectContact(
   result: SearchResult
 ): {
@@ -998,8 +1060,8 @@ function getDirectContact(
     return {
       contact: email,
       contactEmail: email,
-      contactPhone: phone,
-      contactUrl: link,
+      contactPhone: "",
+      contactUrl: "",
     };
   }
 
@@ -1008,7 +1070,7 @@ function getDirectContact(
       contact: phone,
       contactEmail: "",
       contactPhone: phone,
-      contactUrl: link,
+      contactUrl: "",
     };
   }
 
@@ -1042,8 +1104,7 @@ function getDirectContact(
     contactPhone: "",
     contactUrl: "",
   };
-}
-
+    }
 function isDemandLead(
   result: SearchResult
 ): boolean {
@@ -1248,10 +1309,19 @@ function extractContactUrlFromHtml(
     }
 
     try {
-      return new URL(
-        href,
-        baseUrl
-      ).toString();
+      const resolved =
+        new URL(
+          href,
+          baseUrl
+        ).toString();
+
+      if (
+        isValidHttpUrl(
+          resolved
+        )
+      ) {
+        return resolved;
+      }
     } catch {
       continue;
     }
@@ -1259,6 +1329,318 @@ function extractContactUrlFromHtml(
 
   return "";
 }
+
+async function inspectSaasSource(
+  link: string
+): Promise<{
+  pageText: string;
+  email: string;
+  phone: string;
+  contactUrl: string;
+}> {
+  if (!isValidHttpUrl(link)) {
+    return {
+      pageText: "",
+      email: "",
+      phone: "",
+      contactUrl: "",
+    };
+  }
+
+  try {
+    const controller =
+      new AbortController();
+
+    const timeout =
+      setTimeout(
+        () =>
+          controller.abort(),
+        6000
+      );
+
+    const response =
+      await fetch(link, {
+        method: "GET",
+        redirect: "follow",
+        signal:
+          controller.signal,
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 OpportunityHubLeadCollector/1.0",
+        },
+      });
+
+    clearTimeout(timeout);
+
+    if (!response.ok) {
+      return {
+        pageText: "",
+        email: "",
+        phone: "",
+        contactUrl: "",
+      };
+    }
+
+    const html =
+      await response.text();
+
+    const pageText =
+      extractHtmlText(html);
+
+    const email =
+      extractEmail(
+        `${html} ${pageText}`
+      );
+
+    const phone =
+      extractPhone(pageText);
+
+    const contactUrl =
+      extractContactUrlFromHtml(
+        html,
+        link
+      );
+
+    return {
+      pageText,
+      email,
+      phone,
+      contactUrl,
+    };
+  } catch {
+    return {
+      pageText: "",
+      email: "",
+      phone: "",
+      contactUrl: "",
+    };
+  }
+        }
+function isDemandLead(
+  result: SearchResult
+): boolean {
+  const combined =
+    `${clean(result.title)} ${clean(
+      result.snippet
+    )}`;
+
+  if (
+    !hasAny(
+      combined,
+      DEMAND_SIGNALS
+    )
+  ) {
+    return false;
+  }
+
+  if (
+    hasAny(
+      combined,
+      PROVIDER_TERMS
+    )
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+function isSupplyLead(
+  result: SearchResult
+): boolean {
+  const combined =
+    `${clean(result.title)} ${clean(
+      result.snippet
+    )}`;
+
+  if (
+    !hasAny(
+      combined,
+      SUPPLY_SIGNALS
+    )
+  ) {
+    return false;
+  }
+
+  if (
+    hasAny(
+      combined,
+      DEMAND_SIGNALS
+    )
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+function isSaasJobSeeker(
+  result: SearchResult
+): boolean {
+  const combined =
+    `${clean(result.title)} ${clean(
+      result.snippet
+    )}`;
+
+  const jobSeekerTerms = [
+    "looking for work",
+    "looking for a job",
+    "seeking employment",
+    "seeking a job",
+    "open to work",
+    "available for work",
+    "available for employment",
+    "resume",
+    "cv",
+    "curriculum vitae",
+  ];
+
+  return hasAny(
+    combined,
+    jobSeekerTerms
+  );
+}
+
+function hasSaasPersonIdentity(
+  result: SearchResult,
+  pageText = ""
+): string {
+  const title =
+    clean(result.title);
+
+  const snippet =
+    clean(result.snippet);
+
+  const link =
+    clean(result.link);
+
+  if (
+    isSpecificSocialOrProfileUrl(
+      link
+    )
+  ) {
+    return (
+      extractPersonName(
+        title,
+        snippet
+      ) ||
+      "Professional"
+    );
+  }
+
+  const resultName =
+    extractPersonName(
+      title,
+      snippet
+    );
+
+  if (resultName) {
+    return resultName;
+  }
+
+  return extractPersonName(
+    pageText,
+    ""
+  );
+}
+
+function extractHtmlText(
+  html: string
+): string {
+  return html
+    .replace(
+      /<script[\s\S]*?<\/script>/gi,
+      " "
+    )
+    .replace(
+      /<style[\s\S]*?<\/style>/gi,
+      " "
+    )
+    .replace(
+      /<noscript[\s\S]*?<\/noscript>/gi,
+      " "
+    )
+    .replace(
+      /<[^>]+>/g,
+      " "
+    )
+    .replace(
+      /&nbsp;/gi,
+      " "
+    )
+    .replace(
+      /&amp;/gi,
+      "&"
+    )
+    .replace(
+      /\s+/g,
+      " "
+    )
+    .trim();
+}
+
+function extractContactUrlFromHtml(
+  html: string,
+  baseUrl: string
+): string {
+  const matches =
+    html.match(
+      /href\s*=\s*["']([^"']+)["']/gi
+    ) || [];
+
+  const contactTerms = [
+    "contact",
+    "get-in-touch",
+    "reach-me",
+    "book",
+    "booking",
+    "hire",
+  ];
+
+  for (const raw of matches) {
+    const match =
+      raw.match(
+        /href\s*=\s*["']([^"']+)["']/i
+      );
+
+    const href =
+      match?.[1] || "";
+
+    if (!href) {
+      continue;
+    }
+
+    if (
+      !hasAny(
+        href,
+        contactTerms
+      )
+    ) {
+      continue;
+    }
+
+    try {
+      const resolved =
+        new URL(
+          href,
+          baseUrl
+        ).toString();
+
+      if (
+        isValidHttpUrl(
+          resolved
+        )
+      ) {
+        return resolved;
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return "";
+}
+
 async function inspectSaasSource(
   link: string
 ): Promise<{
@@ -1345,7 +1727,6 @@ async function inspectSaasSource(
     };
   }
 }
-
 async function searchSerper(
   query: string
 ): Promise<SearchResult[]> {
@@ -1375,8 +1756,14 @@ async function searchSerper(
     );
 
   if (!response.ok) {
+    const errorText =
+      await response.text();
+
     throw new Error(
-      `Serper request failed: ${response.status}`
+      `Serper request failed: ${response.status} ${errorText.slice(
+        0,
+        200
+      )}`
     );
   }
 
@@ -1392,23 +1779,27 @@ async function searchSerper(
     : [];
 }
 
-async function loadSkills(): Promise<
-  SkillRow[]
-> {
+function getSupabase() {
   if (
     !SUPABASE_URL ||
     !SUPABASE_SERVICE_ROLE_KEY
   ) {
     throw new Error(
-      "Supabase server environment variables are missing"
+      "SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is missing"
     );
   }
 
+  return createClient(
+    SUPABASE_URL,
+    SUPABASE_SERVICE_ROLE_KEY
+  );
+}
+
+async function loadSkills(): Promise<
+  SkillRow[]
+> {
   const supabase =
-    createClient(
-      SUPABASE_URL,
-      SUPABASE_SERVICE_ROLE_KEY
-    );
+    getSupabase();
 
   const {
     data,
@@ -1429,22 +1820,6 @@ async function loadSkills(): Promise<
   return Array.isArray(data)
     ? data
     : [];
-}
-
-function getSupabase() {
-  if (
-    !SUPABASE_URL ||
-    !SUPABASE_SERVICE_ROLE_KEY
-  ) {
-    throw new Error(
-      "SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is missing"
-    );
-  }
-
-  return createClient(
-    SUPABASE_URL,
-    SUPABASE_SERVICE_ROLE_KEY
-  );
 }
 
 function getLeadTable(
@@ -1469,23 +1844,947 @@ async function leadAlreadyExists(
   const supabase =
     getSupabase();
 
+  const safeTitle =
+    clean(title);
+
+  const safeSource =
+    clean(source);
+
+  if (
+    !safeTitle &&
+    !safeSource
+  ) {
+    return false;
+  }
+
+  if (safeTitle) {
+    const {
+      data,
+      error,
+    } =
+      await supabase
+        .from(table)
+        .select("id")
+        .eq(
+          "title",
+          safeTitle
+        )
+        .limit(1);
+
+    if (
+      !error &&
+      Array.isArray(data) &&
+      data.length > 0
+    ) {
+      return true;
+    }
+  }
+
+  if (safeSource) {
+    const {
+      data,
+      error,
+    } =
+      await supabase
+        .from(table)
+        .select("id")
+        .eq(
+          "source",
+          safeSource
+        )
+        .limit(1);
+
+    if (
+      !error &&
+      Array.isArray(data) &&
+      data.length > 0
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function createBaseLead(
+  type: LeadType,
+  result: SearchResult,
+  skill: SkillRow,
+  contact: {
+    contact: string;
+    contactEmail: string;
+    contactPhone: string;
+    contactUrl: string;
+  }
+): CollectedLead {
+  const title =
+    clean(result.title) ||
+    "Opportunity";
+
+  const description =
+    clean(result.snippet);
+
+  const link =
+    clean(result.link);
+
+  const combined =
+    `${title} ${description}`;
+
+  const skillName =
+    getSkillName(skill);
+
+  const country =
+    findCountry(
+      combined,
+      link
+    );
+
+  const personName =
+    extractPersonName(
+      title,
+      description
+    );
+
+  return {
+    leadType: type,
+    title,
+    name: personName,
+    description,
+    skill: skillName,
+    category:
+      clean(skill.category),
+    subcategory:
+      clean(skill.subcategory),
+    country,
+    city: "",
+    contact:
+      contact.contact,
+    contactEmail:
+      contact.contactEmail,
+    contactPhone:
+      contact.contactPhone,
+    contactUrl:
+      contact.contactUrl,
+    source: link,
+    openUrl: link,
+    budget: "",
+    currency: "",
+  };
+}
+
+function hasRequiredContact(
+  lead: CollectedLead
+): boolean {
+  return Boolean(
+    clean(lead.contactEmail) ||
+      clean(lead.contactPhone) ||
+      clean(lead.contactUrl) ||
+      clean(lead.contact)
+  );
+}
+
+function matchesSkill(
+  result: SearchResult,
+  skill: SkillRow
+): boolean {
+  const combined =
+    `${clean(result.title)} ${clean(
+      result.snippet
+    )}`;
+
+  const terms =
+    getSkillSearchTerms(
+      skill
+    );
+
+  if (!terms.length) {
+    return true;
+  }
+
+  return terms.some(
+    (term) =>
+      lower(combined).includes(
+        lower(term)
+      )
+  );
+}
+
+function normalizeLeadForInsert(
+  lead: CollectedLead
+): Record<string, unknown> {
+  return {
+    title: lead.title,
+    name: lead.name,
+    client_name: lead.name,
+    skill_needed: lead.skill,
+    description:
+      lead.description,
+    content:
+      lead.description,
+    skill: lead.skill,
+    category:
+      lead.category,
+    subcategory:
+      lead.subcategory,
+    country:
+      lead.country,
+    city: lead.city,
+    contact_email:
+      lead.contactEmail,
+    contact_phone:
+      lead.contactPhone,
+    contact:
+      lead.contact,
+    source:
+      lead.source,
+    open_url:
+      lead.openUrl,
+    contact_url:
+      lead.contactUrl,
+    budget:
+      lead.budget,
+    currency:
+      lead.currency,
+    status: "new",
+  };
+  }
+async function insertLead(
+  type: LeadType,
+  lead: CollectedLead
+): Promise<{
+  inserted: boolean;
+  reason?: string;
+}> {
+  const table =
+    getLeadTable(type);
+
+  if (
+    !lead.title ||
+    !lead.source
+  ) {
+    return {
+      inserted: false,
+      reason:
+        "Missing title or source",
+    };
+  }
+
+  if (
+    !hasRequiredContact(lead)
+  ) {
+    return {
+      inserted: false,
+      reason:
+        "No direct contact",
+    };
+  }
+
+  const exists =
+    await leadAlreadyExists(
+      table,
+      lead.title,
+      lead.source
+    );
+
+  if (exists) {
+    return {
+      inserted: false,
+      reason:
+        "Already exists",
+    };
+  }
+
+  const supabase =
+    getSupabase();
+
+  /*
+   * Keep the insert payload limited
+   * to the fields used by the
+   * existing Opportunity Hub leads.
+   *
+   * This avoids sending arbitrary
+   * fields that could break Supabase.
+   */
+  const payload = {
+    title: lead.title,
+    name: lead.name,
+    description:
+      lead.description,
+    content:
+      lead.description,
+    skill_needed: lead.skill,
+    category:
+      lead.category,
+    subcategory:
+      lead.subcategory,
+    country:
+      lead.country,
+    city:
+      lead.city,
+    budget:
+      lead.budget,
+    currency:
+      lead.currency,
+    contact_email:
+      lead.contactEmail,
+    contact_phone:
+      lead.contactPhone,
+    source:
+      lead.source,
+    status: "new",
+  };
+
   const {
-    data,
     error,
   } =
     await supabase
       .from(table)
-      .select("id")
-      .eq("title", title)
-      .eq("source", source)
-      .limit(1);
+      .insert(payload);
 
   if (error) {
-    return false;
+    return {
+      inserted: false,
+      reason:
+        error.message,
+    };
   }
 
-  return (
-    Array.isArray(data) &&
-    data.length > 0
-  );
+  return {
+    inserted: true,
+  };
+}
+
+async function collectDemand(
+  skills: SkillRow[]
+): Promise<{
+  found: number;
+  inserted: number;
+  skipped: number;
+}> {
+  let found = 0;
+  let inserted = 0;
+  let skipped = 0;
+
+  const queries =
+    buildQueries(
+      skills,
+      "Demand"
+    );
+
+  for (const query of queries) {
+    let results: SearchResult[] = [];
+
+    try {
+      results =
+        await searchSerper(
+          query
+        );
+    } catch {
+      continue;
     }
+
+    for (const result of results) {
+      const link =
+        clean(result.link);
+
+      if (
+        !link ||
+        !isValidHttpUrl(link) ||
+        isBlocked(link)
+      ) {
+        skipped++;
+        continue;
+      }
+
+      if (
+        !isFresh(
+          clean(result.date)
+        )
+      ) {
+        skipped++;
+        continue;
+      }
+
+      if (
+        !isDemandLead(result)
+      ) {
+        skipped++;
+        continue;
+      }
+
+      const contact =
+        getDirectContact(
+          result
+        );
+
+      if (
+        !contact.contact &&
+        !contact.contactEmail &&
+        !contact.contactPhone &&
+        !contact.contactUrl
+      ) {
+        skipped++;
+        continue;
+      }
+
+      let matchedSkill:
+        | SkillRow
+        | undefined;
+
+      for (const skill of skills) {
+        if (
+          matchesSkill(
+            result,
+            skill
+          )
+        ) {
+          matchedSkill =
+            skill;
+          break;
+        }
+      }
+
+      if (!matchedSkill) {
+        skipped++;
+        continue;
+      }
+
+      const lead =
+        createBaseLead(
+          "Demand",
+          result,
+          matchedSkill,
+          contact
+        );
+
+      found++;
+
+      const saved =
+        await insertLead(
+          "Demand",
+          lead
+        );
+
+      if (saved.inserted) {
+        inserted++;
+      } else {
+        skipped++;
+      }
+    }
+  }
+
+  return {
+    found,
+    inserted,
+    skipped,
+  };
+}
+
+async function collectSupply(
+  skills: SkillRow[]
+): Promise<{
+  found: number;
+  inserted: number;
+  skipped: number;
+}> {
+  let found = 0;
+  let inserted = 0;
+  let skipped = 0;
+
+  const queries =
+    buildQueries(
+      skills,
+      "Supply"
+    );
+
+  for (const query of queries) {
+    let results: SearchResult[] = [];
+
+    try {
+      results =
+        await searchSerper(
+          query
+        );
+    } catch {
+      continue;
+    }
+
+    for (const result of results) {
+      const link =
+        clean(result.link);
+
+      if (
+        !link ||
+        !isValidHttpUrl(link) ||
+        isBlocked(link)
+      ) {
+        skipped++;
+        continue;
+      }
+
+      if (
+        !isFresh(
+          clean(result.date)
+        )
+      ) {
+        skipped++;
+        continue;
+      }
+
+      if (
+        !isSupplyLead(result)
+      ) {
+        skipped++;
+        continue;
+      }
+
+      const contact =
+        getDirectContact(
+          result
+        );
+
+      if (
+        !contact.contact &&
+        !contact.contactEmail &&
+        !contact.contactPhone &&
+        !contact.contactUrl
+      ) {
+        skipped++;
+        continue;
+      }
+
+      let matchedSkill:
+        | SkillRow
+        | undefined;
+
+      for (const skill of skills) {
+        if (
+          matchesSkill(
+            result,
+            skill
+          )
+        ) {
+          matchedSkill =
+            skill;
+          break;
+        }
+      }
+
+      if (!matchedSkill) {
+        skipped++;
+        continue;
+      }
+
+      const lead =
+        createBaseLead(
+          "Supply",
+          result,
+          matchedSkill,
+          contact
+        );
+
+      found++;
+
+      const saved =
+        await insertLead(
+          "Supply",
+          lead
+        );
+
+      if (saved.inserted) {
+        inserted++;
+      } else {
+        skipped++;
+      }
+    }
+  }
+
+  return {
+    found,
+    inserted,
+    skipped,
+  };
+}
+
+async function collectSaas(
+  skills: SkillRow[]
+): Promise<{
+  found: number;
+  inserted: number;
+  skipped: number;
+}> {
+  let found = 0;
+  let inserted = 0;
+  let skipped = 0;
+
+  const queries =
+    buildQueries(
+      skills,
+      "SaaS"
+    );
+
+  for (const query of queries) {
+    let results: SearchResult[] = [];
+
+    try {
+      results =
+        await searchSerper(
+          query
+        );
+    } catch {
+      continue;
+    }
+
+    for (const result of results) {
+      const link =
+        clean(result.link);
+
+      if (
+        !link ||
+        !isValidHttpUrl(link) ||
+        isBlocked(link)
+      ) {
+        skipped++;
+        continue;
+      }
+
+      if (
+        !isFresh(
+          clean(result.date)
+        )
+      ) {
+        skipped++;
+        continue;
+      }
+
+      if (
+        isSaasJobSeeker(result)
+      ) {
+        skipped++;
+        continue;
+      }
+
+      if (
+        !isSaasProfessional(
+          result
+        )
+      ) {
+        skipped++;
+        continue;
+      }
+
+      if (
+        !isIndividualSaasProfile(
+          result
+        )
+      ) {
+        skipped++;
+        continue;
+      }
+
+      const inspection =
+        await inspectSaasSource(
+          link
+        );
+
+      const contact =
+        getDirectContact(
+          result
+        );
+
+      const finalEmail =
+        contact.contactEmail ||
+        inspection.email;
+
+      const finalPhone =
+        contact.contactPhone ||
+        inspection.phone;
+
+      const finalUrl =
+        contact.contactUrl ||
+        inspection.contactUrl ||
+        (
+          isSpecificSocialOrProfileUrl(
+            link
+          )
+            ? link
+            : ""
+        );
+
+      const finalContact =
+        finalEmail ||
+        finalPhone ||
+        finalUrl;
+
+      if (!finalContact) {
+        skipped++;
+        continue;
+      }
+
+      const personName =
+        hasSaasPersonIdentity(
+          result,
+          inspection.pageText
+        );
+
+      const title =
+        clean(result.title) ||
+        "Professional";
+
+      const description =
+        clean(result.snippet);
+
+      const country =
+        findCountry(
+          `${title} ${description} ${inspection.pageText}`,
+          link
+        );
+
+      const lead: CollectedLead = {
+        leadType: "SaaS",
+        title,
+        name:
+          personName ||
+          "Professional",
+        description,
+        skill: "",
+        category: "",
+        subcategory: "",
+        country,
+        city: "",
+        contact:
+          finalContact,
+        contactEmail:
+          finalEmail,
+        contactPhone:
+          finalPhone,
+        contactUrl:
+          finalUrl,
+        source: link,
+        openUrl: link,
+        budget: "",
+        currency: "",
+      };
+
+      found++;
+
+      const saved =
+        await insertLead(
+          "SaaS",
+          lead
+        );
+
+      if (saved.inserted) {
+        inserted++;
+      } else {
+        skipped++;
+      }
+    }
+  }
+
+  return {
+    found,
+    inserted,
+    skipped,
+  };
+}
+
+function sendJsonError(
+  res: Response,
+  status: number,
+  message: string
+) {
+  return res.status(status).json({
+    success: false,
+    message: clean(message) ||
+      "Lead collection failed",
+  });
+}
+
+router.post(
+  "/",
+  async (
+    req: Request,
+    res: Response
+  ) => {
+    try {
+      if (!SUPABASE_URL) {
+        return sendJsonError(
+          res,
+          500,
+          "SUPABASE_URL is missing"
+        );
+      }
+
+      if (
+        !SUPABASE_SERVICE_ROLE_KEY
+      ) {
+        return sendJsonError(
+          res,
+          500,
+          "SUPABASE_SERVICE_ROLE_KEY is missing"
+        );
+      }
+
+      if (!SERPER_API_KEY) {
+        return sendJsonError(
+          res,
+          500,
+          "SERPER_API_KEY is missing"
+        );
+      }
+
+      const skills =
+        await loadSkills();
+
+      if (!skills.length) {
+        return res.status(200).json({
+          success: true,
+          message:
+            "No skills found for lead collection",
+          results: {
+            Demand: {
+              found: 0,
+              inserted: 0,
+              skipped: 0,
+            },
+            Supply: {
+              found: 0,
+              inserted: 0,
+              skipped: 0,
+            },
+            SaaS: {
+              found: 0,
+              inserted: 0,
+              skipped: 0,
+            },
+          },
+        });
+      }
+
+      const requestedTypes =
+        Array.isArray(
+          req.body?.types
+        )
+          ? req.body.types
+          : [
+              "Demand",
+              "Supply",
+              "SaaS",
+            ];
+
+      const types: LeadType[] =
+        requestedTypes.filter(
+          (
+            type: unknown
+          ): type is LeadType =>
+            type === "Demand" ||
+            type === "Supply" ||
+            type === "SaaS"
+        );
+
+      const results: Record<
+        LeadType,
+        {
+          found: number;
+          inserted: number;
+          skipped: number;
+        }
+      > = {
+        Demand: {
+          found: 0,
+          inserted: 0,
+          skipped: 0,
+        },
+        Supply: {
+          found: 0,
+          inserted: 0,
+          skipped: 0,
+        },
+        SaaS: {
+          found: 0,
+          inserted: 0,
+          skipped: 0,
+        },
+      };
+
+      if (
+        types.includes("Demand")
+      ) {
+        results.Demand =
+          await collectDemand(
+            skills
+          );
+      }
+
+      if (
+        types.includes("Supply")
+      ) {
+        results.Supply =
+          await collectSupply(
+            skills
+          );
+      }
+
+      if (
+        types.includes("SaaS")
+      ) {
+        results.SaaS =
+          await collectSaas(
+            skills
+          );
+      }
+
+      const totalInserted =
+        results.Demand.inserted +
+        results.Supply.inserted +
+        results.SaaS.inserted;
+
+      const totalFound =
+        results.Demand.found +
+        results.Supply.found +
+        results.SaaS.found;
+
+      return res.status(200).json({
+        success: true,
+        message:
+          "Real lead collection completed",
+        totalFound,
+        totalInserted,
+        results,
+      });
+    } catch (error) {
+      console.error(
+        "Real lead collection failed:",
+        error
+      );
+
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Lead collection failed";
+
+      return sendJsonError(
+        res,
+        500,
+        message
+      );
+    }
+  }
+);
+
+router.get(
+  "/",
+  (
+    _req: Request,
+    res: Response
+  ) => {
+    return res.status(200).json({
+      success: true,
+      message:
+        "Real lead collection API is running",
+    });
+  }
+);
+
+export default router;
