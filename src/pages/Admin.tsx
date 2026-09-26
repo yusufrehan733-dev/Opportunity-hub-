@@ -319,14 +319,14 @@ export default function Admin() {
       }
 
       setFetchResult(
-        `Added ${data.count ?? 0} leads — Demand: ${
-          data.demand ?? 0
-        }, Supply: ${
-          data.supply ?? 0
-        }, SaaS: ${
-          data.saas ?? 0
-        }`
-      );
+  `Added ${data.totalInserted ?? 0} leads — Demand: ${
+    data.results?.Demand?.inserted ?? 0
+  }, Supply: ${
+    data.results?.Supply?.inserted ?? 0
+  }, SaaS: ${
+    data.results?.SaaS?.inserted ?? 0
+  }`
+);
 
       await loadData();
     } catch (err: any) {
