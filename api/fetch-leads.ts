@@ -986,47 +986,89 @@ async function loadSkills(
       }
 function leadInsertPayload(
   lead: CollectedLead
-) {
-  return {
-    type: lead.leadType,
-    source: lead.source,
-    client_name:
-      lead.name ||
-      lead.title,
-    skill_needed:
-      lead.skill || null,
-    description:
-      lead.description || null,
-    contact_email:
+): Record<string, any> {
+  if (lead.leadType === "SaaS") {
+    const contact =
       lead.contactEmail ||
-      null,
-    contact_phone:
       lead.contactPhone ||
-      null,
-    contact_name:
       lead.contactName ||
-      lead.name ||
-      null,
-    status: "active",
+      lead.contactUrl ||
+      "";
+
+    return {
+      name:
+        lead.name ||
+        lead.contactName ||
+        lead.title,
+
+      platform:
+        lead.company ||
+        lead.source ||
+        "Opportunity Hub",
+
+      niche:
+        lead.skill ||
+        lead.category ||
+        lead.subcategory ||
+        "",
+
+      contact,
+
+      status: "new",
+
+      description:
+        lead.description ||
+        lead.title ||
+        "",
+
+      commission: null,
+
+      trial_days: 14,
+
+      landing_url:
+        lead.contactUrl ||
+        lead.source ||
+        "",
+
+      source_url:
+        lead.contactUrl ||
+        "",
+
+      contact_url:
+        lead.contactUrl ||
+        "",
+
+      country:
+        lead.country ||
+        "",
+
+      city:
+        lead.city ||
+        "",
+    };
+  }
+
+  return {
+    lead_type: lead.leadType,
+    source: lead.source,
     title: lead.title,
-    category:
-      lead.category || null,
-    subcategory:
-      lead.subcategory || null,
-    country:
-      lead.country || null,
-    city:
-      lead.city || null,
-    budget:
-      lead.budget || null,
-    currency:
-      lead.currency || null,
-    contact_url:
-      lead.contactUrl || null,
-    created_at:
-      new Date().toISOString(),
+    name: lead.name,
+    company: lead.company,
+    description: lead.description,
+    skill: lead.skill,
+    category: lead.category,
+    subcategory: lead.subcategory,
+    country: lead.country,
+    city: lead.city,
+    budget: lead.budget,
+    currency: lead.currency,
+    contact_email: lead.contactEmail,
+    contact_phone: lead.contactPhone,
+    contact_name: lead.contactName,
+    contact_url: lead.contactUrl,
+    created_at: lead.createdAt,
   };
-}
+}t
 
 async function leadAlreadyExists(
   supabase: ReturnType<
