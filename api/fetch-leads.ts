@@ -2320,16 +2320,26 @@ export default async function handler(
         success: true,
 
         message:
-          `Added ${totalInserted} leads — ` +
-          `Demand: ${
-            demand?.inserted || 0
-          }, ` +
-          `Supply: ${
-            supply?.inserted || 0
-          }, ` +
-          `SaaS: ${
-            saas?.inserted || 0
-          }`,
+  `Added ${totalInserted} leads — ` +
+  `Demand: ${
+    demand?.inserted || 0
+  }, ` +
+  `Supply: ${
+    supply?.inserted || 0
+  }, ` +
+  `SaaS: ${
+    saas?.inserted || 0
+  }. ` +
+  `Diagnostics: ` +
+  `Demand ${JSON.stringify(
+    (demand as any)?.stats || {}
+  )}; ` +
+  `Supply ${JSON.stringify(
+    (supply as any)?.stats || {}
+  )}; ` +
+  `SaaS ${JSON.stringify(
+    (saas as any)?.stats || {}
+  )}`,
 
         totalFound,
 
