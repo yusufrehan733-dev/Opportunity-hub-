@@ -1120,27 +1120,6 @@ function leadInsertPayload(
       new Date().toISOString(),
   };
 }
-  return {
-    lead_type: lead.leadType,
-    source: lead.source,
-    title: lead.title,
-    name: lead.name,
-    company: lead.company,
-    description: lead.description,
-    skill: lead.skill,
-    category: lead.category,
-    subcategory: lead.subcategory,
-    country: lead.country,
-    city: lead.city,
-    budget: lead.budget,
-    currency: lead.currency,
-    contact_email: lead.contactEmail,
-    contact_phone: lead.contactPhone,
-    contact_name: lead.contactName,
-    contact_url: lead.contactUrl,
-    created_at: lead.createdAt,
-  };
-}
 async function leadAlreadyExists(
   supabase: ReturnType<
     typeof createSupabase
