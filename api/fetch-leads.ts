@@ -987,7 +987,6 @@ async function loadSkills(
 function leadInsertPayload(
   lead: CollectedLead
 ): Record<string, any> {
-  // SaaS uses the actual saas_leads table structure.
   if (lead.leadType === "SaaS") {
     const contact =
       lead.contactEmail ||
@@ -1051,9 +1050,9 @@ function leadInsertPayload(
     };
   }
 
-  // Demand and Supply keep their existing table structure.
   return {
-    type: lead.leadType,
+    type:
+      lead.leadType,
 
     source:
       lead.source,
@@ -1083,7 +1082,8 @@ function leadInsertPayload(
       lead.name ||
       null,
 
-    status: "active",
+    status:
+      "active",
 
     title:
       lead.title,
@@ -1095,7 +1095,7 @@ function leadInsertPayload(
     subcategory:
       lead.subcategory ||
       null,
-    
+
     country:
       lead.country ||
       null,
@@ -1119,8 +1119,7 @@ function leadInsertPayload(
     created_at:
       new Date().toISOString(),
   };
-      }
-
+}
   return {
     lead_type: lead.leadType,
     source: lead.source,
