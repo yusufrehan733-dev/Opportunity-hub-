@@ -1068,8 +1068,7 @@ function leadInsertPayload(
     contact_url: lead.contactUrl,
     created_at: lead.createdAt,
   };
-}t
-
+}
 async function leadAlreadyExists(
   supabase: ReturnType<
     typeof createSupabase
