@@ -987,13 +987,14 @@ async function loadSkills(
 function leadInsertPayload(
   lead: CollectedLead
 ): Record<string, any> {
+  // SaaS uses the actual saas_leads table structure.
   if (lead.leadType === "SaaS") {
     const contact =
       lead.contactEmail ||
       lead.contactPhone ||
       lead.contactName ||
       lead.contactUrl ||
-      "";
+      null;
 
     return {
       name:
@@ -1010,16 +1011,16 @@ function leadInsertPayload(
         lead.skill ||
         lead.category ||
         lead.subcategory ||
-        "",
+        null,
 
       contact,
 
-      status: "new",
+      status: "active",
 
       description:
         lead.description ||
         lead.title ||
-        "",
+        null,
 
       commission: null,
 
@@ -1027,26 +1028,98 @@ function leadInsertPayload(
 
       landing_url:
         lead.contactUrl ||
-        lead.source ||
-        "",
+        null,
 
       source_url:
-        lead.contactUrl ||
-        "",
+        lead.source ||
+        null,
 
       contact_url:
         lead.contactUrl ||
-        "",
+        null,
 
       country:
         lead.country ||
-        "",
+        null,
 
       city:
         lead.city ||
-        "",
+        null,
+
+      created_at:
+        new Date().toISOString(),
     };
   }
+
+  // Demand and Supply keep their existing table structure.
+  return {
+    type: lead.leadType,
+
+    source:
+      lead.source,
+
+    client_name:
+      lead.name ||
+      lead.title,
+
+    skill_needed:
+      lead.skill ||
+      null,
+
+    description:
+      lead.description ||
+      null,
+
+    contact_email:
+      lead.contactEmail ||
+      null,
+
+    contact_phone:
+      lead.contactPhone ||
+      null,
+
+    contact_name:
+      lead.contactName ||
+      lead.name ||
+      null,
+
+    status: "active",
+
+    title:
+      lead.title,
+
+    category:
+      lead.category ||
+      null,
+
+    subcategory:
+      lead.subcategory ||
+      null,
+    
+    country:
+      lead.country ||
+      null,
+
+    city:
+      lead.city ||
+      null,
+
+    budget:
+      lead.budget ||
+      null,
+
+    currency:
+      lead.currency ||
+      null,
+
+    contact_url:
+      lead.contactUrl ||
+      null,
+
+    created_at:
+      new Date().toISOString(),
+  };
+      }
 
   return {
     lead_type: lead.leadType,
