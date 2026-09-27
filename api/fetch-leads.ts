@@ -1119,8 +1119,8 @@ function leadInsertPayload(
     created_at:
       new Date().toISOString(),
   };
-}
-async function leadAlreadyExists(
+}.      
+  async function leadAlreadyExists(
   supabase: ReturnType<
     typeof createSupabase
   >,
@@ -1136,7 +1136,24 @@ async function leadAlreadyExists(
     .select("id")
     .limit(1);
 
-  if (lead.source) {
+  if (lead.leadType === "SaaS") {
+    if (lead.contactUrl) {
+      query = query.eq(
+        "contact_url",
+        lead.contactUrl
+      );
+    } else if (lead.source) {
+      query = query.eq(
+        "source_url",
+        lead.source
+      );
+    } else if (lead.name) {
+      query = query.eq(
+        "name",
+        lead.name
+      );
+    }
+  } else if (lead.source) {
     query = query.eq(
       "source",
       lead.source
@@ -1155,32 +1172,6 @@ async function leadAlreadyExists(
   return (
     Array.isArray(data) &&
     data.length > 0
-  );
-}
-
-function resultMatchesType(
-  result: SearchResult,
-  type: LeadType
-): boolean {
-  const text =
-    getSearchText(result);
-
-  if (type === "Demand") {
-    return containsAny(
-      text,
-      DEMAND_SIGNALS
-    );
-  }
-
-  if (type === "Supply") {
-    return containsAny(
-      text,
-      SUPPLY_SIGNALS
-    );
-  }
-
-  return isIndividualSaasProfile(
-    result
   );
 }
 
