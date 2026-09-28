@@ -456,17 +456,17 @@ export default function Admin() {
       icon: Link2,
     },
       return (
-    <div className="min-h-screen bg-black text-white">
-      <div className="border-b border-[#222] bg-black">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() =>
-                  navigate("/dashboard")
-                }
-                className="p-2 rounded-lg border border-[#333] bg-[#111]"
-              >
+  <div className="min-h-screen bg-black text-white">
+    <div className="border-b border-[#222] bg-black">
+      <div className="max-w-7xl mx-auto px-4 py-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() =>
+                navigate("/dashboard")
+              }
+              className="p-2 rounded-lg border border-[#333] bg-[#111]"
+            >
                 <ArrowLeft size={17} />
               </button>
 
