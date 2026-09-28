@@ -1917,43 +1917,41 @@ try {
           .insert(payload);
           if (error) {
   throw new Error(
+ const {
+  error,
+} = await supabase
+  .from(table)
+  .insert(payload);
+
+if (error) {
+  throw new Error(
     `${type} lead insert failed: ${error.message}`
   );
 }
 
-        stats.inserted++;
-        insertedCount++;
-      } catch {
-        stats.insertErrors++;
-      }
-    }
-  }
+stats.inserted++;
+insertedCount++;
+} catch (error) {
+  throw error;
+      }   
 
-  return insertedCount;
+ const {
+  error,
+} = await supabase
+  .from(table)
+  .insert(payload);
+
+if (error) {
+  throw new Error(
+    `${type} lead insert failed: ${error.message}`
+  );
 }
 
-export default async function handler(
-  req: VercelRequest,
-  res: VercelResponse
-) {
-  if (
-    req.method !== "POST"
-  ) {
-    return res.status(405).json({
-      ok: false,
-      error:
-        "Method not allowed",
-    });
-  }
-
-  try {
-    const supabase =
-      createSupabase();
-
-    const skills =
-      await loadSkills(
-        supabase
-      );
+stats.inserted++;
+insertedCount++;
+} catch (error) {
+  throw error;
+  } 
 
     const stats =
       emptyStats();
