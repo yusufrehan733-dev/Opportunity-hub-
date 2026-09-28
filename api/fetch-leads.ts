@@ -1857,16 +1857,22 @@ async function collectLeadsForType(
     const query of queries
   ) {
     let results: SearchResult[] = [];
+try {
+  results =
+    await searchSerper(
+      query,
+      type
+    );
+} catch (error) {
+  const message =
+    error instanceof Error
+      ? error.message
+      : "Serper search failed.";
 
-    try {
-      results =
-        await searchSerper(
-          query,
-          type
-        );
-    } catch {
-      continue;
-    }
+  throw new Error(
+    `${type} lead search failed: ${message}`
+  );
+}
 
     for (
       const result of results
