@@ -75,6 +75,7 @@ type LeadStats = {
   noSkillMatch: number;
   blocked: number;
   insertErrors: number;
+  lastInsertError?: string;
 };
 
 type LeadFetchDiagnostics = {
@@ -248,9 +249,7 @@ export default function Admin() {
           Array.isArray(userData.users)
         ) {
           setUsers(userData.users);
-        }
-      }
-
+}
       if (section === "leads") {
         const leadData =
           await adminRequest("leads");
@@ -340,27 +339,56 @@ export default function Admin() {
         );
       }
 
-      setFetchResult(
-        `Added ${data.totalInserted ?? 0} leads — Demand: ${
-          data.results?.Demand?.inserted ?? 0
-        }, Supply: ${
-          data.results?.Supply?.inserted ?? 0
-        }, SaaS: ${
-          data.results?.SaaS?.inserted ?? 0
-        }`
-      );
+      const insertedByType =
+        data.insertedByType || {};
+
+      const totalInserted =
+        Object.values(
+          insertedByType
+        ).reduce(
+          (
+            sum: number,
+            value: unknown
+          ) =>
+            sum +
+            (typeof value === "number"
+              ? value
+              : 0),
+          0
+        );
+
+      const insertError =
+        data?.stats?.lastInsertError ||
+        "";
+
+      if (insertError) {
+        setFetchResult(
+          `Added ${totalInserted} leads — Demand: ${
+            insertedByType.Demand ?? 0
+          }, Supply: ${
+            insertedByType.Supply ?? 0
+          }, SaaS: ${
+            insertedByType.SaaS ?? 0
+          }\n\nInsert error: ${insertError}`
+        );
+      } else {
+        setFetchResult(
+          `Added ${totalInserted} leads — Demand: ${
+            insertedByType.Demand ?? 0
+          }, Supply: ${
+            insertedByType.Supply ?? 0
+          }, SaaS: ${
+            insertedByType.SaaS ?? 0
+          }`
+        );
+      }
 
       if (data.stats) {
-  setFetchDiagnostics({
-    Demand:
-      data.stats,
-
-    Supply:
-      data.stats,
-
-    SaaS:
-      data.stats,
-  });
+        setFetchDiagnostics({
+          Demand: data.stats,
+          Supply: data.stats,
+          SaaS: data.stats,
+        });
       }
 
       await loadData();
@@ -451,21 +479,20 @@ export default function Admin() {
       id: "links",
       label: "Links",
       icon: Link2,
-     },
+    },
   ];
-
-  return (
-  <div className="min-h-screen bg-black text-white">
-    <div className="border-b border-[#222] bg-black">
-      <div className="max-w-7xl mx-auto px-4 py-4">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() =>
-                navigate("/dashboard")
-              }
-              className="p-2 rounded-lg border border-[#333] bg-[#111]"
-            >
+    return (
+    <div className="min-h-screen bg-black text-white">
+      <div className="border-b border-[#222] bg-black">
+        <div className="max-w-7xl mx-auto px-4 py-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() =>
+                  navigate("/dashboard")
+                }
+                className="p-2 rounded-lg border border-[#333] bg-[#111]"
+              >
                 <ArrowLeft size={17} />
               </button>
 
@@ -683,8 +710,7 @@ function OverviewSection({
       </div>
     </div>
   );
-}
-
+        }
 function UsersSection({
   users,
   updateUser,
@@ -733,8 +759,7 @@ function UsersSection({
               <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
                 <div className="min-w-0">
                   <div className="text-sm font-semibold">
-                    {user.name ||
-                      "Unnamed User"}
+                    {user.name || "Unnamed User"}
                   </div>
 
                   <div className="text-xs text-[#777] mt-1 break-all">
@@ -743,8 +768,7 @@ function UsersSection({
 
                   <div className="flex flex-wrap gap-2 mt-3">
                     <span className="px-2 py-1 rounded-md bg-black border border-[#333] text-xs text-[#aaa]">
-                      Plan:{" "}
-                      {user.plan || "—"}
+                      Plan: {user.plan || "—"}
                     </span>
 
                     <span
@@ -761,21 +785,16 @@ function UsersSection({
 
                     {user.status && (
                       <span className="px-2 py-1 rounded-md bg-black border border-[#333] text-xs text-[#aaa]">
-                        Status:{" "}
-                        {user.status}
+                        Status: {user.status}
                       </span>
                     )}
                   </div>
 
                   <div className="text-xs text-[#666] mt-3">
                     Trial:{" "}
-                    {dateText(
-                      user.trial_start
-                    )}{" "}
+                    {dateText(user.trial_start)}{" "}
                     →{" "}
-                    {dateText(
-                      user.trial_end
-                    )}
+                    {dateText(user.trial_end)}
                   </div>
 
                   <div className="text-xs text-[#666] mt-1">
@@ -789,10 +808,7 @@ function UsersSection({
                 <div className="flex flex-wrap gap-2 lg:justify-end">
                   <button
                     onClick={() =>
-                      updateUser(
-                        user,
-                        "renew"
-                      )
+                      updateUser(user, "renew")
                     }
                     className="px-3 py-2 rounded-lg bg-[#1b1b1b] border border-[#333] text-xs"
                   >
@@ -827,10 +843,7 @@ function UsersSection({
 
                   <button
                     onClick={() =>
-                      updateUser(
-                        user,
-                        "cancel"
-                      )
+                      updateUser(user, "cancel")
                     }
                     className="px-3 py-2 rounded-lg bg-[#1b1b1b] border border-[#333] text-xs text-yellow-400"
                   >
@@ -894,7 +907,8 @@ function LeadsSection({
           </h2>
 
           <p className="text-sm text-[#777] mt-1">
-            Fetch fresh Demand, Supply and SaaS leads from the real lead collector.
+            Fetch fresh Demand, Supply and SaaS
+            leads from the real lead collector.
           </p>
         </div>
 
@@ -919,7 +933,7 @@ function LeadsSection({
       </div>
 
       {fetchResult && (
-        <div className="rounded-xl border border-[#333] bg-[#111] p-4 text-sm text-[#ddd]">
+        <div className="rounded-xl border border-[#333] bg-[#111] p-4 text-sm text-[#ddd] whitespace-pre-wrap">
           {fetchResult}
         </div>
       )}
@@ -1020,6 +1034,18 @@ function LeadsSection({
                     <div className="text-right">
                       {stats.insertErrors}
                     </div>
+
+                    {stats.lastInsertError && (
+                      <>
+                        <div className="text-[#777]">
+                          Last Insert Error
+                        </div>
+
+                        <div className="text-right text-red-400 break-words">
+                          {stats.lastInsertError}
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
               );
@@ -1027,7 +1053,8 @@ function LeadsSection({
           </div>
         </div>
       )}
-        <div>
+
+      <div>
         <h3 className="text-sm font-semibold mb-3">
           Current Leads
         </h3>
@@ -1083,7 +1110,6 @@ function LeadsSection({
     </div>
   );
 }
-
 function SimpleSection({
   icon: Icon,
   title,
@@ -1095,28 +1121,21 @@ function SimpleSection({
 }) {
   return (
     <div className="space-y-5">
-      <div className="flex items-center gap-3">
-        <div className="p-2 rounded-lg border border-[#333] bg-[#111]">
-          <Icon
-            size={18}
-            className="text-[#aaa]"
-          />
-        </div>
+      <div>
+        <h2 className="text-xl font-semibold flex items-center gap-2">
+          <Icon size={20} />
+          {title}
+        </h2>
 
-        <div>
-          <h2 className="text-xl font-semibold">
-            {title}
-          </h2>
-
-          <p className="text-sm text-[#777] mt-1">
-            {text}
-          </p>
-        </div>
+        <p className="text-sm text-[#777] mt-1">
+          {text}
+        </p>
       </div>
 
       <div className="rounded-xl border border-[#222] bg-[#111] p-5">
         <div className="text-sm text-[#aaa]">
-          This section is available from the Admin dashboard.
+          This section is available in the
+          admin dashboard.
         </div>
       </div>
     </div>
@@ -1335,13 +1354,11 @@ function LinksSection({
                     </div>
 
                     <div className="text-xs text-[#777] mt-1">
-                      Plan:{" "}
-                      {invite.plan}
+                      Plan: {invite.plan}
                     </div>
 
                     <div className="text-xs text-[#666] mt-1 break-all">
-                      Token:{" "}
-                      {invite.token}
+                      Token: {invite.token}
                     </div>
                   </div>
 
@@ -1367,4 +1384,4 @@ function LinksSection({
       </div>
     </div>
   );
-            }
+        }
