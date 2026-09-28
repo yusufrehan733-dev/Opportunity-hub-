@@ -207,11 +207,7 @@ export default function Admin() {
       saas: 0,
       invites: 0,
     });
-
-  const [loading, setLoading] =
-    useState(false);
-
-  const [error, setError] =
+    const [error, setError] =
     useState("");
 
   const [fetchingLeads, setFetchingLeads] =
@@ -317,8 +313,7 @@ export default function Admin() {
           },
         }
       );
-
-      const text =
+            const text =
         await response.text();
 
       let data: any;
@@ -355,7 +350,7 @@ export default function Admin() {
       if (data.results) {
         setFetchDiagnostics({
           Demand:
-            data.results.Demand?.stats ?? {
+            data.results.Demand ?? {
               found: 0,
               accepted: 0,
               inserted: 0,
@@ -367,8 +362,9 @@ export default function Admin() {
               blocked: 0,
               insertErrors: 0,
             },
+
           Supply:
-            data.results.Supply?.stats ?? {
+            data.results.Supply ?? {
               found: 0,
               accepted: 0,
               inserted: 0,
@@ -380,8 +376,9 @@ export default function Admin() {
               blocked: 0,
               insertErrors: 0,
             },
+
           SaaS:
-            data.results.SaaS?.stats ?? {
+            data.results.SaaS ?? {
               found: 0,
               accepted: 0,
               inserted: 0,
@@ -399,87 +396,8 @@ export default function Admin() {
       await loadData();
     } catch (err: any) {
       setError(
-        err?.message ||
-          "Could not fetch real leads."
-      );
-    } finally {
-      setFetchingLeads(false);
-    }
-  }
-
-  useEffect(() => {
-    loadData();
-  }, [section]);
-
-  async function updateUser(
-    user: AdminUser,
-    action: string,
-    plan?: string
-  ) {
-    try {
-      setLoading(true);
-      setError("");
-
-      await adminRequest(
-        "set_user",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            id: user.id,
-            action,
-            plan,
-          }),
-        }
-      );
-
-      await loadData();
-    } catch (err: any) {
-      setError(
-        err?.message ||
-          "Could not update user."
-      );
-      setLoading(false);
-    }
-    }
-    const sections = [
-    {
-      id: "overview" as AdminSection,
-      label: "Overview",
-      icon: Target,
-    },
-    {
-      id: "users" as AdminSection,
-      label: "Users",
-      icon: Users,
-    },
-    {
-      id: "leads" as AdminSection,
-      label: "Leads",
-      icon: Target,
-    },
-    {
-      id: "referrals" as AdminSection,
-      label: "Referrals",
-      icon: UserPlus,
-    },
-    {
-      id: "resellers" as AdminSection,
-      label: "Resellers",
-      icon: Store,
-    },
-    {
-      id: "subscription" as AdminSection,
-      label: "Subscription",
-      icon: CreditCard,
-    },
-    {
-      id: "links" as AdminSection,
-      label: "Referral Links",
-      icon: Link2,
-    },
-  ];
-
-  return (
+        err?.
+          return (
     <div className="min-h-screen bg-black text-white">
       <div className="border-b border-[#222] bg-black">
         <div className="max-w-7xl mx-auto px-4 py-4">
@@ -616,9 +534,8 @@ export default function Admin() {
       </div>
     </div>
   );
-}
-
-function OverviewSection({
+    }
+    function OverviewSection({
   overview,
   onRefresh,
 }: {
@@ -723,6 +640,7 @@ function SimpleSection({
     <div className="rounded-xl border border-[#222] bg-[#111] p-5">
       <div className="flex items-center gap-3">
         <Icon size={20} />
+
         <h2 className="text-lg font-semibold">
           {title}
         </h2>
@@ -733,7 +651,8 @@ function SimpleSection({
       </p>
     </div>
   );
-            }
+}
+
 function UsersSection({
   users,
   updateUser,
@@ -924,9 +843,8 @@ function UsersSection({
       )}
     </div>
   );
-}
-
-function LeadsSection({
+      }
+    function LeadsSection({
   leads,
   fetchRealLeads,
   fetchingLeads,
@@ -1114,6 +1032,7 @@ function LeadsSection({
     </div>
   );
 }
+
 function LinksSection({
   invites,
   reload,
@@ -1206,7 +1125,9 @@ function LinksSection({
           <input
             value={email}
             onChange={(event) =>
-              setEmail(event.target.value)
+              setEmail(
+                event.target.value
+              )
             }
             placeholder="user@example.com"
             className="mt-2 w-full rounded-lg border border-[#333] bg-black px-3 py-3 text-sm text-white outline-none"
@@ -1221,7 +1142,9 @@ function LinksSection({
           <select
             value={plan}
             onChange={(event) =>
-              setPlan(event.target.value)
+              setPlan(
+                event.target.value
+              )
             }
             className="mt-2 w-full rounded-lg border border-[#333] bg-black px-3 py-3 text-sm text-white outline-none"
           >
@@ -1333,4 +1256,4 @@ function LinksSection({
       </div>
     </div>
   );
-              }
+                        }
