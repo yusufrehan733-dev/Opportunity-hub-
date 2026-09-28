@@ -350,20 +350,17 @@ export default function Admin() {
         }`
       );
 
-      if (data.results) {
-        setFetchDiagnostics({
-          Demand:
-            data.results.Demand ??
-            defaultLeadStats(),
+      if (data.stats) {
+  setFetchDiagnostics({
+    Demand:
+      data.stats,
 
-          Supply:
-            data.results.Supply ??
-            defaultLeadStats(),
+    Supply:
+      data.stats,
 
-          SaaS:
-            data.results.SaaS ??
-            defaultLeadStats(),
-        });
+    SaaS:
+      data.stats,
+  });
       }
 
       await loadData();
