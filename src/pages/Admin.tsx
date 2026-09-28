@@ -531,17 +531,18 @@ export default function Admin() {
             reload={loadData}
           />
         )}
-      </div>
+            </div>
     </div>
   );
-    }
-    function OverviewSection({
+}
+
+function OverviewSection({
   overview,
   onRefresh,
 }: {
   overview: OverviewData;
   onRefresh: () => Promise<void>;
-}) {
+}) 
   const cards = [
     {
       label: "Total Users",
