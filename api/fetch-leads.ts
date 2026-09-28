@@ -518,7 +518,7 @@ function isFresh(
     parseResultDate(result);
 
   if (!date) {
-    return false;
+    return true;
   }
 
   const ageMs =
@@ -536,7 +536,6 @@ function isFresh(
     ageMs <= maxAgeMs
   );
 }
-
 function extractEmails(
   text: string
 ): string[] {
