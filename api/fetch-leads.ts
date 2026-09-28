@@ -1915,11 +1915,11 @@ try {
         } = await supabase
           .from(table)
           .insert(payload);
-
-        if (error) {
-          stats.insertErrors++;
-          continue;
-        }
+          if (error) {
+  throw new Error(
+    `${type} lead insert failed: ${error.message}`
+  );
+}
 
         stats.inserted++;
         insertedCount++;
