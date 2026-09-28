@@ -93,7 +93,9 @@ async function adminRequest(
   } = await supabase.auth.getSession();
 
   if (!session?.access_token) {
-    throw new Error("Admin session not found.");
+    throw new Error(
+      "Admin session not found."
+    );
   }
 
   const response = await fetch(
@@ -101,7 +103,8 @@ async function adminRequest(
     {
       ...options,
       headers: {
-        "Content-Type": "application/json",
+        "Content-Type":
+          "application/json",
         Authorization:
           `Bearer ${session.access_token}`,
         ...(options.headers || {}),
@@ -109,7 +112,8 @@ async function adminRequest(
     }
   );
 
-  const text = await response.text();
+  const text =
+    await response.text();
 
   let data: any;
 
@@ -148,26 +152,13 @@ function dateText(
   return date.toLocaleDateString();
 }
 
-function defaultLeadStats(): LeadStats {
-  return {
-    found: 0,
-    accepted: 0,
-    inserted: 0,
-    duplicate: 0,
-    stale: 0,
-    wrongType: 0,
-    noContact: 0,
-    noSkillMatch: 0,
-    blocked: 0,
-    insertErrors: 0,
-  };
-}
-
 export default function Admin() {
   const navigate = useNavigate();
 
   const [section, setSection] =
-    useState<AdminSection>("overview");
+    useState<AdminSection>(
+      "overview"
+    );
 
   const [users, setUsers] =
     useState<AdminUser[]>([]);
@@ -211,7 +202,9 @@ export default function Admin() {
       setError("");
 
       const data =
-        await adminRequest("overview");
+        await adminRequest(
+          "overview"
+        );
 
       setOverview({
         users: data.users ?? 0,
@@ -226,7 +219,9 @@ export default function Admin() {
       if (
         Array.isArray(data.usersList)
       ) {
-        setUsers(data.usersList);
+        setUsers(
+          data.usersList
+        );
       }
 
       if (
@@ -236,36 +231,54 @@ export default function Admin() {
       }
 
       if (
-        Array.isArray(data.invitesList)
+        Array.isArray(
+          data.invitesList
+        )
       ) {
-        setInvites(data.invitesList);
+        setInvites(
+          data.invitesList
+        );
       }
 
       if (section === "users") {
         const userData =
-          await adminRequest("users");
+          await adminRequest(
+            "users"
+          );
 
         if (
-          Array.isArray(userData.users)
+          Array.isArray(
+            userData.users
+          )
         ) {
-          setUsers(userData.users);
+          setUsers(
+            userData.users
+          );
         }
       }
 
       if (section === "leads") {
         const leadData =
-          await adminRequest("leads");
+          await adminRequest(
+            "leads"
+          );
 
         if (
-          Array.isArray(leadData.leads)
+          Array.isArray(
+            leadData.leads
+          )
         ) {
-          setLeads(leadData.leads);
+          setLeads(
+            leadData.leads
+          );
         }
       }
 
       if (section === "links") {
         const inviteData =
-          await adminRequest("invites");
+          await adminRequest(
+            "invites"
+          );
 
         if (
           Array.isArray(
@@ -285,9 +298,8 @@ export default function Admin() {
     } finally {
       setLoading(false);
     }
-  }
-
-  async function fetchRealLeads() {
+          }
+    async function fetchRealLeads() {
     try {
       setFetchingLeads(true);
       setFetchResult("");
@@ -484,293 +496,7 @@ export default function Admin() {
     },
   ];
 
-...options,
-      headers: {
-        "Content-Type": "application/json",
-        Authorization:
-          `Bearer ${session.access_token}`,
-        ...(options.headers || {}),
-      },
-    }
-  );
-
-  const text = await response.text();
-
-  let data: any;
-
-  try {
-    data = JSON.parse(text);
-  } catch {
-    throw new Error(
-      `Admin API returned ${response.status} instead of JSON.`
-    );
-  }
-
-  if (!response.ok) {
-    throw new Error(
-      data?.error ||
-        data?.message ||
-        "Admin request failed."
-    );
-  }
-
-  return data;
-}
-
-function dateText(
-  value?: string | null
-) {
-  if (!value) {
-    return "—";
-  }
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return date.toLocaleDateString();
-}
-
-function defaultLeadStats(): LeadStats {
-  return {
-    found: 0,
-    accepted: 0,
-    inserted: 0,
-    duplicate: 0,
-    stale: 0,
-    wrongType: 0,
-    noContact: 0,
-    noSkillMatch: 0,
-    blocked: 0,
-    insertErrors: 0,
-  };
-}
-
-export default function Admin() {
-  const navigate = useNavigate();
-
-  const [section, setSection] =
-    useState<AdminSection>("overview");
-
-  const [users, setUsers] =
-    useState<AdminUser[]>([]);
-
-  const [leads, setLeads] =
-    useState<AdminLead[]>([]);
-
-  const [invites, setInvites] =
-    useState<Invite[]>([]);
-
-  const [overview, setOverview] =
-    useState<OverviewData>({
-      users: 0,
-      activeUsers: 0,
-      demand: 0,
-      supply: 0,
-      saas: 0,
-      invites: 0,
-    });
-
-  const [loading, setLoading] =
-    useState(false);
-
-  const [error, setError] =
-    useState("");
-
-  const [fetchingLeads, setFetchingLeads] =
-    useState(false);
-
-  const [fetchResult, setFetchResult] =
-    useState("");
-
-  const [fetchDiagnostics, setFetchDiagnostics] =
-    useState<LeadFetchDiagnostics | null>(
-      null
-    );
-
-  async function loadData() {
-    try {
-      setLoading(true);
-      setError("");
-
-      const data =
-        await adminRequest("overview");
-
-      setOverview({
-        users: data.users ?? 0,
-        activeUsers:
-          data.activeUsers ?? 0,
-        demand: data.demand ?? 0,
-        supply: data.supply ?? 0,
-        saas: data.saas ?? 0,
-        invites: data.invites ?? 0,
-      });
-
-      if (
-        Array.isArray(data.usersList)
-      ) {
-        setUsers(data.usersList);
-      }
-
-      if (
-        Array.isArray(data.leads)
-      ) {
-        setLeads(data.leads);
-      }
-
-      if (
-        Array.isArray(data.invitesList)
-      ) {
-        setInvites(data.invitesList);
-      }
-
-      if (section === "users") {
-        const userData =
-          await adminRequest("users");
-
-        if (
-          Array.isArray(userData.users)
-        ) {
-          setUsers(userData.users);
-        }
-           if (section === "leads") {
-        const leadData =
-          await adminRequest("leads");
-
-        if (
-          Array.isArray(leadData.leads)
-        ) {
-          setLeads(leadData.leads);
-        }
-      }
-
-      if (section === "links") {
-        const inviteData =
-          await adminRequest("invites");
-
-        if (
-          Array.isArray(
-            inviteData.invites
-          )
-        ) {
-          setInvites(
-            inviteData.invites
-          );
-        }
-      }
-    } catch (err: any) {
-      setError(
-        err?.message ||
-          "Failed to load admin data."
-      );
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function fetchRealLeads() {
-    try {
-      setFetchingLeads(true);
-      setFetchResult("");
-      setFetchDiagnostics(null);
-      setError("");
-
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      if (!session?.access_token) {
-        throw new Error(
-          "Admin session not found."
-        );
-      }
-
-      const response = await fetch(
-        "/api/fetch-leads",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type":
-              "application/json",
-            Authorization:
-              `Bearer ${session.access_token}`,
-          },
-        }
-      );
-
-      const text =
-        await response.text();
-
-      let data: any;
-
-      try {
-        data = JSON.parse(text);
-      } catch {
-        throw new Error(
-          `Lead collector returned ${response.status} instead of JSON.`
-        );
-      }
-
-      if (
-        !response.ok ||
-        data?.success === false
-      ) {
-        throw new Error(
-          data?.error ||
-            data?.message ||
-            "Real lead collection failed."
-        );
-      }
-
-      const insertedByType =
-        data.insertedByType || {};
-
-      const totalInserted =
-        Object.values(
-          insertedByType
-        ).reduce(
-          (
-            sum: number,
-            value: unknown
-          ) =>
-            sum +
-            (typeof value === "number"
-              ? value
-              : 0),
-          0
-        );
-
-      const insertError =
-        data?.stats?.lastInsertError ||
-        "";
-
-      if (insertError) {
-        setFetchResult(
-          `Added ${totalInserted} leads — Demand: ${
-            insertedByType.Demand ?? 0
-          }, Supply: ${
-            insertedByType.Supply ?? 0
-          }, SaaS: ${
-            insertedByType.SaaS ?? 0
-          }\n\nInsert error: ${insertError}`
-        );
-      } else {
-        setFetchResult(
-          `Added ${totalInserted} leads — Demand: ${
-            insertedByType.Demand ?? 0
-          }, Supply: ${
-            insertedByType.Supply ?? 0
-          }, SaaS: ${
-            insertedByType.SaaS ?? 0
-          }`
-        );
-      }
-
-
-
-    return (
+  return (
     <div className="min-h-screen bg-black text-white">
       <div className="border-b border-[#222] bg-black">
         <div className="max-w-7xl mx-auto px-4 py-4">
@@ -797,7 +523,9 @@ export default function Admin() {
             </div>
 
             <button
-              onClick={() => void loadData()}
+              onClick={() =>
+                void loadData()
+              }
               disabled={loading}
               className="flex items-center gap-2 px-3 py-2 rounded-lg border border-[#333] bg-[#111] text-xs disabled:opacity-50"
             >
@@ -819,6 +547,7 @@ export default function Admin() {
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2 mb-6">
           {sections.map((item) => {
             const Icon = item.icon;
+
             const active =
               section === item.id;
 
@@ -865,8 +594,12 @@ export default function Admin() {
         {section === "leads" && (
           <LeadsSection
             leads={leads}
-            fetchRealLeads={fetchRealLeads}
-            fetchingLeads={fetchingLeads}
+            fetchRealLeads={
+              fetchRealLeads
+            }
+            fetchingLeads={
+              fetchingLeads
+            }
             fetchResult={fetchResult}
             fetchDiagnostics={
               fetchDiagnostics
@@ -908,7 +641,6 @@ export default function Admin() {
     </div>
   );
 }
-
 function OverviewSection({
   overview,
   onRefresh,
@@ -999,7 +731,7 @@ function OverviewSection({
       </div>
     </div>
   );
-        }
+}
 function UsersSection({
   users,
   updateUser,
@@ -1254,72 +986,52 @@ function LeadsSection({
                   </div>
 
                   <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
-                    <div className="text-[#777]">
-                      Found
-                    </div>
+                    <div className="text-[#777]">Found</div>
                     <div className="text-right">
                       {stats.found}
                     </div>
 
-                    <div className="text-[#777]">
-                      Accepted
-                    </div>
+                    <div className="text-[#777]">Accepted</div>
                     <div className="text-right">
                       {stats.accepted}
                     </div>
 
-                    <div className="text-[#777]">
-                      Inserted
-                    </div>
+                    <div className="text-[#777]">Inserted</div>
                     <div className="text-right">
                       {stats.inserted}
                     </div>
 
-                    <div className="text-[#777]">
-                      Duplicate
-                    </div>
+                    <div className="text-[#777]">Duplicate</div>
                     <div className="text-right">
                       {stats.duplicate}
                     </div>
 
-                    <div className="text-[#777]">
-                      Stale
-                    </div>
+                    <div className="text-[#777]">Stale</div>
                     <div className="text-right">
                       {stats.stale}
                     </div>
 
-                    <div className="text-[#777]">
-                      Wrong Type
-                    </div>
+                    <div className="text-[#777]">Wrong Type</div>
                     <div className="text-right">
                       {stats.wrongType}
                     </div>
 
-                    <div className="text-[#777]">
-                      No Contact
-                    </div>
+                    <div className="text-[#777]">No Contact</div>
                     <div className="text-right">
                       {stats.noContact}
                     </div>
 
-                    <div className="text-[#777]">
-                      No Skill
-                    </div>
+                    <div className="text-[#777]">No Skill</div>
                     <div className="text-right">
                       {stats.noSkillMatch}
                     </div>
 
-                    <div className="text-[#777]">
-                      Blocked
-                    </div>
+                    <div className="text-[#777]">Blocked</div>
                     <div className="text-right">
                       {stats.blocked}
                     </div>
 
-                    <div className="text-[#777]">
-                      Insert Errors
-                    </div>
+                    <div className="text-[#777]">Insert Errors</div>
                     <div className="text-right">
                       {stats.insertErrors}
                     </div>
@@ -1570,11 +1282,9 @@ function LinksSection({
             <option value="Basic">
               Basic
             </option>
-
             <option value="Premium">
               Premium
             </option>
-
             <option value="Gold">
               Gold
             </option>
@@ -1673,4 +1383,4 @@ function LinksSection({
       </div>
     </div>
   );
-        }
+}
