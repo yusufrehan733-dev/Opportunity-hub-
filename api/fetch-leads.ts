@@ -1708,13 +1708,17 @@ async function processResult(
   skills: SkillRow[],
   stats: CollectionStats
 ): Promise<CollectedLead | null> {
+async function processResult(
+  result: SearchResult,
+  type: LeadType,
+  skills: SkillRow[],
+  stats: CollectionStats
+): Promise<CollectedLead | null> {
   stats.found++;
 
   if (
     !result.link ||
-    isBlockedDomain(
-      result.link
-    )
+    isBlockedDomain(result.link)
   ) {
     stats.blocked++;
     return null;
@@ -1786,43 +1790,24 @@ async function processResult(
   const country =
     detectCountry(text);
 
-  if (
-    type === "SaaS" &&
-    !country
-  ) {
-    stats.wrongType++;
-    return null;
-  }
-
-  if (
-    type !== "SaaS" &&
-    !country
-  ) {
+  if (!country) {
     stats.wrongType++;
     return null;
   }
 
   const lead: CollectedLead = {
     leadType: type,
-    source:
-      result.link,
+    source: result.link,
     title,
-    name:
-      personName,
+    name: personName,
     description,
-    skill:
-      detectedSkill.name,
-    category:
-      detectedSkill.category,
-    subcategory:
-      detectedSkill.subcategory,
+    skill: detectedSkill.name,
+    category: detectedSkill.category,
+    subcategory: detectedSkill.subcategory,
     country,
-    contactEmail:
-      contact.email,
-    contactPhone:
-      contact.phone,
-    contactName:
-      personName,
+    contactEmail: contact.email,
+    contactPhone: contact.phone,
+    contactName: personName,
     contactUrl:
       contact.url ||
       result.link,
@@ -1835,11 +1820,10 @@ async function processResult(
   stats.accepted++;
 
   return lead;
-      }
+}
+
 async function collectLeadsForType(
-  supabase: ReturnType<
-    typeof createSupabase
-  >,
+  supabase: ReturnType<typeof createSupabase>,
   type: LeadType,
   skills: SkillRow[],
   stats: CollectionStats
@@ -1852,30 +1836,27 @@ async function collectLeadsForType(
 
   let insertedCount = 0;
 
-  for (
-    const query of queries
-  ) {
+  for (const query of queries) {
     let results: SearchResult[] = [];
-try {
-  results =
-    await searchSerper(
-      query,
-      type
-    );
-} catch (error) {
-  const message =
-    error instanceof Error
-      ? error.message
-      : "Serper search failed.";
 
-  throw new Error(
-    `${type} lead search failed: ${message}`
-  );
-}
+    try {
+      results =
+        await searchSerper(
+          query,
+          type
+        );
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Serper search failed.";
 
-    for (
-      const result of results
-    ) {
+      throw new Error(
+        `${type} lead search failed: ${message}`
+      );
+    }
+
+    for (const result of results) {
       const lead =
         await processResult(
           result,
@@ -1911,109 +1892,24 @@ try {
           );
 
         const {
-          error,
+          error: insertError,
         } = await supabase
           .from(table)
           .insert(payload);
-          if (error) {
-  throw new Error(
- const {
-  error,
-} = await supabase
-  .from(table)
-  .insert(payload);
 
-if (error) {
-  throw new Error(
-    `${type} lead insert failed: ${error.message}`
-  );
-}
+        if (insertError) {
+          throw new Error(
+            `${type} lead insert failed: ${insertError.message}`
+          );
+        }
 
-stats.inserted++;
-insertedCount++;
-} catch (error) {
-  throw error;
-      }   
-
- const {
-  error,
-} = await supabase
-  .from(table)
-  .insert(payload);
-
-if (error) {
-  throw new Error(
-    `${type} lead insert failed: ${error.message}`
-  );
-}
-
-stats.inserted++;
-insertedCount++;
-} catch (error) {
-  throw error;
-  } 
-
-    const stats =
-      emptyStats();
-
-    const requestedType =
-      typeof req.body?.type ===
-      "string"
-        ? req.body.type
-        : "";
-
-    const types: LeadType[] =
-      requestedType ===
-        "Demand" ||
-      requestedType ===
-        "Supply" ||
-      requestedType ===
-        "SaaS"
-        ? [
-            requestedType as LeadType,
-          ]
-        : [
-            "Demand",
-            "Supply",
-            "SaaS",
-          ];
-
-    const insertedByType: Record<
-      LeadType,
-      number
-    > = {
-      Demand: 0,
-      Supply: 0,
-      SaaS: 0,
-    };
-
-    for (
-      const type of types
-    ) {
-      insertedByType[type] =
-        await collectLeadsForType(
-          supabase,
-          type,
-          skills,
-          stats
-        );
+        stats.inserted++;
+        insertedCount++;
+      } catch (error) {
+        throw error;
+      }
     }
-return res.status(200).json({
-  ok: true,
-  message:
-    "Lead collection completed.",
-  types,
-  insertedByType,
-  stats,
-});
-     } catch (error) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : "Lead collection failed.";
-return res.status(500).json({
-  ok: false,
-  error: message,
-});
-}
-}
+  }
+
+  return insertedCount;
+    }
