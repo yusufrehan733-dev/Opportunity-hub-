@@ -249,8 +249,8 @@ export default function Admin() {
           Array.isArray(userData.users)
         ) {
           setUsers(userData.users);
-}
-      if (section === "leads") {
+        }
+           if (section === "leads") {
         const leadData =
           await adminRequest("leads");
 
@@ -480,7 +480,8 @@ export default function Admin() {
       label: "Links",
       icon: Link2,
     },
-  ];
+  ];   
+
     return (
     <div className="min-h-screen bg-black text-white">
       <div className="border-b border-[#222] bg-black">
