@@ -529,11 +529,12 @@ export default function Admin() {
           <LinksSection
             invites={invites}
             reload={loadData}
-          />
-        )}
-            </div>
+                  />
+      )}
     </div>
-  );
+  </div>
+);
+
 }
 
 function OverviewSection({
