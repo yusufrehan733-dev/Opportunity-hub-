@@ -454,8 +454,10 @@ export default function Admin() {
       id: "links",
       label: "Links",
       icon: Link2,
-    },
-      return (
+     },
+  ];
+
+  return (
   <div className="min-h-screen bg-black text-white">
     <div className="border-b border-[#222] bg-black">
       <div className="max-w-7xl mx-auto px-4 py-4">
