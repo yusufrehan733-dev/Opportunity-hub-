@@ -101,7 +101,8 @@ async function adminRequest(
       ...options,
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${session.access_token}`,
+        Authorization:
+          `Bearer ${session.access_token}`,
         ...(options.headers || {}),
       },
     }
@@ -119,68 +120,46 @@ async function adminRequest(
     );
   }
 
-  if (!response.ok || data?.success === false) {
+  if (!response.ok) {
     throw new Error(
-      data?.error || "Admin request failed."
+      data?.error ||
+        data?.message ||
+        "Admin request failed."
     );
   }
 
   return data;
 }
 
-function dateText(value?: string | null) {
-  if (!value) return "—";
+function dateText(
+  value?: string | null
+) {
+  if (!value) {
+    return "—";
+  }
 
   const date = new Date(value);
 
   if (Number.isNaN(date.getTime())) {
-    return "—";
+    return value;
   }
 
   return date.toLocaleDateString();
 }
 
-function getStatus(user: AdminUser) {
-  if (user.status) return user.status;
-
-  const now = new Date();
-
-  if (
-    user.trial_end &&
-    new Date(user.trial_end) > now
-  ) {
-    return "trial";
-  }
-
-  if (
-    user.subscription_end &&
-    new Date(user.subscription_end) > now
-  ) {
-    return "active";
-  }
-
-  if (!user.active) return "inactive";
-
-  return "expired";
-}
-
-function getStatusClass(status: string) {
-  if (
-    status === "active" ||
-    status === "trial"
-  ) {
-    return "text-[#00c98b]";
-  }
-
-  if (status === "expired") {
-    return "text-yellow-400";
-  }
-
-  if (status === "inactive") {
-    return "text-red-400";
-  }
-
-  return "text-[#aaa]";
+function defaultLeadStats(): LeadStats {
+  return {
+    found: 0,
+    accepted: 0,
+    inserted: 0,
+    duplicate: 0,
+    stale: 0,
+    wrongType: 0,
+    noContact: 0,
+    noSkillMatch: 0,
+    blocked: 0,
+    insertErrors: 0,
+  };
 }
 
 export default function Admin() {
@@ -207,7 +186,11 @@ export default function Admin() {
       saas: 0,
       invites: 0,
     });
-    const [error, setError] =
+
+  const [loading, setLoading] =
+    useState(false);
+
+  const [error, setError] =
     useState("");
 
   const [fetchingLeads, setFetchingLeads] =
@@ -217,7 +200,9 @@ export default function Admin() {
     useState("");
 
   const [fetchDiagnostics, setFetchDiagnostics] =
-    useState<LeadFetchDiagnostics | null>(null);
+    useState<LeadFetchDiagnostics | null>(
+      null
+    );
 
   async function loadData() {
     try {
@@ -229,22 +214,29 @@ export default function Admin() {
 
       setOverview({
         users: data.users ?? 0,
-        activeUsers: data.activeUsers ?? 0,
+        activeUsers:
+          data.activeUsers ?? 0,
         demand: data.demand ?? 0,
         supply: data.supply ?? 0,
         saas: data.saas ?? 0,
         invites: data.invites ?? 0,
       });
 
-      if (Array.isArray(data.usersList)) {
+      if (
+        Array.isArray(data.usersList)
+      ) {
         setUsers(data.usersList);
       }
 
-      if (Array.isArray(data.leads)) {
+      if (
+        Array.isArray(data.leads)
+      ) {
         setLeads(data.leads);
       }
 
-      if (Array.isArray(data.invitesList)) {
+      if (
+        Array.isArray(data.invitesList)
+      ) {
         setInvites(data.invitesList);
       }
 
@@ -252,7 +244,9 @@ export default function Admin() {
         const userData =
           await adminRequest("users");
 
-        if (Array.isArray(userData.users)) {
+        if (
+          Array.isArray(userData.users)
+        ) {
           setUsers(userData.users);
         }
       }
@@ -261,7 +255,9 @@ export default function Admin() {
         const leadData =
           await adminRequest("leads");
 
-        if (Array.isArray(leadData.leads)) {
+        if (
+          Array.isArray(leadData.leads)
+        ) {
           setLeads(leadData.leads);
         }
       }
@@ -270,14 +266,20 @@ export default function Admin() {
         const inviteData =
           await adminRequest("invites");
 
-        if (Array.isArray(inviteData.invites)) {
-          setInvites(inviteData.invites);
+        if (
+          Array.isArray(
+            inviteData.invites
+          )
+        ) {
+          setInvites(
+            inviteData.invites
+          );
         }
       }
     } catch (err: any) {
       setError(
         err?.message ||
-          "Could not load admin data."
+          "Failed to load admin data."
       );
     } finally {
       setLoading(false);
@@ -313,7 +315,8 @@ export default function Admin() {
           },
         }
       );
-            const text =
+
+      const text =
         await response.text();
 
       let data: any;
@@ -350,54 +353,109 @@ export default function Admin() {
       if (data.results) {
         setFetchDiagnostics({
           Demand:
-            data.results.Demand ?? {
-              found: 0,
-              accepted: 0,
-              inserted: 0,
-              duplicate: 0,
-              stale: 0,
-              wrongType: 0,
-              noContact: 0,
-              noSkillMatch: 0,
-              blocked: 0,
-              insertErrors: 0,
-            },
+            data.results.Demand ??
+            defaultLeadStats(),
 
           Supply:
-            data.results.Supply ?? {
-              found: 0,
-              accepted: 0,
-              inserted: 0,
-              duplicate: 0,
-              stale: 0,
-              wrongType: 0,
-              noContact: 0,
-              noSkillMatch: 0,
-              blocked: 0,
-              insertErrors: 0,
-            },
+            data.results.Supply ??
+            defaultLeadStats(),
 
           SaaS:
-            data.results.SaaS ?? {
-              found: 0,
-              accepted: 0,
-              inserted: 0,
-              duplicate: 0,
-              stale: 0,
-              wrongType: 0,
-              noContact: 0,
-              noSkillMatch: 0,
-              blocked: 0,
-              insertErrors: 0,
-            },
+            data.results.SaaS ??
+            defaultLeadStats(),
         });
       }
 
       await loadData();
     } catch (err: any) {
       setError(
-        err?.
-          return (
+        err?.message ||
+          "Real lead collection failed."
+      );
+    } finally {
+      setFetchingLeads(false);
+    }
+  }
+
+  async function updateUser(
+    user: AdminUser,
+    action:
+      | "renew"
+      | "upgrade"
+      | "cancel"
+      | "deactivate"
+      | "activate",
+    plan?: string
+  ) {
+    try {
+      setError("");
+
+      await adminRequest(
+        "set_user",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            id: user.id,
+            action,
+            plan,
+          }),
+        }
+      );
+
+      await loadData();
+    } catch (err: any) {
+      setError(
+        err?.message ||
+          "Failed to update user."
+      );
+    }
+  }
+
+  useEffect(() => {
+    void loadData();
+  }, [section]);
+
+  const sections: {
+    id: AdminSection;
+    label: string;
+    icon: any;
+  }[] = [
+    {
+      id: "overview",
+      label: "Overview",
+      icon: ShieldCheck,
+    },
+    {
+      id: "users",
+      label: "Users",
+      icon: Users,
+    },
+    {
+      id: "leads",
+      label: "Leads",
+      icon: Target,
+    },
+    {
+      id: "referrals",
+      label: "Referrals",
+      icon: UserPlus,
+    },
+    {
+      id: "resellers",
+      label: "Resellers",
+      icon: Store,
+    },
+    {
+      id: "subscription",
+      label: "Subscription",
+      icon: CreditCard,
+    },
+    {
+      id: "links",
+      label: "Links",
+      icon: Link2,
+    },
+      return (
     <div className="min-h-screen bg-black text-white">
       <div className="border-b border-[#222] bg-black">
         <div className="max-w-7xl mx-auto px-4 py-4">
@@ -409,27 +467,27 @@ export default function Admin() {
                 }
                 className="p-2 rounded-lg border border-[#333] bg-[#111]"
               >
-                <ArrowLeft size={18} />
+                <ArrowLeft size={17} />
               </button>
 
               <div>
-                <div className="text-lg font-semibold">
+                <h1 className="text-xl font-semibold">
                   Admin Dashboard
-                </div>
+                </h1>
 
-                <div className="text-xs text-[#777]">
-                  Opportunity Hub administration
-                </div>
+                <p className="text-xs text-[#666] mt-1">
+                  Opportunity Hub administration.
+                </p>
               </div>
             </div>
 
             <button
-              onClick={loadData}
+              onClick={() => void loadData()}
               disabled={loading}
               className="flex items-center gap-2 px-3 py-2 rounded-lg border border-[#333] bg-[#111] text-xs disabled:opacity-50"
             >
               <RefreshCw
-                size={14}
+                size={15}
                 className={
                   loading
                     ? "animate-spin"
@@ -529,12 +587,11 @@ export default function Admin() {
           <LinksSection
             invites={invites}
             reload={loadData}
-                  />
-      )}
+          />
+        )}
+      </div>
     </div>
-  </div>
-);
-
+  );
 }
 
 function OverviewSection({
@@ -543,7 +600,7 @@ function OverviewSection({
 }: {
   overview: OverviewData;
   onRefresh: () => Promise<void>;
-}) 
+}) {
   const cards = [
     {
       label: "Total Users",
@@ -627,34 +684,9 @@ function OverviewSection({
       </div>
     </div>
   );
-}
+        }
 
-function SimpleSection({
-  icon: Icon,
-  title,
-  text,
-}: {
-  icon: any;
-  title: string;
-  text: string;
-}) {
-  return (
-    <div className="rounded-xl border border-[#222] bg-[#111] p-5">
-      <div className="flex items-center gap-3">
-        <Icon size={20} />
-
-        <h2 className="text-lg font-semibold">
-          {title}
-        </h2>
-      </div>
-
-      <p className="text-sm text-[#777] mt-3">
-        {text}
-      </p>
-    </div>
-  );
-}
-
+  ];
 function UsersSection({
   users,
   updateUser,
@@ -663,75 +695,81 @@ function UsersSection({
   users: AdminUser[];
   updateUser: (
     user: AdminUser,
-    action: string,
+    action:
+      | "renew"
+      | "upgrade"
+      | "cancel"
+      | "deactivate"
+      | "activate",
     plan?: string
   ) => Promise<void>;
   loading: boolean;
 }) {
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-semibold">
-            Users
-          </h2>
+    <div className="space-y-5">
+      <div>
+        <h2 className="text-xl font-semibold">
+          Users
+        </h2>
 
-          <p className="text-sm text-[#777] mt-1">
-            Manage plans and account status.
-          </p>
-        </div>
-
-        {loading && (
-          <div className="text-xs text-[#777]">
-            Updating...
-          </div>
-        )}
+        <p className="text-sm text-[#777] mt-1">
+          Manage user plans and account status.
+        </p>
       </div>
 
-      {users.length === 0 ? (
-        <div className="rounded-xl border border-[#222] bg-[#111] p-5 text-sm text-[#888]">
+      {loading ? (
+        <div className="rounded-xl border border-[#222] bg-[#111] p-5 text-sm text-[#777]">
+          Loading users...
+        </div>
+      ) : users.length === 0 ? (
+        <div className="rounded-xl border border-[#222] bg-[#111] p-5 text-sm text-[#777]">
           No users found.
         </div>
       ) : (
-        users.map((user) => {
-          const status =
-            getStatus(user);
-
-          return (
+        <div className="space-y-3">
+          {users.map((user) => (
             <div
               key={user.id}
               className="rounded-xl border border-[#222] bg-[#111] p-4"
             >
-              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                <div>
-                  <div className="font-semibold">
+              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold">
                     {user.name ||
                       "Unnamed User"}
                   </div>
 
-                  <div className="text-xs text-[#777] mt-1">
+                  <div className="text-xs text-[#777] mt-1 break-all">
                     {user.email}
                   </div>
 
-                  <div className="flex flex-wrap gap-3 mt-3 text-xs">
-                    <span className="text-[#aaa]">
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    <span className="px-2 py-1 rounded-md bg-black border border-[#333] text-xs text-[#aaa]">
                       Plan:{" "}
-                      <span className="text-white">
-                        {user.plan ||
-                          "Basic"}
-                      </span>
+                      {user.plan || "—"}
                     </span>
 
                     <span
-                      className={getStatusClass(
-                        status
-                      )}
+                      className={`px-2 py-1 rounded-md bg-black border border-[#333] text-xs ${
+                        user.active
+                          ? "text-[#00c98b]"
+                          : "text-red-400"
+                      }`}
                     >
-                      Status: {status}
+                      {user.active
+                        ? "Active"
+                        : "Inactive"}
                     </span>
+
+                    {user.status && (
+                      <span className="px-2 py-1 rounded-md bg-black border border-[#333] text-xs text-[#aaa]">
+                        Status:{" "}
+                        {user.status}
+                      </span>
+                    )}
                   </div>
 
-                  <div className="text-xs text-[#666] mt-2">
+                  <div className="text-xs text-[#666] mt-3">
                     Trial:{" "}
                     {dateText(
                       user.trial_start
@@ -750,7 +788,7 @@ function UsersSection({
                   </div>
                 </div>
 
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2 lg:justify-end">
                   <button
                     onClick={() =>
                       updateUser(
@@ -761,19 +799,6 @@ function UsersSection({
                     className="px-3 py-2 rounded-lg bg-[#1b1b1b] border border-[#333] text-xs"
                   >
                     Renew
-                  </button>
-
-                  <button
-                    onClick={() =>
-                      updateUser(
-                        user,
-                        "upgrade",
-                        "Basic"
-                      )
-                    }
-                    className="px-3 py-2 rounded-lg bg-[#1b1b1b] border border-[#333] text-xs"
-                  >
-                    Basic
                   </button>
 
                   <button
@@ -840,13 +865,14 @@ function UsersSection({
                 </div>
               </div>
             </div>
-          );
-        })
+          ))}
+        </div>
       )}
     </div>
   );
-      }
-    function LeadsSection({
+}
+
+function LeadsSection({
   leads,
   fetchRealLeads,
   fetchingLeads,
@@ -857,42 +883,56 @@ function UsersSection({
   fetchRealLeads: () => Promise<void>;
   fetchingLeads: boolean;
   fetchResult: string;
-  fetchDiagnostics: LeadFetchDiagnostics | null;
+  fetchDiagnostics:
+    | LeadFetchDiagnostics
+    | null;
 }) {
   return (
-    <div className="space-y-3">
-      <div className="rounded-xl border border-[#222] bg-[#111] p-4">
-        <div className="font-semibold">
-          Real Lead Collection
-        </div>
+    <div className="space-y-5">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-semibold">
+            Real Lead Collection
+          </h2>
 
-        <div className="text-xs text-[#777] mt-1">
-          Fetch fresh Demand, Supply and SaaS
-          leads from the real lead collector.
+          <p className="text-sm text-[#777] mt-1">
+            Fetch fresh Demand, Supply and SaaS leads from the real lead collector.
+          </p>
         </div>
 
         <button
           onClick={fetchRealLeads}
           disabled={fetchingLeads}
-          className="mt-4 w-full rounded-lg bg-white text-black py-3 text-sm font-semibold disabled:opacity-50"
+          className="flex items-center justify-center gap-2 rounded-lg bg-white text-black px-4 py-3 text-sm font-semibold disabled:opacity-50"
         >
+          <RefreshCw
+            size={16}
+            className={
+              fetchingLeads
+                ? "animate-spin"
+                : ""
+            }
+          />
+
           {fetchingLeads
-            ? "Fetching Real Leads..."
+            ? "Fetching..."
             : "Fetch Real Leads"}
         </button>
+      </div>
 
-        {fetchResult && (
-          <div className="mt-3 rounded-lg border border-[#333] bg-[#0a0a0a] p-3 text-xs text-[#aaa]">
-            {fetchResult}
-          </div>
-        )}
+      {fetchResult && (
+        <div className="rounded-xl border border-[#333] bg-[#111] p-4 text-sm text-[#ddd]">
+          {fetchResult}
+        </div>
+      )}
 
-        {fetchDiagnostics && (
-          <div className="mt-3 rounded-lg border border-[#333] bg-[#0a0a0a] p-3">
-            <div className="text-xs font-semibold text-white mb-3">
-              Collector Diagnostics
-            </div>
+      {fetchDiagnostics && (
+        <div className="space-y-3">
+          <h3 className="text-sm font-semibold">
+            Collector Diagnostics
+          </h3>
 
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {(
               [
                 "Demand",
@@ -906,131 +946,181 @@ function UsersSection({
               return (
                 <div
                   key={type}
-                  className="mb-4 last:mb-0"
+                  className="rounded-xl border border-[#222] bg-[#111] p-4"
                 >
-                  <div className="text-xs font-semibold text-[#ddd] mb-2">
+                  <div className="text-sm font-semibold mb-3">
                     {type}
                   </div>
 
-                  <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-[11px]">
-                    <div className="text-[#aaa]">
-                      Found:{" "}
-                      <span className="text-white">
-                        {stats.found}
-                      </span>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+                    <div className="text-[#777]">
+                      Found
+                    </div>
+                    <div className="text-right">
+                      {stats.found}
                     </div>
 
-                    <div className="text-[#aaa]">
-                      Accepted:{" "}
-                      <span className="text-white">
-                        {stats.accepted}
-                      </span>
+                    <div className="text-[#777]">
+                      Accepted
+                    </div>
+                    <div className="text-right">
+                      {stats.accepted}
                     </div>
 
-                    <div className="text-[#aaa]">
-                      Inserted:{" "}
-                      <span className="text-[#00c98b]">
-                        {stats.inserted}
-                      </span>
+                    <div className="text-[#777]">
+                      Inserted
+                    </div>
+                    <div className="text-right">
+                      {stats.inserted}
                     </div>
 
-                    <div className="text-[#aaa]">
-                      Duplicate:{" "}
-                      <span className="text-white">
-                        {stats.duplicate}
-                      </span>
+                    <div className="text-[#777]">
+                      Duplicate
+                    </div>
+                    <div className="text-right">
+                      {stats.duplicate}
                     </div>
 
-                    <div className="text-[#aaa]">
-                      Stale:{" "}
-                      <span className="text-yellow-400">
-                        {stats.stale}
-                      </span>
+                    <div className="text-[#777]">
+                      Stale
+                    </div>
+                    <div className="text-right">
+                      {stats.stale}
                     </div>
 
-                    <div className="text-[#aaa]">
-                      Wrong Type:{" "}
-                      <span className="text-white">
-                        {stats.wrongType}
-                      </span>
+                    <div className="text-[#777]">
+                      Wrong Type
+                    </div>
+                    <div className="text-right">
+                      {stats.wrongType}
                     </div>
 
-                    <div className="text-[#aaa]">
-                      No Contact:{" "}
-                      <span className="text-yellow-400">
-                        {stats.noContact}
-                      </span>
+                    <div className="text-[#777]">
+                      No Contact
+                    </div>
+                    <div className="text-right">
+                      {stats.noContact}
                     </div>
 
-                    <div className="text-[#aaa]">
-                      No Skill:{" "}
-                      <span className="text-yellow-400">
-                        {stats.noSkillMatch}
-                      </span>
+                    <div className="text-[#777]">
+                      No Skill
+                    </div>
+                    <div className="text-right">
+                      {stats.noSkillMatch}
                     </div>
 
-                    <div className="text-[#aaa]">
-                      Blocked:{" "}
-                      <span className="text-white">
-                        {stats.blocked}
-                      </span>
+                    <div className="text-[#777]">
+                      Blocked
+                    </div>
+                    <div className="text-right">
+                      {stats.blocked}
                     </div>
 
-                    <div className="text-[#aaa]">
-                      Insert Errors:{" "}
-                      <span className="text-red-400">
-                        {stats.insertErrors}
-                      </span>
+                    <div className="text-[#777]">
+                      Insert Errors
+                    </div>
+                    <div className="text-right">
+                      {stats.insertErrors}
                     </div>
                   </div>
                 </div>
               );
             })}
           </div>
+        </div>
+      )}
+        <div>
+        <h3 className="text-sm font-semibold mb-3">
+          Current Leads
+        </h3>
+
+        {leads.length === 0 ? (
+          <div className="rounded-xl border border-[#222] bg-[#111] p-5 text-sm text-[#777]">
+            No leads found.
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {leads.map((lead) => (
+              <div
+                key={lead.id}
+                className="rounded-xl border border-[#222] bg-[#111] p-4"
+              >
+                <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold">
+                      {lead.title ||
+                        lead.client_name ||
+                        "Untitled lead"}
+                    </div>
+
+                    <div className="text-xs text-[#888] mt-1">
+                      {lead.skill_needed ||
+                        "—"}{" "}
+                      {lead.country
+                        ? `· ${lead.country}`
+                        : ""}
+                    </div>
+
+                    {lead.description && (
+                      <div className="text-sm text-[#aaa] mt-3">
+                        {lead.description}
+                      </div>
+                    )}
+
+                    <div className="text-xs text-[#666] mt-3">
+                      {lead.source ||
+                        "Unknown source"}{" "}
+                      ·{" "}
+                      {dateText(
+                        lead.created_at
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         )}
       </div>
+    </div>
+  );
+}
 
-      {leads.length === 0 ? (
-        <div className="rounded-xl border border-[#222] bg-[#111] p-5 text-sm text-[#888]">
-          No leads found.
+function SimpleSection({
+  icon: Icon,
+  title,
+  text,
+}: {
+  icon: any;
+  title: string;
+  text: string;
+}) {
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center gap-3">
+        <div className="p-2 rounded-lg border border-[#333] bg-[#111]">
+          <Icon
+            size={18}
+            className="text-[#aaa]"
+          />
         </div>
-      ) : (
-        leads.map((lead) => (
-          <div
-            key={lead.id}
-            className="rounded-xl border border-[#222] bg-[#111] p-4"
-          >
-            <div className="font-semibold">
-              {lead.title ||
-                lead.client_name ||
-                "Untitled Lead"}
-            </div>
 
-            <div className="text-xs text-[#888] mt-1">
-              {lead.skill_needed ||
-                "—"}{" "}
-              {lead.country
-                ? `· ${lead.country}`
-                : ""}
-            </div>
+        <div>
+          <h2 className="text-xl font-semibold">
+            {title}
+          </h2>
 
-            {lead.description && (
-              <div className="text-sm text-[#aaa] mt-3">
-                {lead.description}
-              </div>
-            )}
+          <p className="text-sm text-[#777] mt-1">
+            {text}
+          </p>
+        </div>
+      </div>
 
-            <div className="text-xs text-[#666] mt-3">
-              {lead.source ||
-                "Unknown source"}{" "}
-              ·{" "}
-              {dateText(
-                lead.created_at
-              )}
-            </div>
-          </div>
-        ))
-      )}
+      <div className="rounded-xl border border-[#222] bg-[#111] p-5">
+        <div className="text-sm text-[#aaa]">
+          This section is available from the Admin dashboard.
+        </div>
+      </div>
     </div>
   );
 }
@@ -1048,20 +1138,24 @@ function LinksSection({
   const [plan, setPlan] =
     useState("Basic");
 
+  const [creating, setCreating] =
+    useState(false);
+
   const [inviteUrl, setInviteUrl] =
     useState("");
 
   const [copied, setCopied] =
     useState(false);
 
-  const [creating, setCreating] =
-    useState(false);
+  const [error, setError] =
+    useState("");
 
   async function createInvite() {
-    if (!email.trim()) return;
-
     try {
       setCreating(true);
+      setError("");
+      setInviteUrl("");
+      setCopied(false);
 
       const data =
         await adminRequest(
@@ -1076,14 +1170,18 @@ function LinksSection({
         );
 
       setInviteUrl(
-        data.invite_url || ""
+        data.inviteUrl ||
+          data.url ||
+          ""
       );
+
+      setEmail("");
 
       await reload();
     } catch (err: any) {
-      alert(
+      setError(
         err?.message ||
-          "Could not create invite."
+          "Failed to create referral link."
       );
     } finally {
       setCreating(false);
@@ -1091,18 +1189,25 @@ function LinksSection({
   }
 
   async function copyInvite() {
-    if (!inviteUrl) return;
+    if (!inviteUrl) {
+      return;
+    }
 
-    await navigator.clipboard.writeText(
-      inviteUrl
-    );
+    try {
+      await navigator.clipboard.writeText(
+        inviteUrl
+      );
 
-    setCopied(true);
+      setCopied(true);
 
-    setTimeout(
-      () => setCopied(false),
-      1500
-    );
+      window.setTimeout(() => {
+        setCopied(false);
+      }, 2000);
+    } catch {
+      setError(
+        "Could not copy the referral URL."
+      );
+    }
   }
 
   return (
@@ -1113,18 +1218,24 @@ function LinksSection({
         </h2>
 
         <p className="text-sm text-[#777] mt-1">
-          Create unique invitation links for
-          new users.
+          Create valid invite and referral links.
         </p>
       </div>
 
+      {error && (
+        <div className="rounded-lg border border-red-900 bg-[#160808] p-3 text-sm text-red-300">
+          {error}
+        </div>
+      )}
+
       <div className="rounded-xl border border-[#222] bg-[#111] p-4 space-y-4">
         <div>
-          <label className="text-xs text-[#888]">
+          <label className="block text-xs text-[#777] mb-2">
             Email
           </label>
 
           <input
+            type="email"
             value={email}
             onChange={(event) =>
               setEmail(
@@ -1132,12 +1243,12 @@ function LinksSection({
               )
             }
             placeholder="user@example.com"
-            className="mt-2 w-full rounded-lg border border-[#333] bg-black px-3 py-3 text-sm text-white outline-none"
+            className="w-full rounded-lg border border-[#333] bg-black px-3 py-3 text-sm text-white outline-none"
           />
         </div>
 
         <div>
-          <label className="text-xs text-[#888]">
+          <label className="block text-xs text-[#777] mb-2">
             Plan
           </label>
 
@@ -1148,7 +1259,7 @@ function LinksSection({
                 event.target.value
               )
             }
-            className="mt-2 w-full rounded-lg border border-[#333] bg-black px-3 py-3 text-sm text-white outline-none"
+            className="w-full rounded-lg border border-[#333] bg-black px-3 py-3 text-sm text-white outline-none"
           >
             <option value="Basic">
               Basic
@@ -1204,9 +1315,9 @@ function LinksSection({
       </div>
 
       <div className="rounded-xl border border-[#222] bg-[#111] p-4">
-        <div className="font-semibold">
-          Existing Invites
-        </div>
+        <h3 className="text-sm font-semibold">
+          Existing Referral Links
+        </h3>
 
         <div className="mt-3 space-y-2">
           {invites.length === 0 ? (
@@ -1258,4 +1369,4 @@ function LinksSection({
       </div>
     </div>
   );
-                        }
+            }
