@@ -686,9 +686,8 @@ function OverviewSection({
       </div>
     </div>
   );
-        }
+}
 
-  ];
 function UsersSection({
   users,
   updateUser,
