@@ -2000,24 +2000,22 @@ export default async function handler(
           stats
         );
     }
-
-    return res.status(200).json({
-      ok: true,
-      message:
-        "Lead collection completed.",
-      types,
-      insertedByType,
-      stats,
-    });
-  } catch (error) {
+return res.status(200).json({
+  ok: true,
+  message:
+    "Lead collection completed.",
+  types,
+  insertedByType,
+  stats,
+});
+     } catch (error) {
     const message =
       error instanceof Error
         ? error.message
         : "Lead collection failed.";
-
-    return res.status(500).json({
-      ok: false,
-      error: message,
-    });
-  }
-  }
+return res.status(500).json({
+  ok: false,
+  error: message,
+});
+}
+}
