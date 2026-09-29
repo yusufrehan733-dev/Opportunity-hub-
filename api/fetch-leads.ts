@@ -2505,6 +2505,122 @@ function leadInsertPayload(
       lead.subcategory ||
       null,
 
+function leadInsertPayload(
+  lead: CollectedLead
+) {
+  /*
+   * SaaS uses the actual existing
+   * saas_leads table schema:
+   *
+   * id, name, platform, nich, contect,
+   * status, description, commission,
+   * trial_days, landing_url, source_url,
+   * contect_url, country, city
+   */
+  if (
+    lead.leadType === "SaaS"
+  ) {
+    return {
+      name:
+        lead.name ||
+        null,
+
+      platform:
+        "Opportunity Hub",
+
+      nich:
+        lead.skill ||
+        null,
+
+      contect:
+        lead.contactName ||
+        lead.contactEmail ||
+        lead.contactPhone ||
+        null,
+
+      status:
+        "active",
+
+      description:
+        lead.description ||
+        null,
+
+      commission:
+        null,
+
+      trial_days:
+        null,
+
+      landing_url:
+        lead.contactUrl ||
+        lead.source ||
+        null,
+
+      source_url:
+        lead.source ||
+        null,
+
+      contect_url:
+        lead.contactUrl ||
+        null,
+
+      country:
+        lead.country ||
+        null,
+
+      city:
+        lead.city ||
+        null,
+    };
+  }
+
+  /*
+   * Demand and Supply use their
+   * existing lead schema.
+   */
+  return {
+    source:
+      lead.source,
+
+    name:
+      lead.name ||
+      null,
+
+    skill_needed:
+      lead.skill ||
+      null,
+
+    description:
+      lead.description ||
+      null,
+
+    contact_email:
+      lead.contactEmail ||
+      null,
+
+    contact_phone:
+      lead.contactPhone ||
+      null,
+
+    contact_name:
+      lead.contactName ||
+      lead.name ||
+      null,
+
+    status:
+      "active",
+
+    title:
+      lead.title,
+
+    category:
+      lead.category ||
+      null,
+
+    subcategory:
+      lead.subcategory ||
+      null,
+
     country:
       lead.country ||
       null,
