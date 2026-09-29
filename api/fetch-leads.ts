@@ -2391,10 +2391,78 @@ async function loadSkills(
     ? data
     : [];
 }
+
 function leadInsertPayload(
   lead: CollectedLead
 ) {
-  const payload = {
+  /*
+   * SaaS has a smaller schema than
+   * Demand/Supply.
+   *
+   * Keep only fields that belong
+   * to the existing SaaS lead table.
+   */
+  if (
+    lead.leadType === "SaaS"
+  ) {
+    return {
+      source:
+        lead.source,
+
+      name:
+        lead.name ||
+        null,
+
+      skill_needed:
+        lead.skill ||
+        null,
+
+      description:
+        lead.description ||
+        null,
+
+      contact_email:
+        lead.contactEmail ||
+        null,
+
+      contact_phone:
+        lead.contactPhone ||
+        null,
+
+      contact_name:
+        lead.contactName ||
+        lead.name ||
+        null,
+
+      status:
+        "active",
+
+      title:
+        lead.title,
+
+      country:
+        lead.country ||
+        null,
+
+      city:
+        lead.city ||
+        null,
+
+      contact_url:
+        lead.contactUrl ||
+        null,
+
+      created_at:
+        lead.createdAt ||
+        new Date().toISOString(),
+    };
+  }
+
+  /*
+   * Demand and Supply use the
+   * larger lead schema.
+   */
+  return {
     source:
       lead.source,
 
@@ -2445,6 +2513,14 @@ function leadInsertPayload(
       lead.city ||
       null,
 
+    budget:
+      lead.budget ||
+      null,
+
+    currency:
+      lead.currency ||
+      null,
+
     contact_url:
       lead.contactUrl ||
       null,
@@ -2453,34 +2529,7 @@ function leadInsertPayload(
       lead.createdAt ||
       new Date().toISOString(),
   };
-
-  /*
-   * Demand and Supply support
-   * budget/currency.
-   *
-   * SaaS does NOT have these
-   * columns, so they are excluded.
-   */
-  if (
-    lead.leadType === "Demand" ||
-    lead.leadType === "Supply"
-  ) {
-    return {
-      ...payload,
-
-      budget:
-        lead.budget ||
-        null,
-
-      currency:
-        lead.currency ||
-        null,
-    };
-  }
-
-  return payload;
 }
-
 async function leadAlreadyExists(
   supabase: ReturnType<
     typeof createSupabase
