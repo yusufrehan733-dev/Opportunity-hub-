@@ -2544,17 +2544,20 @@ async function leadAlreadyExists(
       .limit(1);
 
   /*
-   * SaaS uses the actual column
-   * contect_url, not contact_url.
+   * SaaS uses source_url for
+   * duplicate detection.
+   *
+   * This is an actual column in
+   * the existing saas_leads table.
    */
   if (
     lead.leadType === "SaaS" &&
-    lead.contactUrl
+    lead.source
   ) {
     query =
       query.eq(
-        "contect_url",
-        lead.contactUrl
+        "source_url",
+        lead.source
       );
   } else if (
     lead.source
@@ -2568,7 +2571,7 @@ async function leadAlreadyExists(
 
   const {
     data,
-    error,
+    error
   } =
     await query;
 
@@ -2583,7 +2586,6 @@ async function leadAlreadyExists(
     data.length > 0
   );
 }
-
 async function processResult(
   result: SearchResult,
   type: LeadType,
