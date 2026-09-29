@@ -2058,18 +2058,12 @@ function stripHtml(
       .trim()
   );
 }
-
 function parseGoogleResults(
   html: string
 ): SearchResult[] {
   const results: SearchResult[] =
     [];
 
-  /*
-   * Google result links are extracted from
-   * normal anchor tags. We intentionally reject
-   * Google's own navigation/search URLs.
-   */
   const anchorPattern =
     /<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
 
@@ -2091,19 +2085,13 @@ function parseGoogleResults(
     const anchorHtml =
       match[2] || "";
 
-    if (
-      !rawHref
-    ) {
+    if (!rawHref) {
       continue;
     }
 
     let url =
       rawHref;
 
-    /*
-     * Google sometimes wraps the actual URL
-     * inside /url?q=...
-     */
     if (
       url.startsWith(
         "/url?"
@@ -2167,14 +2155,77 @@ function parseGoogleResults(
       continue;
     }
 
-    let containerText =
-      title;
+    /*
+     * Capture the surrounding Google result text.
+     * This gives the collector access to the actual
+     * search-result context, not just the title.
+     */
+    const anchorStart =
+      match.index;
+
+    const surroundingStart =
+      Math.max(
+        0,
+        anchorStart - 500
+      );
+
+    const surroundingEnd =
+      Math.min(
+        html.length,
+        anchorStart +
+          match[0].length +
+          2500
+      );
+
+    const surroundingHtml =
+      html.slice(
+        surroundingStart,
+        surroundingEnd
+      );
+
+    const surroundingText =
+      cleanText(
+        stripHtml(
+          surroundingHtml
+        )
+      );
+
+    let snippet =
+      surroundingText;
+
+    if (
+      title &&
+      snippet
+        .toLowerCase()
+        .startsWith(
+          title.toLowerCase()
+        )
+    ) {
+      snippet =
+        snippet
+          .slice(
+            title.length
+          )
+          .trim();
+    }
+
+    if (
+      snippet.length >
+      1500
+    ) {
+      snippet =
+        snippet.slice(
+          0,
+          1500
+        );
+    }
 
     const result: SearchResult = {
       title,
       link: url,
       snippet:
-        containerText,
+        snippet ||
+        title,
     };
 
     const duplicate =
@@ -2184,11 +2235,15 @@ function parseGoogleResults(
           result.link
       );
 
-    if (!duplicate) {
-      results.push(
-        result
-      );
+    if (
+      duplicate
+    ) {
+      continue;
     }
+
+    results.push(
+      result
+    );
 
     if (
       results.length >=
@@ -2199,7 +2254,7 @@ function parseGoogleResults(
   }
 
   return results;
-}
+    }
 
 async function searchWithFallback(
   query: string,
