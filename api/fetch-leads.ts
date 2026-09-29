@@ -2298,9 +2298,74 @@ function resultMatchesType(
       result
     );
 
+  const title =
+    normalize(
+      result.title || ""
+    );
+
+  const link =
+    normalize(
+      result.link || ""
+    );
+
   if (type === "SaaS") {
-    return isIndividualSaasProfile(
-      result
+    /*
+     * SaaS must still be an individual professional.
+     * First use the full existing SaaS validation.
+     */
+    if (
+      isIndividualSaasProfile(
+        result
+      )
+    ) {
+      return true;
+    }
+
+    /*
+     * Some genuine professional profiles are returned
+     * with profile URLs but their title/snippet does not
+     * contain enough information for the stricter helper.
+     *
+     * Allow only recognizable individual-profile URLs
+     * combined with professional language.
+     */
+    const individualProfileUrl =
+      link.includes(
+        "linkedin.com/in/"
+      ) ||
+      link.includes(
+        "facebook.com/"
+      ) ||
+      link.includes(
+        "instagram.com/"
+      ) ||
+      link.includes(
+        "x.com/"
+      ) ||
+      link.includes(
+        "twitter.com/"
+      ) ||
+      link.includes(
+        "threads.net/@"
+      );
+
+    const professionalProfile =
+      containsAny(
+        text,
+        PROFESSIONAL_TERMS
+      );
+
+    const personName =
+      hasLikelyPersonName(
+        extractPersonName(
+          result
+        )
+      );
+
+    return (
+      individualProfileUrl &&
+      professionalProfile &&
+      personName
     );
   }
 
@@ -2309,16 +2374,47 @@ function resultMatchesType(
       text,
       [
         ...DEMAND_SIGNALS,
+
         "client needs",
         "help needed",
         "assistance needed",
+
         "looking for someone",
+        "looking for a",
+        "looking for an",
+
         "need help",
+        "need someone",
         "need a teacher",
         "need a tutor",
         "need a coach",
+        "need a consultant",
+        "need a mentor",
+
+        "teacher needed",
+        "tutor needed",
+        "coach needed",
+        "consultant needed",
+        "mentor needed",
+
+        "teacher wanted",
+        "tutor wanted",
+        "coach wanted",
+
         "seeking a teacher",
         "seeking a tutor",
+        "seeking a coach",
+        "seeking a consultant",
+        "seeking a mentor",
+
+        "seeking services",
+        "request for",
+        "requesting",
+        "service needed",
+        "services needed",
+        "private tutor needed",
+        "online tutor needed",
+        "online teacher needed",
       ]
     );
   }
@@ -2327,18 +2423,45 @@ function resultMatchesType(
     text,
     [
       ...SUPPLY_SIGNALS,
+
       "hiring for",
       "we're hiring",
+      "we are hiring",
       "we are looking for",
+      "we're looking for",
+
       "join our team",
       "open position",
       "open positions",
+      "open role",
+      "open roles",
+
       "employment opportunity",
+      "employment opportunities",
       "career opportunity",
+      "career opportunities",
+
+      "position available",
+      "positions available",
+      "vacant position",
+      "vacancy for",
+
+      "seeking applicants",
+      "accepting applications",
+      "applications are open",
+      "now recruiting",
+      "currently recruiting",
+
+      "teacher vacancy",
+      "tutor vacancy",
+      "coach vacancy",
+      "teaching position",
+      "teaching opportunity",
+      "tutoring position",
+      "coaching position",
     ]
   );
 }
-
 async function loadSkills(
   supabase: ReturnType<
     typeof createSupabase
