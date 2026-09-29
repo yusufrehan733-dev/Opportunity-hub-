@@ -247,6 +247,7 @@ const COUNTRY_ALIASES: Record<
     "dutch",
   ],
 };
+
 const DEMAND_SIGNALS = [
   "looking for",
   "need a",
@@ -260,7 +261,6 @@ const DEMAND_SIGNALS = [
   "help needed",
   "assistance needed",
 ];
-
 const SUPPLY_SIGNALS = [
   "hiring",
   "we are hiring",
@@ -570,7 +570,6 @@ function containsAny(
       )
   );
 }
-
 function parseResultDate(
   result: SearchResult
 ): Date | null {
@@ -616,7 +615,8 @@ function isFresh(
     ageMs >= 0 &&
     ageMs <= maxAgeMs
   );
-  }
+}
+
 function extractEmails(
   text: string
 ): string[] {
@@ -648,10 +648,14 @@ function extractPhones(
   return [
     ...new Set(
       matches
-        .map((phone) =>
-          phone
-            .replace(/\s+/g, " ")
-            .trim()
+        .map(
+          (phone) =>
+            phone
+              .replace(
+                /\s+/g,
+                " "
+              )
+              .trim()
         )
         .filter(
           (phone) =>
@@ -966,7 +970,7 @@ function detectSkill(
   }
 
   return undefined;
-}
+  }
 function extractContactLinks(
   html: string,
   baseUrl: string
@@ -1302,8 +1306,7 @@ function isInstagramPersonProfile(
   } catch {
     return false;
   }
-}
-
+  }
 function isXPersonProfile(
   url?: string
 ): boolean {
@@ -1324,10 +1327,8 @@ function isXPersonProfile(
         );
 
     if (
-      host !==
-        "x.com" &&
-      host !==
-        "twitter.com"
+      host !== "x.com" &&
+      host !== "twitter.com"
     ) {
       return false;
     }
@@ -1389,8 +1390,7 @@ function isThreadsPersonProfile(
         );
 
     if (
-      host !==
-      "threads.net"
+      host !== "threads.net"
     ) {
       return false;
     }
@@ -1402,8 +1402,7 @@ function isThreadsPersonProfile(
 
     if (
       parts.length !== 2 ||
-      parts[0] !==
-        "@"
+      parts[0] !== "@"
     ) {
       return false;
     }
@@ -1434,7 +1433,8 @@ function isDirectSocialProfile(
       url
     )
   );
-    }
+}
+
 function extractPersonName(
   text: string
 ): string | undefined {
@@ -1512,9 +1512,7 @@ function extractPersonName(
       words.some(
         (word) =>
           genericTerms.has(
-            normalize(
-              word
-            )
+            normalize(word)
           )
       )
     ) {
@@ -1576,29 +1574,18 @@ function extractPersonName(
 function hasLikelyPersonName(
   result: SearchResult
 ): boolean {
-  const title =
-    cleanText(
-      result.title
-    );
-
-  const snippet =
-    cleanText(
-      result.snippet
-    );
-
-  const combined =
-    `${title} ${snippet}`;
-
-  const personName =
-    extractPersonName(
-      combined
-    );
+  const text =
+    [
+      result.title,
+      result.snippet,
+    ]
+      .filter(Boolean)
+      .join(" ");
 
   return Boolean(
-    personName
+    extractPersonName(text)
   );
 }
-
 function isSaasProfessional(
   text: string
 ): boolean {
@@ -1783,7 +1770,8 @@ function getDirectContact(
     phone:
       phones[0],
   };
-      }
+}
+
 async function improveContact(
   result: SearchResult
 ): Promise<ContactInfo> {
@@ -1894,7 +1882,6 @@ async function improveContact(
     };
   }
 }
-
 function buildSkillSearchTerms(
   skill: SkillRow
 ): string[] {
@@ -2140,7 +2127,8 @@ function buildSkillSearchTerms(
     skill.category || "",
     skill.subcategory || "",
   ].filter(Boolean);
-      }
+}
+
 function buildQueries(
   type: LeadType,
   skills: SkillRow[]
@@ -2186,10 +2174,6 @@ function buildQueries(
     );
   }
 
-  /*
-   * SaaS searches for individual
-   * professional profiles.
-   */
   return selected.map(
     (skill) =>
       `"${skill}" ("teacher" OR "tutor" OR "coach" OR "consultant" OR "mentor" OR "freelancer") ("profile" OR "professional")`
@@ -2258,8 +2242,7 @@ async function searchSerper(
   )
     ? data.organic
     : [];
-}
-
+      }
 function resultMatchesType(
   result: SearchResult,
   type: LeadType
@@ -2392,131 +2375,32 @@ async function loadSkills(
     : [];
 }
 
+/*
+ * IMPORTANT:
+ * Demand/Supply use their existing
+ * lead table schema.
+ *
+ * SaaS uses the actual existing
+ * saas_leads schema:
+ *
+ * id
+ * name
+ * platform
+ * nich
+ * contect
+ * status
+ * description
+ * commission
+ * trial_days
+ * landing_url
+ * source_url
+ * contect_url
+ * country
+ * city
+ */
 function leadInsertPayload(
   lead: CollectedLead
 ) {
-  /*
-   * SaaS has a smaller schema than
-   * Demand/Supply.
-   *
-   * Keep only fields that belong
-   * to the existing SaaS lead table.
-   */
-  if (
-    lead.leadType === "SaaS"
-  ) {
-    return {
-      source:
-        lead.source,
-
-      name:
-        lead.name ||
-        null,
-
-      skill_needed:
-        lead.skill ||
-        null,
-
-      description:
-        lead.description ||
-        null,
-
-      contact_email:
-        lead.contactEmail ||
-        null,
-
-      contact_phone:
-        lead.contactPhone ||
-        null,
-
-      contact_name:
-        lead.contactName ||
-        lead.name ||
-        null,
-
-      status:
-        "active",
-
-      title:
-        lead.title,
-
-      country:
-        lead.country ||
-        null,
-
-      city:
-        lead.city ||
-        null,
-
-      contact_url:
-        lead.contactUrl ||
-        null,
-
-      created_at:
-        lead.createdAt ||
-        new Date().toISOString(),
-    };
-  }
-
-  /*
-   * Demand and Supply use the
-   * larger lead schema.
-   */
-  return {
-    source:
-      lead.source,
-
-    name:
-      lead.name ||
-      null,
-
-    skill_needed:
-      lead.skill ||
-      null,
-
-    description:
-      lead.description ||
-      null,
-
-    contact_email:
-      lead.contactEmail ||
-      null,
-
-    contact_phone:
-      lead.contactPhone ||
-      null,
-
-    contact_name:
-      lead.contactName ||
-      lead.name ||
-      null,
-
-    status:
-      "active",
-
-    title:
-      lead.title,
-
-    category:
-      lead.category ||
-      null,
-
-    subcategory:
-      lead.subcategory ||
-      null,
-
-function leadInsertPayload(
-  lead: CollectedLead
-) {
-  /*
-   * SaaS uses the actual existing
-   * saas_leads table schema:
-   *
-   * id, name, platform, nich, contect,
-   * status, description, commission,
-   * trial_days, landing_url, source_url,
-   * contect_url, country, city
-   */
   if (
     lead.leadType === "SaaS"
   ) {
@@ -2574,10 +2458,6 @@ function leadInsertPayload(
     };
   }
 
-  /*
-   * Demand and Supply use their
-   * existing lead schema.
-   */
   return {
     source:
       lead.source,
@@ -2664,10 +2544,8 @@ async function leadAlreadyExists(
       .limit(1);
 
   /*
-   * SaaS profiles are checked
-   * by their direct profile URL.
-   *
-   * Other lead types use source.
+   * SaaS uses the actual column
+   * contect_url, not contact_url.
    */
   if (
     lead.leadType === "SaaS" &&
@@ -2675,7 +2553,7 @@ async function leadAlreadyExists(
   ) {
     query =
       query.eq(
-        "contact_url",
+        "contect_url",
         lead.contactUrl
       );
   } else if (
@@ -2886,7 +2764,8 @@ async function processResult(
   stats.accepted++;
 
   return lead;
-  }
+}
+
 async function collectLeadsForType(
   supabase: ReturnType<
     typeof createSupabase
@@ -2941,7 +2820,7 @@ async function collectLeadsForType(
             skills,
             stats
           );
-      } catch (error) {
+      } catch {
         stats.wrongType++;
         continue;
       }
@@ -2967,12 +2846,6 @@ async function collectLeadsForType(
             type
           );
 
-        /*
-         * IMPORTANT:
-         * leadInsertPayload() keeps
-         * SaaS free of budget/currency,
-         * while Demand/Supply retain them.
-         */
         const payload =
           leadInsertPayload(
             lead
@@ -3015,8 +2888,7 @@ async function collectLeadsForType(
   }
 
   return insertedCount;
-}
-
+      }
 function getBearerToken(
   request: VercelRequest
 ): string | null {
@@ -3047,6 +2919,7 @@ function getBearerToken(
 
   return token || null;
 }
+
 export default async function handler(
   req: VercelRequest,
   res: VercelResponse
