@@ -78,10 +78,25 @@ type LeadStats = {
   lastInsertError?: string;
 };
 
+/*
+ * These are the actual per-type inserted counts returned
+ * by the current lead collector.
+ */
+type InsertedByType = {
+  Demand: number;
+  Supply: number;
+  SaaS: number;
+};
+
+/*
+ * The current API returns one aggregate stats object.
+ * We keep it separate from the per-type inserted counts
+ * so the Admin page does not falsely show the same
+ * aggregate diagnostics as three separate type diagnostics.
+ */
 type LeadFetchDiagnostics = {
-  Demand: LeadStats;
-  Supply: LeadStats;
-  SaaS: LeadStats;
+  overall: LeadStats;
+  insertedByType: InsertedByType;
 };
 
 async function adminRequest(
@@ -191,7 +206,10 @@ export default function Admin() {
   const [fetchResult, setFetchResult] =
     useState("");
 
-  const [fetchDiagnostics, setFetchDiagnostics] =
+  const [
+    fetchDiagnostics,
+    setFetchDiagnostics,
+  ] =
     useState<LeadFetchDiagnostics | null>(
       null
     );
@@ -298,7 +316,7 @@ export default function Admin() {
     } finally {
       setLoading(false);
     }
-          }
+    }
     async function fetchRealLeads() {
     try {
       setFetchingLeads(true);
@@ -356,18 +374,36 @@ export default function Admin() {
       const insertedByType =
         data.insertedByType || {};
 
+      const normalizedInsertedByType: InsertedByType =
+        {
+          Demand:
+            typeof insertedByType.Demand ===
+            "number"
+              ? insertedByType.Demand
+              : 0,
+
+          Supply:
+            typeof insertedByType.Supply ===
+            "number"
+              ? insertedByType.Supply
+              : 0,
+
+          SaaS:
+            typeof insertedByType.SaaS ===
+            "number"
+              ? insertedByType.SaaS
+              : 0,
+        };
+
       const totalInserted =
         Object.values(
-          insertedByType
+          normalizedInsertedByType
         ).reduce(
           (
             sum: number,
-            value: unknown
+            value: number
           ) =>
-            sum +
-            (typeof value === "number"
-              ? value
-              : 0),
+            sum + value,
           0
         );
 
@@ -378,30 +414,38 @@ export default function Admin() {
       if (insertError) {
         setFetchResult(
           `Added ${totalInserted} leads — Demand: ${
-            insertedByType.Demand ?? 0
+            normalizedInsertedByType.Demand
           }, Supply: ${
-            insertedByType.Supply ?? 0
+            normalizedInsertedByType.Supply
           }, SaaS: ${
-            insertedByType.SaaS ?? 0
-          }\n\nInsert error: ${insertError}`
+            normalizedInsertedByType.SaaS
+          }\n\nOverall insert error: ${insertError}`
         );
       } else {
         setFetchResult(
           `Added ${totalInserted} leads — Demand: ${
-            insertedByType.Demand ?? 0
+            normalizedInsertedByType.Demand
           }, Supply: ${
-            insertedByType.Supply ?? 0
+            normalizedInsertedByType.Supply
           }, SaaS: ${
-            insertedByType.SaaS ?? 0
+            normalizedInsertedByType.SaaS
           }`
         );
       }
 
+      /*
+       * IMPORTANT:
+       * The current API returns one aggregate stats object,
+       * not separate Demand/Supply/SaaS diagnostic objects.
+       *
+       * Store it once as OVERALL diagnostics instead of
+       * pretending it belongs separately to all three types.
+       */
       if (data.stats) {
         setFetchDiagnostics({
-          Demand: data.stats,
-          Supply: data.stats,
-          SaaS: data.stats,
+          overall: data.stats,
+          insertedByType:
+            normalizedInsertedByType,
         });
       }
 
@@ -495,8 +539,7 @@ export default function Admin() {
       icon: Link2,
     },
   ];
-
-  return (
+    return (
     <div className="min-h-screen bg-black text-white">
       <div className="border-b border-[#222] bg-black">
         <div className="max-w-7xl mx-auto px-4 py-4">
@@ -641,6 +684,7 @@ export default function Admin() {
     </div>
   );
 }
+
 function OverviewSection({
   overview,
   onRefresh,
@@ -732,6 +776,7 @@ function OverviewSection({
     </div>
   );
 }
+
 function UsersSection({
   users,
   updateUser,
@@ -902,8 +947,7 @@ function UsersSection({
       )}
     </div>
   );
-}
-
+      }
 function LeadsSection({
   leads,
   fetchRealLeads,
@@ -965,92 +1009,155 @@ function LeadsSection({
             Collector Diagnostics
           </h3>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {(
-              [
-                "Demand",
-                "Supply",
-                "SaaS",
-              ] as const
-            ).map((type) => {
-              const stats =
-                fetchDiagnostics[type];
+          <div className="rounded-xl border border-[#222] bg-[#111] p-4">
+            <div className="text-sm font-semibold mb-3">
+              Inserted by Lead Type
+            </div>
 
-              return (
-                <div
-                  key={type}
-                  className="rounded-xl border border-[#222] bg-[#111] p-4"
-                >
-                  <div className="text-sm font-semibold mb-3">
-                    {type}
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
-                    <div className="text-[#777]">Found</div>
-                    <div className="text-right">
-                      {stats.found}
-                    </div>
-
-                    <div className="text-[#777]">Accepted</div>
-                    <div className="text-right">
-                      {stats.accepted}
-                    </div>
-
-                    <div className="text-[#777]">Inserted</div>
-                    <div className="text-right">
-                      {stats.inserted}
-                    </div>
-
-                    <div className="text-[#777]">Duplicate</div>
-                    <div className="text-right">
-                      {stats.duplicate}
-                    </div>
-
-                    <div className="text-[#777]">Stale</div>
-                    <div className="text-right">
-                      {stats.stale}
-                    </div>
-
-                    <div className="text-[#777]">Wrong Type</div>
-                    <div className="text-right">
-                      {stats.wrongType}
-                    </div>
-
-                    <div className="text-[#777]">No Contact</div>
-                    <div className="text-right">
-                      {stats.noContact}
-                    </div>
-
-                    <div className="text-[#777]">No Skill</div>
-                    <div className="text-right">
-                      {stats.noSkillMatch}
-                    </div>
-
-                    <div className="text-[#777]">Blocked</div>
-                    <div className="text-right">
-                      {stats.blocked}
-                    </div>
-
-                    <div className="text-[#777]">Insert Errors</div>
-                    <div className="text-right">
-                      {stats.insertErrors}
-                    </div>
-
-                    {stats.lastInsertError && (
-                      <>
-                        <div className="text-[#777]">
-                          Last Insert Error
-                        </div>
-
-                        <div className="text-right text-red-400 break-words">
-                          {stats.lastInsertError}
-                        </div>
-                      </>
-                    )}
-                  </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="rounded-lg border border-[#222] bg-black p-3">
+                <div className="text-xs text-[#777]">
+                  Demand
                 </div>
-              );
-            })}
+
+                <div className="text-xl font-semibold mt-1">
+                  {
+                    fetchDiagnostics
+                      .insertedByType
+                      .Demand
+                  }
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-[#222] bg-black p-3">
+                <div className="text-xs text-[#777]">
+                  Supply
+                </div>
+
+                <div className="text-xl font-semibold mt-1">
+                  {
+                    fetchDiagnostics
+                      .insertedByType
+                      .Supply
+                  }
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-[#222] bg-black p-3">
+                <div className="text-xs text-[#777]">
+                  SaaS
+                </div>
+
+                <div className="text-xl font-semibold mt-1">
+                  {
+                    fetchDiagnostics
+                      .insertedByType
+                      .SaaS
+                  }
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-[#222] bg-[#111] p-4">
+            <div className="text-sm font-semibold mb-1">
+              Overall Collector Diagnostics
+            </div>
+
+            <div className="text-xs text-[#666] mb-4">
+              These numbers are combined across Demand,
+              Supply and SaaS by the current collector.
+              They are not shown as separate type results.
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-3 text-xs">
+              <div className="text-[#777]">
+                Found
+              </div>
+              <div className="text-right">
+                {fetchDiagnostics.overall.found}
+              </div>
+
+              <div className="text-[#777]">
+                Accepted
+              </div>
+              <div className="text-right">
+                {fetchDiagnostics.overall.accepted}
+              </div>
+
+              <div className="text-[#777]">
+                Inserted
+              </div>
+              <div className="text-right">
+                {fetchDiagnostics.overall.inserted}
+              </div>
+
+              <div className="text-[#777]">
+                Duplicate
+              </div>
+              <div className="text-right">
+                {fetchDiagnostics.overall.duplicate}
+              </div>
+
+              <div className="text-[#777]">
+                Stale
+              </div>
+              <div className="text-right">
+                {fetchDiagnostics.overall.stale}
+              </div>
+
+              <div className="text-[#777]">
+                Wrong Type
+              </div>
+              <div className="text-right">
+                {fetchDiagnostics.overall.wrongType}
+              </div>
+
+              <div className="text-[#777]">
+                No Contact
+              </div>
+              <div className="text-right">
+                {fetchDiagnostics.overall.noContact}
+              </div>
+
+              <div className="text-[#777]">
+                No Skill
+              </div>
+              <div className="text-right">
+                {fetchDiagnostics.overall.noSkillMatch}
+              </div>
+
+              <div className="text-[#777]">
+                Blocked
+              </div>
+              <div className="text-right">
+                {fetchDiagnostics.overall.blocked}
+              </div>
+
+              <div className="text-[#777]">
+                Insert Errors
+              </div>
+              <div className="text-right">
+                {fetchDiagnostics.overall.insertErrors}
+              </div>
+
+              {fetchDiagnostics.overall
+                .lastInsertError && (
+                <>
+                  <div className="text-[#777]">
+                    Last Insert Error
+                  </div>
+
+                  <div className="text-right text-red-400 break-words col-span-1 md:col-span-3">
+                    {
+                      fetchDiagnostics
+                        .overall
+                        .lastInsertError
+                    }
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -1111,6 +1218,7 @@ function LeadsSection({
     </div>
   );
 }
+
 function SimpleSection({
   icon: Icon,
   title,
@@ -1282,9 +1390,11 @@ function LinksSection({
             <option value="Basic">
               Basic
             </option>
+
             <option value="Premium">
               Premium
             </option>
+
             <option value="Gold">
               Gold
             </option>
@@ -1383,4 +1493,5 @@ function LinksSection({
       </div>
     </div>
   );
-}
+                      }
+  
