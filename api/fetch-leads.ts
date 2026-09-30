@@ -1,46 +1,46 @@
-import { createClient } from "@supabase/supabase-js";
-import type {
-  VercelRequest,
-  VercelResponse,
-} from "@vercel/node";
+import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
-const SUPABASE_URL =
-  process.env.SUPABASE_URL ||
-  process.env.VITE_SUPABASE_URL ||
-  "";
+type LeadType = "Demand" | "Supply" | "SaaS";
 
-const SUPABASE_SERVICE_ROLE_KEY =
-  process.env.SUPABASE_SERVICE_ROLE_KEY ||
-  "";
-
-const SERPER_API_KEY =
-  process.env.SERPER_API_KEY ||
-  "";
-
-const MAX_AGE_HOURS = 72;
-const MAX_QUERIES_PER_TYPE = 6;
-const RESULTS_PER_SEARCH = 10;
-
-type LeadType =
-  | "Demand"
-  | "Supply"
-  | "SaaS";
+type SearchResult = {
+  title: string;
+  link: string;
+  snippet?: string;
+  date?: string;
+  searchQuery?: string;
+};
 
 type SkillRow = {
   id?: string;
   name: string;
-  category?: string | null;
-  subcategory?: string | null;
-  tags?: string[] | string | null;
+  category?: string;
+  subcategory?: string;
+  tags?: string[] | string;
 };
 
-type SearchResult = {
-  title?: string;
-  link?: string;
-  snippet?: string;
-  date?: string;
-  position?: number;
-  searchQuery?: string;
+type LeadStats = {
+  found: number;
+  accepted: number;
+  inserted: number;
+  duplicate: number;
+  stale: number;
+  wrongType: number;
+  noContact: number;
+  noSkill: number;
+  blocked: number;
+  insertErrors: number;
+};
+
+type InsertedByType = {
+  Demand: number;
+  Supply: number;
+  SaaS: number;
+};
+
+type CollectorResult = {
+  stats: LeadStats;
+  insertedByType: InsertedByType;
 };
 
 type ContactInfo = {
@@ -49,63 +49,276 @@ type ContactInfo = {
   url?: string;
 };
 
-type CollectedLead = {
-  leadType: LeadType;
-  source: string;
-  title: string;
-  name?: string;
-  description?: string;
-  skill?: string;
-  category?: string;
-  subcategory?: string;
-  country?: string;
-  city?: string;
-  budget?: string | number;
-  currency?: string;
-  contactEmail?: string;
-  contactPhone?: string;
-  contactName?: string;
-  contactUrl?: string;
-  createdAt?: string;
+const MAX_AGE_HOURS = 72;
+const MAX_QUERIES_PER_TYPE = 6;
+const RESULTS_PER_SEARCH = 10;
+
+const GOOGLE_SEARCH_URL = "https://www.google.com/search";
+
+const SERPER_API_KEY =
+  process.env.SERPER_API_KEY || process.env.VITE_SERPER_API_KEY || "";
+
+const SUPABASE_URL =
+  process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
+
+const SUPABASE_SERVICE_ROLE_KEY =
+  process.env.SUPABASE_SERVICE_ROLE_KEY ||
+  process.env.SUPABASE_SERVICE_KEY ||
+  "";
+
+const supabase: SupabaseClient | null =
+  SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
+    ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+    : null;
+
+const BLOCKED_DOMAINS = [
+  "google.com",
+  "google.co.uk",
+  "google.ca",
+  "google.ae",
+  "google.com.pk",
+  "support.google.com",
+  "accounts.google.com",
+  "policies.google.com",
+  "youtube.com",
+  "youtu.be",
+  "amazon.com",
+  "amazon.co.uk",
+  "amazon.ca",
+  "amazon.ae",
+  "daraz.pk",
+  "ebay.com",
+  "etsy.com",
+  "walmart.com",
+  "aliexpress.com",
+  "udemy.com",
+  "coursera.org",
+  "skillshare.com",
+  "fiverr.com",
+  "upwork.com",
+  "freelancer.com",
+  "peopleperhour.com",
+  "guru.com",
+];
+
+const BLOCKED_RESULT_TERMS = [
+  "feedback",
+  "google search",
+  "search settings",
+  "privacy",
+  "terms",
+  "advertising",
+  "help center",
+  "sign in",
+  "search preferences",
+];
+
+const SAAS_REJECT_TERMS = [
+  "amazon",
+  "daraz",
+  "ebay",
+  "etsy",
+  "walmart",
+  "aliexpress",
+  "book",
+  "ebook",
+  "course",
+  "webinar",
+  "training course",
+  "online course",
+  "app",
+  "software",
+  "plugin",
+  "template",
+  "directory",
+  "marketplace",
+  "job board",
+  "jobs board",
+  "news",
+  "article",
+  "blog",
+  "podcast",
+  "product",
+  "pricing",
+  "shop",
+  "store",
+  "buy now",
+];
+
+const DEMAND_TERMS = [
+  "looking for",
+  "need a",
+  "need an",
+  "seeking",
+  "wanted",
+  "want a",
+  "want an",
+  "require",
+  "requires",
+  "required",
+  "hiring",
+  "hire",
+  "help needed",
+  "help wanted",
+  "client needs",
+  "project needed",
+  "looking to hire",
+  "looking to work with",
+];
+
+const SUPPLY_TERMS = [
+  "freelance",
+  "freelancer",
+  "available for",
+  "available to",
+  "accepting clients",
+  "taking clients",
+  "open for work",
+  "open to work",
+  "work with clients",
+  "offers",
+  "offering",
+  "services",
+  "service provider",
+  "tutor available",
+  "teacher available",
+  "coach available",
+  "consultant available",
+  "apply",
+  "applications open",
+  "now accepting",
+];
+
+const PROFESSIONAL_TERMS = [
+  "teacher",
+  "tutor",
+  "trainer",
+  "coach",
+  "mentor",
+  "consultant",
+  "advisor",
+  "adviser",
+  "educator",
+  "instructor",
+  "professional",
+  "freelancer",
+  "freelance",
+  "consulting",
+  "coaching",
+  "teaching",
+  "training",
+];
+
+const DIRECT_CONTACT_TERMS = [
+  "contact",
+  "email",
+  "e-mail",
+  "phone",
+  "telephone",
+  "whatsapp",
+  "telegram",
+  "linkedin",
+  "facebook",
+  "instagram",
+  "book a call",
+  "schedule a call",
+  "get in touch",
+];
+
+const SKILL_GROUPS: Record<string, string[]> = {
+  math: [
+    "math",
+    "mathematics",
+    "maths",
+    "algebra",
+    "geometry",
+    "calculus",
+    "statistics",
+    "trigonometry",
+  ],
+  science: [
+    "science",
+    "physics",
+    "chemistry",
+    "biology",
+    "environmental science",
+  ],
+  english: [
+    "english",
+    "english language",
+    "english literature",
+    "grammar",
+    "writing",
+    "creative writing",
+    "academic writing",
+  ],
+  languages: [
+    "language",
+    "languages",
+    "arabic",
+    "urdu",
+    "french",
+    "spanish",
+    "german",
+    "chinese",
+    "mandarin",
+    "hindi",
+  ],
+  quran: [
+    "quran",
+    "qur'an",
+    "tajweed",
+    "qirat",
+    "qiraat",
+    "hifz",
+    "hafiz",
+    "islamic studies",
+    "tafsir",
+    "tafseer",
+  ],
+  teaching: [
+    "teaching",
+    "teacher",
+    "tutor",
+    "education",
+    "educator",
+    "instruction",
+    "instructor",
+  ],
+  coaching: [
+    "coach",
+    "coaching",
+    "mentor",
+    "mentoring",
+    "consultant",
+    "consulting",
+    "advisor",
+    "adviser",
+  ],
+  business: [
+    "business",
+    "business coaching",
+    "business consultant",
+    "entrepreneurship",
+    "startup",
+    "management",
+    "marketing",
+    "sales",
+  ],
+  technology: [
+    "technology",
+    "tech",
+    "programming",
+    "coding",
+    "software",
+    "web development",
+    "development",
+    "javascript",
+    "python",
+    "react",
+  ],
 };
-
-type CollectionStats = {
-  found: number;
-  accepted: number;
-  inserted: number;
-  duplicate: number;
-  stale: number;
-  wrongType: number;
-  noContact: number;
-  noSkillMatch: number;
-  blocked: number;
-  insertErrors: number;
-  lastInsertError?: string;
-};
-
-function createSupabase() {
-  if (
-    !SUPABASE_URL ||
-    !SUPABASE_SERVICE_ROLE_KEY
-  ) {
-    throw new Error(
-      "Supabase server environment variables are missing."
-    );
-  }
-
-  return createClient(
-    SUPABASE_URL,
-    SUPABASE_SERVICE_ROLE_KEY,
-    {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-      },
-    }
-  );
-}
-
-function emptyStats(): CollectionStats {
+function emptyStats(): LeadStats {
   return {
     found: 0,
     accepted: 0,
@@ -114,605 +327,232 @@ function emptyStats(): CollectionStats {
     stale: 0,
     wrongType: 0,
     noContact: 0,
-    noSkillMatch: 0,
+    noSkill: 0,
     blocked: 0,
     insertErrors: 0,
   };
 }
 
-const BLOCKED_DOMAINS = [
-  "upwork.com",
-  "fiverr.com",
-  "freelancer.com",
-  "peopleperhour.com",
-  "guru.com",
-  "toptal.com",
-  "workana.com",
+function emptyInsertedByType(): InsertedByType {
+  return {
+    Demand: 0,
+    Supply: 0,
+    SaaS: 0,
+  };
+}
 
-  "indeed.com",
-  "ziprecruiter.com",
-  "glassdoor.com",
-  "monster.com",
-  "careerbuilder.com",
-  "simplyhired.com",
+function cleanText(value: unknown): string {
+  if (value === undefined || value === null) return "";
 
-  "amazon.com",
-  "amazon.co.uk",
-  "amazon.ca",
-  "amazon.ae",
-  "amazon.sa",
-  "amazon.in",
-  "daraz.pk",
-  "daraz.com",
-  "ebay.com",
-  "etsy.com",
-  "walmart.com",
-  "aliexpress.com",
-
-  "udemy.com",
-  "coursera.org",
-  "skillshare.com",
-
-  "wikipedia.org",
-  "medium.com",
-];
-
-const SAAS_BLOCKED_PATHS = [
-  "/search",
-  "/search?",
-  "/jobs",
-  "/job/",
-  "/jobs/",
-  "/company/",
-  "/companies/",
-  "/directory/",
-  "/directories/",
-  "/marketplace/",
-  "/category/",
-  "/categories/",
-  "/products/",
-  "/product/",
-  "/courses/",
-  "/course/",
-  "/events/",
-  "/event/",
-  "/groups/",
-  "/group/",
-  "/tags/",
-  "/tag/",
-  "/reviews/",
-  "/review/",
-];
-
-const COUNTRY_ALIASES: Record<
-  string,
-  string[]
-> = {
-  "United States": [
-    "united states",
-    "usa",
-    "u.s.a",
-    "us",
-    "u.s.",
-    "america",
-    "american",
-  ],
-
-  Canada: [
-    "canada",
-    "canadian",
-    "toronto",
-    "vancouver",
-    "montreal",
-    "calgary",
-    "ottawa",
-    "edmonton",
-  ],
-
-  "United Kingdom": [
-    "united kingdom",
-    "uk",
-    "u.k.",
-    "britain",
-    "great britain",
-    "england",
-    "scotland",
-    "wales",
-    "northern ireland",
-    "london",
-    "manchester",
-    "birmingham",
-    "glasgow",
-    "liverpool",
-  ],
-
-  "United Arab Emirates": [
-    "united arab emirates",
-    "uae",
-    "dubai",
-    "abu dhabi",
-    "sharjah",
-    "ajman",
-  ],
-
-  Qatar: [
-    "qatar",
-    "qatari",
-    "doha",
-  ],
-
-  "Saudi Arabia": [
-    "saudi arabia",
-    "saudi",
-    "riyadh",
-    "jeddah",
-    "dammam",
-  ],
-
-  Kuwait: [
-    "kuwait",
-    "kuwaiti",
-    "kuwait city",
-  ],
-
-  Oman: [
-    "oman",
-    "omani",
-    "muscat",
-  ],
-
-  Bahrain: [
-    "bahrain",
-    "bahraini",
-    "manama",
-  ],
-
-  Australia: [
-    "australia",
-    "australian",
-    "sydney",
-    "melbourne",
-    "brisbane",
-    "perth",
-  ],
-
-  Sweden: [
-    "sweden",
-    "swedish",
-    "stockholm",
-  ],
-
-  Norway: [
-    "norway",
-    "norwegian",
-    "oslo",
-  ],
-
-  Denmark: [
-    "denmark",
-    "danish",
-    "copenhagen",
-  ],
-
-  Finland: [
-    "finland",
-    "finnish",
-    "helsinki",
-  ],
-
-  Pakistan: [
-    "pakistan",
-    "pakistani",
-    "karachi",
-    "lahore",
-    "islamabad",
-    "rawalpindi",
-    "peshawar",
-    "abbottabad",
-    "multan",
-    "faisalabad",
-  ],
-
-  India: [
-    "india",
-    "indian",
-    "delhi",
-    "mumbai",
-    "bangalore",
-    "bengaluru",
-    "hyderabad",
-    "chennai",
-  ],
-
-  Bangladesh: [
-    "bangladesh",
-    "bangladeshi",
-    "dhaka",
-    "chittagong",
-  ],
-
-  Germany: [
-    "germany",
-    "german",
-    "berlin",
-    "munich",
-    "hamburg",
-  ],
-
-  France: [
-    "france",
-    "french",
-    "paris",
-    "lyon",
-  ],
-
-  Netherlands: [
-    "netherlands",
-    "dutch",
-    "amsterdam",
-    "rotterdam",
-  ],
-};
-
-const DEMAND_SIGNALS = [
-  "looking for",
-  "need a",
-  "need an",
-  "need someone",
-  "seeking",
-  "wanted",
-  "recommend a",
-  "looking to hire",
-  "client needs",
-  "help needed",
-  "assistance needed",
-];
-
-const SUPPLY_SIGNALS = [
-  "hiring",
-  "we are hiring",
-  "now hiring",
-  "job opening",
-  "job openings",
-  "vacancy",
-  "vacancies",
-  "position available",
-  "position open",
-  "applications open",
-  "apply now",
-  "recruiting",
-  "recruitment",
-  "opportunity",
-];
-
-const PROFESSIONAL_TERMS = [
-  "teacher",
-  "teaching",
-  "tutor",
-  "tutoring",
-  "coach",
-  "coaching",
-  "consultant",
-  "consulting",
-  "freelancer",
-  "freelance",
-  "designer",
-  "developer",
-  "programmer",
-  "writer",
-  "copywriter",
-  "researcher",
-  "author",
-  "virtual assistant",
-  "trainer",
-  "educator",
-  "instructor",
-  "accountant",
-  "bookkeeper",
-  "marketer",
-  "mentor",
-];
-
-const SAAS_REJECT_TERMS = [
-  "dictionary",
-  "definition",
-  "meaning",
-  "wikipedia",
-  "encyclopedia",
-
-  "resource",
-  "resources",
-  "teaching resource",
-  "lesson plan",
-
-  "job",
-  "jobs",
-  "vacancy",
-  "vacancies",
-  "hiring",
-  "recruiting",
-  "recruitment",
-  "application",
-  "applications",
-
-  "course",
-  "courses",
-  "webinar",
-  "webinars",
-  "seminar",
-  "seminars",
-
-  "article",
-  "articles",
-  "blog",
-  "blogs",
-  "news",
-
-  "book",
-  "books",
-  "ebook",
-  "ebooks",
-
-  "app",
-  "apps",
-  "software",
-  "platform",
-  "marketplace",
-
-  "directory",
-  "directories",
-  "listing",
-  "listings",
-
-  "review",
-  "reviews",
-  "comparison",
-  "compare",
-
-  "podcast",
-  "podcasts",
-
-  "school",
-  "academy",
-  "university",
-  "college",
-  "institute",
-
-  "admissions",
-  "admission",
-
-  "join us",
-  "join our team",
-  "our team",
-  "benefits",
-
-  "become a teacher",
-  "career in teaching",
-  "faculty",
-  "staff directory",
-];
-function cleanText(
-  value?: string | null
-): string {
-  if (!value) return "";
-
-  return value
+  return String(value)
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
     .replace(/\s+/g, " ")
     .trim();
 }
 
-function normalize(
-  value?: string | null
-): string {
+function normalize(value: unknown): string {
   return cleanText(value)
     .toLowerCase()
-    .replace(/[^\p{L}\p{N}\s@._:/-]/gu, " ")
+    .replace(/[’']/g, "'")
+    .replace(/[^a-z0-9\s+#.-]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
 
-function stripHtml(
-  value: string
-): string {
-  return value
-    .replace(
-      /<script[\s\S]*?<\/script>/gi,
-      " "
-    )
-    .replace(
-      /<style[\s\S]*?<\/style>/gi,
-      " "
-    )
-    .replace(
-      /<[^>]+>/g,
-      " "
-    );
+function containsAny(text: string, terms: string[]): boolean {
+  const normalized = normalize(text);
+
+  return terms.some((term) => {
+    const t = normalize(term);
+    return t && normalized.includes(t);
+  });
 }
 
-function decodeHtml(
-  value: string
-): string {
-  return value
-    .replace(/&amp;/g, "&")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&#x2F;/gi, "/")
-    .replace(/&#47;/g, "/");
-}
-
-function domainFromUrl(
-  value?: string
-): string {
-  if (!value) return "";
+function domainFromUrl(url?: string): string {
+  if (!url) return "";
 
   try {
-    const url = new URL(value);
-
-    return url.hostname
-      .toLowerCase()
-      .replace(/^www\./, "");
+    return new URL(url).hostname.toLowerCase().replace(/^www\./, "");
   } catch {
     return "";
   }
 }
 
-function isBlockedDomain(
-  url?: string
-): boolean {
-  const domain =
-    domainFromUrl(url);
+function isGoogleOwnedUrl(url?: string): boolean {
+  const domain = domainFromUrl(url);
+
+  if (!domain) return true;
+
+  return (
+    domain === "google.com" ||
+    domain.endsWith(".google.com") ||
+    domain.endsWith(".google.co.uk") ||
+    domain.endsWith(".google.ca") ||
+    domain.endsWith(".google.ae") ||
+    domain.endsWith(".google.com.pk")
+  );
+}
+
+function isBlockedDomain(url?: string): boolean {
+  const domain = domainFromUrl(url);
 
   if (!domain) return true;
 
   return BLOCKED_DOMAINS.some(
-    (blocked) =>
-      domain === blocked ||
-      domain.endsWith(`.${blocked}`)
+    (blocked) => domain === blocked || domain.endsWith(`.${blocked}`)
   );
 }
 
-function containsAny(
-  text: string,
-  terms: string[]
-): boolean {
-  const normalized =
-    normalize(text);
-
-  return terms.some(
-    (term) =>
-      normalized.includes(
-        normalize(term)
-      )
+function isBlockedResult(result: SearchResult): boolean {
+  const text = normalize(
+    `${result.title} ${result.snippet || ""} ${result.link}`
   );
+
+  if (isGoogleOwnedUrl(result.link)) return true;
+
+  if (isBlockedDomain(result.link)) return true;
+
+  return BLOCKED_RESULT_TERMS.some((term) => {
+    return normalize(result.title).includes(normalize(term));
+  }) || SAAS_REJECT_TERMS.some((term) => {
+    return text.includes(normalize(term));
+  });
 }
 
-function parseResultDate(
-  result: SearchResult
-): Date | null {
-  const raw =
-    cleanText(result.date);
+function normalizeUrl(url?: string): string {
+  if (!url) return "";
 
-  if (!raw) {
-    return null;
+  try {
+    const parsed = new URL(url);
+
+    parsed.hash = "";
+
+    const trackingParams = [
+      "utm_source",
+      "utm_medium",
+      "utm_campaign",
+      "utm_term",
+      "utm_content",
+      "gclid",
+      "fbclid",
+    ];
+
+    trackingParams.forEach((param) => {
+      parsed.searchParams.delete(param);
+    });
+
+    return parsed.toString().replace(/\/$/, "");
+  } catch {
+    return url.trim();
   }
-
-  const timestamp =
-    Date.parse(raw);
-
-  if (Number.isNaN(timestamp)) {
-    return null;
-  }
-
-  return new Date(timestamp);
 }
 
-function isFresh(
-  result: SearchResult
-): boolean {
-  const date =
-    parseResultDate(result);
+function isDirectSocialProfile(url?: string): boolean {
+  if (!url) return false;
 
-  if (!date) {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+    const path = parsed.pathname.toLowerCase();
+
+    if (host.includes("linkedin.com")) {
+      return path.includes("/in/") || path.includes("/company/");
+    }
+
+    if (host.includes("facebook.com")) {
+      return path.length > 1 && !path.startsWith("/search");
+    }
+
+    if (host.includes("instagram.com")) {
+      return path.length > 1 && !path.startsWith("/explore");
+    }
+
+    if (host.includes("x.com") || host.includes("twitter.com")) {
+      return path.length > 1;
+    }
+
+    if (host.includes("t.me")) {
+      return path.length > 1;
+    }
+
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+function isDirectContactPageUrl(url?: string): boolean {
+  if (!url) return false;
+
+  try {
+    const parsed = new URL(url);
+    const path = parsed.pathname.toLowerCase();
+
+    return [
+      "contact",
+      "contact-us",
+      "get-in-touch",
+      "reach-us",
+      "hire-me",
+      "work-with-me",
+      "book-a-call",
+      "book-call",
+      "consultation",
+    ].some((term) => path.includes(term));
+  } catch {
+    return false;
+  }
+}
+
+function isValidExternalResultUrl(url?: string): boolean {
+  if (!url) return false;
+
+  try {
+    const parsed = new URL(url);
+
+    if (!["http:", "https:"].includes(parsed.protocol)) return false;
+
+    if (isGoogleOwnedUrl(url)) return false;
+
+    if (isBlockedDomain(url)) return false;
+
     return true;
+  } catch {
+    return false;
   }
+    }
+function detectCountry(text: string): string | undefined {
+  const value = normalize(text);
 
-  const age =
-    Date.now() -
-    date.getTime();
-
-  const maxAge =
-    MAX_AGE_HOURS *
-    60 *
-    60 *
-    1000;
-
-  return (
-    age >= 0 &&
-    age <= maxAge
-  );
-}
-
-function extractEmails(
-  text: string
-): string[] {
-  const matches =
-    text.match(
-      /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi
-    ) || [];
-
-  return [
-    ...new Set(
-      matches.map(
-        (email) =>
-          email
-            .trim()
-            .toLowerCase()
-      )
-    ),
+  const countries: Array<[string, string[]]> = [
+    ["United Kingdom", ["united kingdom", "uk", "britain", "england", "scotland", "wales"]],
+    ["United States", ["united states", "usa", "us", "america"]],
+    ["Canada", ["canada", "canadian"]],
+    ["Australia", ["australia", "australian"]],
+    ["United Arab Emirates", ["united arab emirates", "uae", "dubai", "abu dhabi"]],
+    ["Pakistan", ["pakistan", "pakistani"]],
+    ["India", ["india", "indian"]],
+    ["Saudi Arabia", ["saudi arabia", "saudi"]],
+    ["Qatar", ["qatar", "doha"]],
+    ["Germany", ["germany", "german"]],
+    ["France", ["france", "french"]],
+    ["Spain", ["spain", "spanish"]],
+    ["Italy", ["italy", "italian"]],
+    ["Malaysia", ["malaysia", "malaysian"]],
+    ["Singapore", ["singapore"]],
+    ["New Zealand", ["new zealand"]],
+    ["South Africa", ["south africa", "south african"]],
+    ["Ireland", ["ireland", "irish"]],
   ];
-}
 
-function extractPhones(
-  text: string
-): string[] {
-  const matches =
-    text.match(
-      /(?:\+?\d[\d\s().-]{7,}\d)/g
-    ) || [];
-
-  return [
-    ...new Set(
-      matches
-        .map((phone) =>
-          cleanText(phone)
-        )
-        .filter(
-          (phone) =>
-            phone.replace(
-              /\D/g,
-              ""
-            ).length >= 8
-        )
-    ),
-  ];
-}
-
-function getSearchText(
-  result: SearchResult
-): string {
-  return [
-    result.title || "",
-    result.snippet || "",
-  ]
-    .map(cleanText)
-    .filter(Boolean)
-    .join(" ");
-}
-
-function detectCountry(
-  text: string
-): string | undefined {
-  const normalized =
-    normalize(text);
-
-  for (
-    const [
-      country,
-      aliases,
-    ] of Object.entries(
-      COUNTRY_ALIASES
-    )
-  ) {
-    if (
-      aliases.some(
-        (alias) =>
-          normalized.includes(
-            normalize(alias)
-          )
-      )
-    ) {
+  for (const [country, aliases] of countries) {
+    if (aliases.some((alias) => value.includes(normalize(alias)))) {
       return country;
     }
   }
@@ -720,388 +560,241 @@ function detectCountry(
   return undefined;
 }
 
-function detectCity(
-  text: string
-): string | undefined {
-  const normalized =
-    normalize(text);
+function detectCity(text: string): string | undefined {
+  const value = normalize(text);
 
-  const cities: Array<
-    [string, string]
-  > = [
-    ["London", "london"],
-    ["Manchester", "manchester"],
-    ["Birmingham", "birmingham"],
-    ["Toronto", "toronto"],
-    ["Vancouver", "vancouver"],
-    ["Montreal", "montreal"],
-    ["Dubai", "dubai"],
-    ["Abu Dhabi", "abu dhabi"],
-    ["Doha", "doha"],
-    ["Riyadh", "riyadh"],
-    ["Jeddah", "jeddah"],
-    ["Karachi", "karachi"],
-    ["Lahore", "lahore"],
-    ["Islamabad", "islamabad"],
-    ["Rawalpindi", "rawalpindi"],
-    ["Peshawar", "peshawar"],
-    ["Abbottabad", "abbottabad"],
-    ["Delhi", "delhi"],
-    ["Mumbai", "mumbai"],
-    ["Dhaka", "dhaka"],
-    ["Berlin", "berlin"],
-    ["Paris", "paris"],
-    ["Amsterdam", "amsterdam"],
+  const cities = [
+    "London",
+    "Manchester",
+    "Birmingham",
+    "Leeds",
+    "Liverpool",
+    "Glasgow",
+    "Edinburgh",
+    "Toronto",
+    "Vancouver",
+    "Montreal",
+    "Calgary",
+    "New York",
+    "Los Angeles",
+    "Chicago",
+    "Houston",
+    "Sydney",
+    "Melbourne",
+    "Brisbane",
+    "Dubai",
+    "Abu Dhabi",
+    "Karachi",
+    "Lahore",
+    "Islamabad",
+    "Peshawar",
+    "Abbottabad",
+    "Delhi",
+    "Mumbai",
+    "Bangalore",
+    "Doha",
+    "Riyadh",
+    "Singapore",
   ];
 
-  const found =
-    cities.find(
-      ([, alias]) =>
-        normalized.includes(alias)
-    );
+  for (const city of cities) {
+    if (value.includes(normalize(city))) {
+      return city;
+    }
+  }
 
-  return found?.[0];
+  return undefined;
 }
 
-const SKILL_GROUPS: Array<{
-  base: string[];
-  synonyms: string[];
-}> = [
-  {
-    base: [
-      "quran",
-      "tajweed",
-      "qirat",
-      "islamic studies",
-      "islamic education",
-    ],
-    synonyms: [
-      "quran teacher",
-      "quran tutor",
-      "tajweed teacher",
-      "tajweed tutor",
-      "qirat teacher",
-      "qirat tutor",
-      "online quran",
-      "online tajweed",
-      "hifz",
-      "hafiz",
-    ],
-  },
+function skillCandidateValues(skill: SkillRow): string[] {
+  const values = [
+    skill.name,
+    skill.category,
+    skill.subcategory,
+  ].filter(Boolean) as string[];
 
-  {
-    base: [
-      "math",
-      "mathematics",
-      "algebra",
-      "calculus",
-      "geometry",
-      "statistics",
-    ],
-    synonyms: [
-      "math teacher",
-      "math tutor",
-      "mathematics teacher",
-      "mathematics tutor",
-      "calculus tutor",
-      "algebra tutor",
-      "statistics tutor",
-    ],
-  },
+  if (Array.isArray(skill.tags)) {
+    values.push(...skill.tags);
+  } else if (typeof skill.tags === "string") {
+    values.push(
+      ...skill.tags
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean)
+    );
+  }
 
-  {
-    base: [
-      "teacher",
-      "teaching",
-      "tutor",
-      "tutoring",
-      "educator",
-      "education",
-      "instructor",
-    ],
-    synonyms: [
-      "online teacher",
-      "online tutor",
-      "private tutor",
-      "private teacher",
-      "online teaching",
-      "education tutor",
-    ],
-  },
+  return values;
+}
 
-  {
-    base: [
-      "coach",
-      "coaching",
-      "mentor",
-      "mentoring",
-    ],
-    synonyms: [
-      "professional coach",
-      "business coach",
-      "life coach",
-      "career coach",
-      "online coach",
-      "mentor",
-      "professional mentor",
-    ],
-  },
-
-  {
-    base: [
-      "freelancer",
-      "freelance",
-    ],
-    synonyms: [
-      "freelance professional",
-      "freelance worker",
-      "freelance services",
-    ],
-  },
-
-  {
-    base: [
-      "developer",
-      "programmer",
-      "development",
-      "coding",
-    ],
-    synonyms: [
-      "web developer",
-      "software developer",
-      "frontend developer",
-      "backend developer",
-      "full stack developer",
-    ],
-  },
-
-  {
-    base: [
-      "designer",
-      "design",
-    ],
-    synonyms: [
-      "graphic designer",
-      "web designer",
-      "ui designer",
-      "ux designer",
-    ],
-  },
-
-  {
-    base: [
-      "writer",
-      "writing",
-      "copywriter",
-      "copywriting",
-    ],
-    synonyms: [
-      "content writer",
-      "content writing",
-      "copywriter",
-      "copywriting",
-    ],
-  },
-
-  {
-    base: [
-      "accountant",
-      "accounting",
-      "bookkeeper",
-      "bookkeeping",
-    ],
-    synonyms: [
-      "accounting professional",
-      "bookkeeping services",
-      "accounting services",
-    ],
-  },
-
-  {
-    base: [
-      "marketing",
-      "marketer",
-    ],
-    synonyms: [
-      "digital marketing",
-      "social media marketing",
-      "marketing consultant",
-    ],
-  },
-
-  {
-    base: [
-      "virtual assistant",
-      "virtual assistance",
-    ],
-    synonyms: [
-      "remote assistant",
-      "online assistant",
-      "virtual assistant",
-    ],
-  },
-
-  {
-    base: [
-      "sociology",
-    ],
-    synonyms: [
-      "sociology teacher",
-      "sociology tutor",
-      "sociology researcher",
-    ],
-  },
-
-  {
-    base: [
-      "psychology",
-    ],
-    synonyms: [
-      "psychology teacher",
-      "psychology tutor",
-      "psychology coach",
-    ],
-  },
-
-  {
-    base: [
-      "anthropology",
-    ],
-    synonyms: [
-      "anthropology teacher",
-      "anthropology tutor",
-    ],
-  },
-
-  {
-    base: [
-      "economics",
-    ],
-    synonyms: [
-      "economics teacher",
-      "economics tutor",
-    ],
-  },
-
-  {
-    base: [
-      "physics",
-    ],
-    synonyms: [
-      "physics teacher",
-      "physics tutor",
-    ],
-  },
-
-  {
-    base: [
-      "chemistry",
-    ],
-    synonyms: [
-      "chemistry teacher",
-      "chemistry tutor",
-    ],
-  },
-];
 function detectSkill(
   text: string,
   skills: SkillRow[]
-): SkillRow | null {
-  const normalized =
-    normalize(text);
+): SkillRow | undefined {
+  const normalizedText = normalize(text);
 
-  for (
-    const skill of skills
-  ) {
-    const candidates = [
-      skill.name,
-      skill.category || "",
-      skill.subcategory || "",
-    ];
+  if (!normalizedText) return undefined;
 
-    if (
-      Array.isArray(
-        skill.tags
-      )
-    ) {
-      candidates.push(
-        ...skill.tags
-      );
-    } else if (
-      typeof skill.tags ===
-      "string"
-    ) {
-      candidates.push(
-        skill.tags
-      );
-    }
+  // First: exact real skill/category/subcategory/tag matching.
+  for (const skill of skills) {
+    const values = skillCandidateValues(skill);
 
-    for (
-      const candidate of candidates
-    ) {
-      const value =
-        normalize(candidate);
+    for (const value of values) {
+      const normalizedValue = normalize(value);
 
       if (
-        value &&
-        normalized.includes(value)
+        normalizedValue.length >= 3 &&
+        normalizedText.includes(normalizedValue)
       ) {
         return skill;
       }
     }
   }
 
-  for (
-    const group of SKILL_GROUPS
-  ) {
-    const matched =
-      group.base.some(
-        (base) =>
-          normalized.includes(
-            normalize(base)
-          )
-      ) ||
-      group.synonyms.some(
-        (synonym) =>
-          normalized.includes(
-            normalize(synonym)
-          )
+  // Second: controlled skill-group matching.
+  for (const skill of skills) {
+    const values = skillCandidateValues(skill);
+    const combined = normalize(values.join(" "));
+
+    for (const groupValues of Object.values(SKILL_GROUPS)) {
+      const matchedGroupTerm = groupValues.find((term) =>
+        normalizedText.includes(normalize(term))
       );
 
-    if (!matched) {
-      continue;
-    }
+      if (!matchedGroupTerm) continue;
 
-    const matchingSkill =
-      skills.find((skill) => {
-        const skillText =
-          normalize(
-            [
-              skill.name,
-              skill.category || "",
-              skill.subcategory || "",
-              Array.isArray(
-                skill.tags
-              )
-                ? skill.tags.join(" ")
-                : skill.tags || "",
-            ].join(" ")
-          );
+      const relatedToGroup = groupValues.some((term) =>
+        combined.includes(normalize(term))
+      );
 
-        return group.base.some(
-          (base) =>
-            skillText.includes(
-              normalize(base)
-            )
-        );
-      });
-
-    if (matchingSkill) {
-      return matchingSkill;
+      if (relatedToGroup) {
+        return skill;
+      }
     }
   }
 
-  return null;
+  return undefined;
+}
+
+/*
+ * Important:
+ * The search query is NOT allowed to create a lead by itself.
+ *
+ * It can only help identify the real skill that was intentionally searched
+ * from our Supabase skills list. The actual result still needs evidence
+ * that it is relevant/professional before this fallback is accepted.
+ */
+function detectSkillFromQueryContext(
+  result: SearchResult,
+  skills: SkillRow[],
+  leadType: LeadType
+): SkillRow | undefined {
+  if (!result.searchQuery) return undefined;
+
+  const query = normalize(result.searchQuery);
+  const resultText = normalize(
+    `${result.title} ${result.snippet || ""}`
+  );
+
+  const resultHasProfessionalEvidence = containsAny(
+    resultText,
+    PROFESSIONAL_TERMS
+  );
+
+  if (!resultHasProfessionalEvidence) {
+    return undefined;
+  }
+
+  for (const skill of skills) {
+    const values = skillCandidateValues(skill);
+
+    if (
+      values.some((value) => {
+        const normalizedValue = normalize(value);
+        return (
+          normalizedValue.length >= 3 &&
+          query.includes(normalizedValue)
+        );
+      })
+    ) {
+      return skill;
+    }
+  }
+
+  // Controlled group fallback for cases such as:
+  // "Mathematics" in the search query while the DB skill is "Math Tutor".
+  for (const skill of skills) {
+    const skillText = normalize(skillCandidateValues(skill).join(" "));
+
+    for (const groupValues of Object.values(SKILL_GROUPS)) {
+      const queryMatchesGroup = groupValues.some((term) =>
+        query.includes(normalize(term))
+      );
+
+      const skillMatchesGroup = groupValues.some((term) =>
+        skillText.includes(normalize(term))
+      );
+
+      if (queryMatchesGroup && skillMatchesGroup) {
+        return skill;
+      }
+    }
+  }
+
+  return undefined;
+        }
+function extractPersonName(title: string): string | undefined {
+  const value = cleanText(title);
+
+  if (!value) return undefined;
+
+  const firstPart = value
+    .split(/\s+[|–—-]\s+/)
+    .map((part) => part.trim())
+    .filter(Boolean)[0];
+
+  if (!firstPart) return undefined;
+
+  const cleaned = firstPart
+    .replace(/\b(teacher|tutor|coach|consultant|mentor|advisor)\b/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const words = cleaned.split(" ");
+
+  if (words.length >= 2 && words.length <= 5) {
+    const looksLikeName = words.every((word) =>
+      /^[A-Z][A-Za-z'.-]+$/.test(word)
+    );
+
+    if (looksLikeName) {
+      return cleaned;
+    }
+  }
+
+  return undefined;
+}
+
+function extractEmails(text: string): string[] {
+  const matches = text.match(
+    /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi
+  );
+
+  return [...new Set((matches || []).map((email) => email.toLowerCase()))];
+}
+
+function extractPhones(text: string): string[] {
+  const matches = text.match(
+    /(?:\+?\d[\d\s().-]{7,}\d)/g
+  );
+
+  return [
+    ...new Set(
+      (matches || [])
+        .map((phone) => phone.replace(/\s+/g, " ").trim())
+        .filter((phone) => phone.replace(/\D/g, "").length >= 8)
+    ),
+  ];
 }
 
 function extractContactLinks(
@@ -1110,1489 +803,564 @@ function extractContactLinks(
 ): string[] {
   const links: string[] = [];
 
-  const anchorPattern =
-    /<a\b[^>]*href=["']([^"']+)["'][^>]*>/gi;
-
-  const contactTerms = [
-    "contact",
-    "get-in-touch",
-    "getintouch",
-    "reach",
-    "about",
-    "profile",
-    "linkedin",
-    "facebook",
-    "instagram",
-    "twitter",
-    "x.com",
-    "threads",
-    "whatsapp",
-    "telegram",
-  ];
-
-  let match:
-    | RegExpExecArray
-    | null;
-
-  while (
-    (match =
-      anchorPattern.exec(
-        html
-      )) !== null
-  ) {
-    const href =
-      decodeHtml(
-        match[1] || ""
-      );
-
-    const normalizedHref =
-      normalize(href);
-
-    if (
-      !contactTerms.some(
-        (term) =>
-          normalizedHref.includes(
-            term
-          )
-      )
-    ) {
-      continue;
-    }
-
-    try {
-      const absolute =
-        new URL(
-          href,
-          baseUrl
-        ).toString();
-
-      if (
-        !links.includes(
-          absolute
-        )
-      ) {
-        links.push(
-          absolute
-        );
-      }
-    } catch {
-      continue;
-    }
-  }
-
-  return links;
-}
-
-function isSocialOrProfileUrl(
-  url?: string
-): boolean {
-  const normalized =
-    normalize(url);
-
-  return (
-    normalized.includes(
-      "linkedin.com/"
-    ) ||
-    normalized.includes(
-      "facebook.com/"
-    ) ||
-    normalized.includes(
-      "instagram.com/"
-    ) ||
-    normalized.includes(
-      "x.com/"
-    ) ||
-    normalized.includes(
-      "twitter.com/"
-    ) ||
-    normalized.includes(
-      "threads.net/"
-    )
-  );
-}
-
-function isLinkedInPersonProfile(
-  url?: string
-): boolean {
-  const normalized =
-    cleanText(url)
-      .toLowerCase();
-
-  return normalized.includes(
-    "linkedin.com/in/"
-  );
-}
-
-function isFacebookPersonProfile(
-  url?: string
-): boolean {
-  const normalized =
-    cleanText(url)
-      .toLowerCase();
-
-  if (
-    !normalized.includes(
-      "facebook.com/"
-    )
-  ) {
-    return false;
-  }
-
-  if (
-    normalized.includes(
-      "/pages/"
-    ) ||
-    normalized.includes(
-      "/groups/"
-    ) ||
-    normalized.includes(
-      "/marketplace/"
-    ) ||
-    normalized.includes(
-      "/events/"
-    )
-  ) {
-    return false;
-  }
-
-  return true;
-}
-
-function isInstagramPersonProfile(
-  url?: string
-): boolean {
-  const normalized =
-    cleanText(url)
-      .toLowerCase();
-
-  return (
-    normalized.includes(
-      "instagram.com/"
-    ) &&
-    !normalized.includes(
-      "/p/"
-    ) &&
-    !normalized.includes(
-      "/reel/"
-    ) &&
-    !normalized.includes(
-      "/explore/"
-    )
-  );
-}
-
-function isXPersonProfile(
-  url?: string
-): boolean {
-  const normalized =
-    cleanText(url)
-      .toLowerCase();
-
-  return (
-    normalized.includes(
-      "x.com/"
-    ) ||
-    normalized.includes(
-      "twitter.com/"
-    )
-  );
-}
-
-function isThreadsPersonProfile(
-  url?: string
-): boolean {
-  const normalized =
-    cleanText(url)
-      .toLowerCase();
-
-  return normalized.includes(
-    "threads.net/@"
-  );
-}
-
-function isDirectSocialProfile(
-  url?: string
-): boolean {
-  return (
-    isLinkedInPersonProfile(url) ||
-    isFacebookPersonProfile(url) ||
-    isInstagramPersonProfile(url) ||
-    isXPersonProfile(url) ||
-    isThreadsPersonProfile(url)
-  );
-}
-
-function extractPersonName(
-  result: SearchResult
-): string | undefined {
-  const title =
-    cleanText(result.title);
-
-  if (!title) {
-    return undefined;
-  }
-
-  const separators = [
-    " - ",
-    " | ",
-    " – ",
-    " — ",
-    " · ",
-  ];
-
-  for (
-    const separator of separators
-  ) {
-    const parts =
-      title
-        .split(separator)
-        .map(cleanText)
-        .filter(Boolean);
-
-    if (
-      parts.length >= 2
-    ) {
-      const first =
-        parts[0];
-
-      if (
-        first.split(/\s+/).length >=
-          2 &&
-        first.length <= 80
-      ) {
-        return first;
-      }
-
-      const last =
-        parts[
-          parts.length - 1
-        ];
-
-      if (
-        last.split(/\s+/).length >=
-          2 &&
-        last.length <= 80
-      ) {
-        return last;
-      }
-    }
-  }
-
-  return undefined;
-}
-
-function hasLikelyPersonName(
-  value?: string
-): boolean {
-  if (!value) {
-    return false;
-  }
-
-  const words =
-    cleanText(value)
-      .split(/\s+/)
-      .filter(Boolean);
-
-  const validWords =
-    words.filter(
-      (word) =>
-        /^[A-Za-zÀ-ÖØ-öø-ÿ'.-]+$/.test(
-          word
-        ) &&
-        word.length >= 2
-    );
-
-  return validWords.length >= 2;
-}
-
-function isSaasProfessional(
-  result: SearchResult,
-  text: string
-): boolean {
-  const normalized =
-    normalize(text);
-
-  const professionalMatch =
-    containsAny(
-      normalized,
-      PROFESSIONAL_TERMS
-    );
-
-  if (
-    !professionalMatch
-  ) {
-    return false;
-  }
-
-  if (
-    containsAny(
-      normalized,
-      SAAS_REJECT_TERMS
-    )
-  ) {
-    return false;
-  }
-
-  return true;
-}
-
-function isIndividualSaasProfile(
-  result: SearchResult
-): boolean {
-  const text =
-    getSearchText(result);
-
-  if (
-    !isSaasProfessional(
-      result,
-      text
-    )
-  ) {
-    return false;
-  }
-
-  const directProfile =
-    isDirectSocialProfile(
-      result.link
-    );
-
-  const linkedinProfile =
-    isLinkedInPersonProfile(
-      result.link
-    );
-
-  const extractedName =
-    extractPersonName(result);
-
-  return (
-    directProfile ||
-    linkedinProfile ||
-    !!extractedName
-  );
-      }
-function parseGoogleResults(
-  html: string
-): SearchResult[] {
-  const results: SearchResult[] = [];
-
-  const anchorPattern =
+  const regex =
     /<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
 
-  let match:
-    | RegExpExecArray
-    | null;
+  let match: RegExpExecArray | null;
 
-  while (
-    (match =
-      anchorPattern.exec(html)) !== null
-  ) {
-    const rawHref =
-      decodeHtml(
-        match[1] || ""
-      );
+  while ((match = regex.exec(html)) !== null) {
+    const href = match[1];
+    const anchorText = normalize(match[2]);
 
-    const anchorHtml =
-      match[2] || "";
+    if (!href) continue;
 
-    if (!rawHref) {
-      continue;
-    }
-
-    let url = rawHref;
-
-    if (
-      url.startsWith("/url?")
-    ) {
-      try {
-        const parsed =
-          new URL(
-            `https://www.google.com${url}`
-          );
-
-        url =
-          parsed.searchParams.get("q") ||
-          parsed.searchParams.get("url") ||
-          "";
-      } catch {
-        continue;
-      }
-    }
-
-    if (
-      !url.startsWith("http://") &&
-      !url.startsWith("https://")
-    ) {
-      continue;
-    }
-
-    if (
-      url.includes(
-        "google.com/search"
-      ) ||
-      url.includes(
-        "google.com/preferences"
-      ) ||
-      url.includes(
-        "google.com/accounts"
-      )
-    ) {
-      continue;
-    }
-
-    const title =
-      cleanText(
-        stripHtml(anchorHtml)
-      );
-
-    if (
-      !title ||
-      title.length < 3
-    ) {
-      continue;
-    }
-
-    const anchorStart =
-      match.index;
-
-    const surroundingStart =
-      Math.max(
-        0,
-        anchorStart - 500
-      );
-
-    const surroundingEnd =
-      Math.min(
-        html.length,
-        anchorStart +
-          match[0].length +
-          2500
-      );
-
-    const surroundingHtml =
-      html.slice(
-        surroundingStart,
-        surroundingEnd
-      );
-
-    const surroundingText =
-      cleanText(
-        stripHtml(
-          surroundingHtml
-        )
-      );
-
-    let snippet =
-      surroundingText;
-
-    if (
-      title &&
-      snippet
-        .toLowerCase()
-        .startsWith(
-          title.toLowerCase()
-        )
-    ) {
-      snippet =
-        snippet
-          .slice(title.length)
-          .trim();
-    }
-
-    if (
-      snippet.length >
-      1500
-    ) {
-      snippet =
-        snippet.slice(
-          0,
-          1500
-        );
-    }
-
-    const result:
-      SearchResult = {
-      title,
-      link: url,
-      snippet:
-        snippet || title,
-    };
-
-    const duplicate =
-      results.some(
-        (item) =>
-          item.link ===
-          result.link
-      );
-
-    if (duplicate) {
-      continue;
-    }
-
-    results.push(result);
-
-    if (
-      results.length >=
-      RESULTS_PER_SEARCH
-    ) {
-      break;
-    }
-  }
-
-  return results;
-}
-
-async function searchPublicWeb(
-  query: string
-): Promise<SearchResult[]> {
-  const encoded =
-    encodeURIComponent(query);
-
-  const url =
-    `https://www.google.com/search?q=${encoded}&num=${RESULTS_PER_SEARCH}`;
-
-  const response =
-    await fetch(
-      url,
-      {
-        method: "GET",
-        headers: {
-          "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0 Safari/537.36",
-          Accept:
-            "text/html,application/xhtml+xml",
-          "Accept-Language":
-            "en-US,en;q=0.9",
-        },
-        redirect: "follow",
-      }
-    );
-
-  if (!response.ok) {
-    throw new Error(
-      `Free web search failed: ${response.status}`
-    );
-  }
-
-  const html =
-    await response.text();
-
-  if (!html) {
-    return [];
-  }
-
-  return parseGoogleResults(
-    html
-  );
-}
-
-async function searchSerper(
-  query: string,
-  type: LeadType
-): Promise<SearchResult[]> {
-  if (!SERPER_API_KEY) {
-    throw new Error(
-      "SERPER_API_KEY is not configured."
-    );
-  }
-
-  const response =
-    await fetch(
-      "https://google.serper.dev/search",
-      {
-        method: "POST",
-        headers: {
-          "X-API-KEY":
-            SERPER_API_KEY,
-          "Content-Type":
-            "application/json",
-        },
-        body: JSON.stringify({
-          q: query,
-          num:
-            RESULTS_PER_SEARCH,
-          type:
-            "search",
-        }),
-      }
-    );
-
-  if (!response.ok) {
-    const message =
-      await response.text();
-
-    throw new Error(
-      `Serper request failed: ${response.status} ${message}`
-    );
-  }
-
-  const data =
-    await response.json();
-
-  const organic =
-    Array.isArray(
-      data?.organic
-    )
-      ? data.organic
-      : [];
-
-  return organic.map(
-    (
-      item: any,
-      index: number
-    ) => ({
-      title:
-        cleanText(
-          item?.title
-        ),
-      link:
-        cleanText(
-          item?.link
-        ),
-      snippet:
-        cleanText(
-          item?.snippet
-        ),
-      date:
-        cleanText(
-          item?.date
-        ) || undefined,
-      position:
-        typeof item?.position ===
-        "number"
-          ? item.position
-          : index + 1,
-    })
-  );
-}
-
-async function searchWithFallback(
-  query: string,
-  type: LeadType
-): Promise<SearchResult[]> {
-  if (SERPER_API_KEY) {
     try {
-      return await searchSerper(
-        query,
-        type
-      );
+      const absolute = new URL(href, baseUrl).toString();
+
+      if (!isValidExternalResultUrl(absolute)) continue;
+
+      const useful =
+        isDirectSocialProfile(absolute) ||
+        isDirectContactPageUrl(absolute) ||
+        containsAny(anchorText, DIRECT_CONTACT_TERMS);
+
+      if (useful) {
+        links.push(normalizeUrl(absolute));
+      }
     } catch {
-      // Fall through to free search.
+      // Ignore malformed links.
     }
   }
 
-  return searchPublicWeb(
-    query
-  );
-}
-function buildQueries(
-  type: LeadType,
-  skills: SkillRow[]
-): string[] {
-  const queries: string[] = [];
-
-  const usableSkills =
-    skills
-      .map(
-        (skill) =>
-          cleanText(
-            skill.name
-          )
-      )
-      .filter(Boolean);
-
-  const selectedSkills =
-    usableSkills.slice(
-      0,
-      MAX_QUERIES_PER_TYPE
-    );
-
-  for (
-    const skill of selectedSkills
-  ) {
-    if (
-      type === "Demand"
-    ) {
-      queries.push(
-        `"${skill}" ("looking for" OR "need a" OR "need someone" OR "seeking" OR "wanted" OR "recommend a" OR "looking to hire")`
-      );
-    }
-
-    if (
-      type === "Supply"
-    ) {
-      queries.push(
-        `"${skill}" ("hiring" OR "we are hiring" OR "job opening" OR "vacancy" OR "position available" OR "applications open" OR "recruiting")`
-      );
-    }
-
-    if (
-      type === "SaaS"
-    ) {
-      queries.push(
-        `"${skill}" ("teacher" OR "tutor" OR "coach" OR "consultant" OR "mentor") ("LinkedIn" OR "professional profile" OR "profile")`
-      );
-    }
-  }
-
-  return [
-    ...new Set(
-      queries
-    ),
-  ].slice(
-    0,
-    MAX_QUERIES_PER_TYPE
-  );
-}
-
-function resultMatchesType(
-  result: SearchResult,
-  type: LeadType
-): boolean {
-  const text =
-    getSearchText(result);
-
-  const queryContext =
-    normalize(
-      result.searchQuery
-    );
-
-  if (
-    type === "SaaS"
-  ) {
-    if (
-      isIndividualSaasProfile(
-        result
-      )
-    ) {
-      return true;
-    }
-
-    const link =
-      cleanText(
-        result.link
-      ).toLowerCase();
-
-    const individualProfileUrl =
-      link.includes(
-        "linkedin.com/in/"
-      ) ||
-      link.includes(
-        "facebook.com/"
-      ) ||
-      link.includes(
-        "instagram.com/"
-      ) ||
-      link.includes(
-        "x.com/"
-      ) ||
-      link.includes(
-        "twitter.com/"
-      ) ||
-      link.includes(
-        "threads.net/@"
-      );
-
-    const professionalProfile =
-      containsAny(
-        text,
-        PROFESSIONAL_TERMS
-      );
-
-    const personName =
-      hasLikelyPersonName(
-        extractPersonName(
-          result
-        )
-      );
-
-    return (
-      individualProfileUrl &&
-      professionalProfile &&
-      personName
-    );
-  }
-
-  if (
-    type === "Demand"
-  ) {
-    const directDemand =
-      containsAny(
-        text,
-        [
-          ...DEMAND_SIGNALS,
-          "looking for someone",
-          "looking for a",
-          "looking for an",
-          "need help",
-          "need a teacher",
-          "need a tutor",
-          "need a coach",
-          "need a consultant",
-          "need a mentor",
-          "teacher needed",
-          "tutor needed",
-          "coach needed",
-          "consultant needed",
-          "mentor needed",
-          "teacher wanted",
-          "tutor wanted",
-          "coach wanted",
-          "seeking a teacher",
-          "seeking a tutor",
-          "seeking a coach",
-          "seeking a consultant",
-          "seeking a mentor",
-          "seeking services",
-          "request for",
-          "requesting",
-          "service needed",
-          "services needed",
-          "private tutor needed",
-          "online tutor needed",
-          "online teacher needed",
-        ]
-      );
-
-    if (
-      directDemand
-    ) {
-      return true;
-    }
-
-    return (
-      queryContext.includes(
-        "looking for"
-      ) ||
-      queryContext.includes(
-        "need a"
-      ) ||
-      queryContext.includes(
-        "need someone"
-      ) ||
-      queryContext.includes(
-        "seeking"
-      ) ||
-      queryContext.includes(
-        "wanted"
-      ) ||
-      queryContext.includes(
-        "recommend a"
-      ) ||
-      queryContext.includes(
-        "looking to hire"
-      )
-    );
-  }
-
-  if (
-    type === "Supply"
-  ) {
-    const directSupply =
-      containsAny(
-        text,
-        [
-          ...SUPPLY_SIGNALS,
-          "open positions",
-          "open role",
-          "open roles",
-          "employment opportunity",
-          "employment opportunities",
-          "career opportunity",
-          "career opportunities",
-          "positions available",
-          "vacant position",
-          "vacancy for",
-          "seeking applicants",
-          "accepting applications",
-          "applications are open",
-          "now recruiting",
-          "currently recruiting",
-          "teacher vacancy",
-          "tutor vacancy",
-          "coach vacancy",
-          "teaching position",
-          "teaching opportunity",
-          "tutoring position",
-          "coaching position",
-        ]
-      );
-
-    if (
-      directSupply
-    ) {
-      return true;
-    }
-
-    return (
-      queryContext.includes(
-        "hiring"
-      ) ||
-      queryContext.includes(
-        "we are hiring"
-      ) ||
-      queryContext.includes(
-        "job opening"
-      ) ||
-      queryContext.includes(
-        "vacancy"
-      ) ||
-      queryContext.includes(
-        "position available"
-      ) ||
-      queryContext.includes(
-        "applications open"
-      ) ||
-      queryContext.includes(
-        "recruiting"
-      )
-    );
-  }
-
-  return false;
-}
-
-function tableForType(
-  type: LeadType
-): string {
-  if (
-    type === "Demand"
-  ) {
-    return "demand_leads";
-  }
-
-  if (
-    type === "Supply"
-  ) {
-    return "supply_leads";
-  }
-
-  return "saas_leads";
-    }
-function leadInsertPayload(
-  lead: CollectedLead
-): Record<string, unknown> {
-  if (
-    lead.leadType ===
-    "SaaS"
-  ) {
-    return {
-      name:
-        lead.name ||
-        lead.title,
-
-      platform:
-        "Opportunity Hub",
-
-      nich:
-        lead.skill ||
-        "",
-
-      contect:
-        lead.contactEmail ||
-        lead.contactPhone ||
-        lead.contactUrl ||
-        "",
-
-      status:
-        "active",
-
-      description:
-        lead.description ||
-        lead.title,
-
-      commission:
-        null,
-
-      trial_days:
-        null,
-
-      landing_url:
-        lead.contactUrl ||
-        lead.source,
-
-      source_url:
-        lead.source,
-
-      contect_url:
-        lead.contactUrl ||
-        lead.source,
-
-      country:
-        lead.country ||
-        null,
-
-      city:
-        lead.city ||
-        null,
-    };
-  }
-
-  return {
-    source:
-      lead.source,
-
-    name:
-      lead.name ||
-      lead.contactName ||
-      null,
-
-    skill_needed:
-      lead.skill ||
-      null,
-
-    description:
-      lead.description ||
-      lead.title,
-
-    contact_email:
-      lead.contactEmail ||
-      null,
-
-    contact_phone:
-      lead.contactPhone ||
-      null,
-
-    contact_name:
-      lead.contactName ||
-      lead.name ||
-      null,
-
-    status:
-      "active",
-
-    title:
-      lead.title,
-
-    category:
-      lead.category ||
-      "Real Opportunity",
-
-    subcategory:
-      lead.subcategory ||
-      null,
-
-    country:
-      lead.country ||
-      null,
-
-    city:
-      lead.city ||
-      null,
-
-    budget:
-      lead.budget ||
-      null,
-
-    currency:
-      lead.currency ||
-      null,
-
-    contact_url:
-      lead.contactUrl ||
-      null,
-
-    created_at:
-      lead.createdAt ||
-      new Date().toISOString(),
-  };
-}
-
-async function leadAlreadyExists(
-  supabase: ReturnType<
-    typeof createSupabase
-  >,
-  lead: CollectedLead
-): Promise<boolean> {
-  const table =
-    tableForType(
-      lead.leadType
-    );
-
-  if (
-    lead.leadType ===
-    "SaaS"
-  ) {
-    const {
-      data,
-      error,
-    } = await supabase
-      .from(table)
-      .select("id")
-      .eq(
-        "source_url",
-        lead.source
-      )
-      .limit(1);
-
-    if (error) {
-      throw new Error(
-        `Duplicate check failed: ${error.message}`
-      );
-    }
-
-    return (
-      Array.isArray(data) &&
-      data.length > 0
-    );
-  }
-
-  const {
-    data,
-    error,
-  } = await supabase
-    .from(table)
-    .select("id")
-    .eq(
-      "source",
-      lead.source
-    )
-    .limit(1);
-
-  if (error) {
-    throw new Error(
-      `Duplicate check failed: ${error.message}`
-    );
-  }
-
-  return (
-    Array.isArray(data) &&
-    data.length > 0
-  );
+  return [...new Set(links)];
 }
 
 async function improveContact(
   result: SearchResult
 ): Promise<ContactInfo> {
-  const text =
-    getSearchText(result);
+  const directText = `${result.title} ${result.snippet || ""}`;
 
-  const emails =
-    extractEmails(text);
+  const directEmails = extractEmails(directText);
+  const directPhones = extractPhones(directText);
 
-  const phones =
-    extractPhones(text);
-
+  // A social/profile/contact page itself can be a valid direct contact path.
   if (
-    emails.length ||
-    phones.length
+    isDirectSocialProfile(result.link) ||
+    isDirectContactPageUrl(result.link)
   ) {
     return {
-      email:
-        emails[0],
-      phone:
-        phones[0],
-      url:
-        cleanText(
-          result.link
-        ) || undefined,
+      email: directEmails[0],
+      phone: directPhones[0],
+      url: normalizeUrl(result.link),
     };
   }
 
-  const source =
-    cleanText(
-      result.link
-    );
-
-  if (!source) {
-    return {};
+  if (!result.link || !isValidExternalResultUrl(result.link)) {
+    return {
+      email: directEmails[0],
+      phone: directPhones[0],
+    };
   }
 
   try {
-    const response =
-      await fetch(
-        source,
-        {
-          method: "GET",
-          headers: {
-            "User-Agent":
-              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0 Safari/537.36",
-            Accept:
-              "text/html,application/xhtml+xml",
-            "Accept-Language":
-              "en-US,en;q=0.9",
-          },
-          redirect: "follow",
-        }
-      );
+    const response = await fetch(result.link, {
+      method: "GET",
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (compatible; OpportunityHubLeadCollector/1.0)",
+        Accept: "text/html,application/xhtml+xml",
+      },
+      redirect: "follow",
+    });
 
     if (!response.ok) {
       return {
-        url: source,
+        email: directEmails[0],
+        phone: directPhones[0],
       };
     }
 
-    const html =
-      await response.text();
+    const html = await response.text();
 
-    const pageText =
-      cleanText(
-        stripHtml(html)
-      );
+    const pageText = cleanText(html);
 
-    const pageEmails =
-      extractEmails(
-        `${html} ${pageText}`
-      );
+    const emails = [
+      ...directEmails,
+      ...extractEmails(pageText),
+    ];
 
-    const pagePhones =
-      extractPhones(
-        `${html} ${pageText}`
-      );
+    const phones = [
+      ...directPhones,
+      ...extractPhones(pageText),
+    ];
 
-    const contactLinks =
-      extractContactLinks(
-        html,
-        source
-      );
+    const links = extractContactLinks(html, result.link);
 
     return {
-      email:
-        pageEmails[0],
-      phone:
-        pagePhones[0],
-      url:
-        contactLinks[0] ||
-        source,
+      email: [...new Set(emails)][0],
+      phone: [...new Set(phones)][0],
+      url: links[0],
     };
   } catch {
     return {
-      url: source,
+      email: directEmails[0],
+      phone: directPhones[0],
     };
   }
-      }
-async function processResult(
+}
+
+function isIndividualSaasProfile(
   result: SearchResult,
-  type: LeadType,
-  skills: SkillRow[],
-  stats: CollectionStats
-): Promise<CollectedLead | null> {
-  stats.found += 1;
+  contact: ContactInfo
+): boolean {
+  const text = normalize(
+    `${result.title} ${result.snippet || ""}`
+  );
 
-  const link =
-    cleanText(
-      result.link
-    );
-
-  const diagnosticTitle =
-    cleanText(
-      result.title
-    ) || "(no title)";
-
-  const diagnosticUrl =
-    link || "(no URL)";
-
-  const diagnosticQuery =
-    cleanText(
-      result.searchQuery
-    ) || "(no query)";
-
-  if (!link) {
-    stats.blocked += 1;
-
-    console.log(
-      "[LEAD DIAGNOSTIC]",
-      JSON.stringify({
-        type,
-        reason:
-          "blocked/no-url",
-        title:
-          diagnosticTitle,
-        url:
-          diagnosticUrl,
-        query:
-          diagnosticQuery,
-      })
-    );
-
-    return null;
+  if (!containsAny(text, PROFESSIONAL_TERMS)) {
+    return false;
   }
 
-  if (
-    isBlockedDomain(link)
-  ) {
-    stats.blocked += 1;
+  const personName = extractPersonName(result.title);
 
-    console.log(
-      "[LEAD DIAGNOSTIC]",
-      JSON.stringify({
-        type,
-        reason:
-          "blocked-domain",
-        title:
-          diagnosticTitle,
-        url:
-          diagnosticUrl,
-        query:
-          diagnosticQuery,
-      })
-    );
+  if (personName) return true;
 
-    return null;
+  if (contact.url && isDirectSocialProfile(contact.url)) {
+    return true;
   }
 
-  if (
-    type === "SaaS"
-  ) {
-    const lowerUrl =
-      link.toLowerCase();
+  if (isDirectSocialProfile(result.link)) {
+    return true;
+  }
+
+  return false;
+  }
+/*
+ * Google fallback parser
+ *
+ * This is the critical repair.
+ *
+ * We ONLY extract anchors that contain a real <h3> result title.
+ * We then reject:
+ * - Google support
+ * - Google feedback
+ * - Google navigation
+ * - Google-owned URLs
+ * - blocked marketplaces/directories/etc.
+ *
+ * This prevents entries such as:
+ * "feedback -> https://support.google.com/websearch"
+ * from ever entering the lead pipeline.
+ */
+function parseGoogleResults(
+  html: string,
+  searchQuery: string
+): SearchResult[] {
+  const results: SearchResult[] = [];
+
+  /*
+   * Google organic results normally contain an <a> containing an <h3>.
+   * We intentionally do NOT parse every <a> on the page.
+   */
+  const resultRegex =
+    /<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?<h3\b[^>]*>[\s\S]*?<\/h3>[\s\S]*?)<\/a>/gi;
+
+  let match: RegExpExecArray | null;
+
+  while ((match = resultRegex.exec(html)) !== null) {
+    const href = match[1];
+    const block = match[2];
+
+    if (!href || !block) continue;
+
+    let link = href.trim();
+
+    // Google may return redirect URLs. Resolve simple /url?q=... redirects.
+    try {
+      if (link.startsWith("/url?")) {
+        const parsed = new URL(link, "https://www.google.com");
+        const target =
+          parsed.searchParams.get("q") ||
+          parsed.searchParams.get("url");
+
+        if (target) {
+          link = target;
+        }
+      }
+    } catch {
+      continue;
+    }
+
+    if (!isValidExternalResultUrl(link)) {
+      continue;
+    }
+
+    const h3Match = block.match(
+      /<h3\b[^>]*>([\s\S]*?)<\/h3>/i
+    );
+
+    if (!h3Match) continue;
+
+    const title = cleanText(h3Match[1]);
+
+    if (!title) continue;
+
+    /*
+     * Strip the title from the block before treating remaining text
+     * as the snippet.
+     */
+    const withoutTitle = block.replace(h3Match[0], " ");
+    const snippet = cleanText(withoutTitle);
+
+    const candidate: SearchResult = {
+      title,
+      link: normalizeUrl(link),
+      snippet: snippet.slice(0, 1200),
+      searchQuery,
+    };
+
+    if (isGoogleOwnedUrl(candidate.link)) continue;
+    if (isBlockedDomain(candidate.link)) continue;
 
     if (
-      SAAS_BLOCKED_PATHS.some(
-        (path) =>
-          lowerUrl.includes(
-            path
-          )
+      containsAny(
+        normalize(`${candidate.title} ${candidate.snippet}`),
+        BLOCKED_RESULT_TERMS
       )
     ) {
-      stats.blocked += 1;
+      continue;
+    }
 
-      console.log(
-        "[LEAD DIAGNOSTIC]",
-        JSON.stringify({
-          type,
-          reason:
-            "saas-blocked-path",
-          title:
-            diagnosticTitle,
-          url:
-            diagnosticUrl,
-          query:
-            diagnosticQuery,
-        })
-      );
+    results.push(candidate);
+  }
 
-      return null;
+  /*
+   * De-duplicate the parser output.
+   */
+  const unique = new Map<string, SearchResult>();
+
+  for (const result of results) {
+    const key = normalizeUrl(result.link);
+
+    if (!key) continue;
+
+    if (!unique.has(key)) {
+      unique.set(key, result);
     }
   }
 
-  if (
-    type === "Demand" ||
-    type === "Supply"
-  ) {
-    if (
-      !isFresh(result)
-    ) {
-      stats.stale += 1;
+  return [...unique.values()].slice(0, RESULTS_PER_SEARCH);
+}
 
-      console.log(
-        "[LEAD DIAGNOSTIC]",
-        JSON.stringify({
-          type,
-          reason: "stale",
-          title:
-            diagnosticTitle,
-          url:
-            diagnosticUrl,
-          query:
-            diagnosticQuery,
-        })
+async function searchSerper(
+  query: string
+): Promise<SearchResult[]> {
+  if (!SERPER_API_KEY) {
+    return [];
+  }
+
+  const response = await fetch(
+    "https://google.serper.dev/search",
+    {
+      method: "POST",
+      headers: {
+        "X-API-KEY": SERPER_API_KEY,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        q: query,
+        num: RESULTS_PER_SEARCH,
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+
+    throw new Error(
+      `Serper request failed: ${response.status} ${errorText}`
+    );
+  }
+
+  const data = await response.json();
+
+  const organic = Array.isArray(data?.organic)
+    ? data.organic
+    : [];
+
+  return organic
+    .map((item: any) => ({
+      title: cleanText(item?.title),
+      link: normalizeUrl(item?.link),
+      snippet: cleanText(item?.snippet),
+      date: cleanText(item?.date),
+      searchQuery: query,
+    }))
+    .filter(
+      (item: SearchResult) =>
+        item.title &&
+        isValidExternalResultUrl(item.link)
+    )
+    .slice(0, RESULTS_PER_SEARCH);
+}
+
+async function searchGoogleFallback(
+  query: string
+): Promise<SearchResult[]> {
+  const params = new URLSearchParams({
+    q: query,
+    num: String(RESULTS_PER_SEARCH),
+    hl: "en",
+  });
+
+  const response = await fetch(
+    `${GOOGLE_SEARCH_URL}?${params.toString()}`,
+    {
+      method: "GET",
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131 Safari/537.36",
+        Accept:
+          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+      },
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `Google fallback request failed: ${response.status}`
+    );
+  }
+
+  const html = await response.text();
+
+  return parseGoogleResults(html, query);
+}
+
+async function searchWithFallback(
+  query: string
+): Promise<SearchResult[]> {
+  if (SERPER_API_KEY) {
+    try {
+      return await searchSerper(query);
+    } catch (error) {
+      console.warn(
+        "[LEAD COLLECTOR] Serper failed; using Google fallback.",
+        error
       );
-
-      return null;
     }
   }
 
-  if (
-    !resultMatchesType(
+  return searchGoogleFallback(query);
+}
+async function insertLead(
+  type: LeadType,
+  result: SearchResult,
+  skill: SkillRow,
+  contact: ContactInfo
+): Promise<void> {
+  if (!supabase) {
+    throw new Error("Supabase is not configured.");
+  }
+
+  const text = getSearchText(result);
+  const country = detectCountry(text);
+  const city = detectCity(text);
+  const budget = getBudget(text);
+  const currency = getCurrency(text);
+  const name = extractPersonName(result.title);
+
+  const common = {
+    title: result.title,
+    name: name || null,
+    company: null,
+    description: result.snippet || null,
+    skill: skill.name || null,
+    category: skill.category || null,
+    subcategory: skill.subcategory || null,
+    country: country || null,
+    city: city || null,
+    budget: budget || null,
+    currency: currency || null,
+    source_url: normalizeUrl(result.link),
+    contact_email: contact.email || null,
+    contact_phone: contact.phone || null,
+    contact_url: contact.url || null,
+  };
+
+  if (type === "Demand") {
+    const { error } = await supabase
+      .from("demand_leads")
+      .insert(common);
+
+    if (error) throw error;
+    return;
+  }
+
+  if (type === "Supply") {
+    const { error } = await supabase
+      .from("supply_leads")
+      .insert(common);
+
+    if (error) throw error;
+    return;
+  }
+
+  /*
+   * Keep the existing compatibility field "contect" as well as
+   * the normal contact fields used by the dashboard.
+   */
+  const saasPayload = {
+    ...common,
+    contect:
+      contact.email ||
+      contact.phone ||
+      contact.url ||
+      null,
+  };
+
+  const { error } = await supabase
+    .from("saas_leads")
+    .insert(saasPayload);
+
+  if (error) throw error;
+}
+
+async function processResult(
+  type: LeadType,
+  result: SearchResult,
+  skills: SkillRow[],
+  stats: LeadStats
+): Promise<boolean> {
+  stats.found += 1;
+
+  /*
+   * First and most important safety check:
+   * Never process Google's own support/navigation pages as leads.
+   */
+  if (!isValidExternalResultUrl(result.link)) {
+    stats.blocked += 1;
+
+    console.log(
+      "[LEAD DIAGNOSTIC]",
+      JSON.stringify({
+        type,
+        reason: "blocked-url",
+        title: result.title,
+        url: result.link,
+        query: result.searchQuery,
+      })
+    );
+
+    return false;
+  }
+
+  if (isBlockedResult(result)) {
+    stats.blocked += 1;
+
+    console.log(
+      "[LEAD DIAGNOSTIC]",
+      JSON.stringify({
+        type,
+        reason: "blocked",
+        title: result.title,
+        url: result.link,
+        query: result.searchQuery,
+      })
+    );
+
+    return false;
+  }
+
+  /*
+   * Demand/Supply/SaaS type evidence must come from the actual result.
+   */
+  if (!resultMatchesType(result, type)) {
+    stats.wrongType += 1;
+
+    console.log(
+      "[LEAD DIAGNOSTIC]",
+      JSON.stringify({
+        type,
+        reason: "wrong-type",
+        title: result.title,
+        url: result.link,
+        query: result.searchQuery,
+        snippet: result.snippet,
+      })
+    );
+
+    return false;
+  }
+
+  if (!isFreshEnough(result, type)) {
+    stats.stale += 1;
+
+    console.log(
+      "[LEAD DIAGNOSTIC]",
+      JSON.stringify({
+        type,
+        reason: "stale",
+        title: result.title,
+        url: result.link,
+        date: result.date,
+      })
+    );
+
+    return false;
+  }
+
+  /*
+   * Normal skill detection first.
+   */
+  let skill = detectSkill(
+    getSearchText(result),
+    skills
+  );
+
+  /*
+   * Controlled query-context fallback:
+   * only maps to a real skill already loaded from Supabase,
+   * and only when the actual result contains professional evidence.
+   *
+   * The query alone cannot create a lead.
+   */
+  if (!skill) {
+    skill = detectSkillFromQueryContext(
       result,
+      skills,
       type
-    )
-  ) {
-    stats.wrongType += 1;
+    );
+  }
+
+  if (!skill) {
+    stats.noSkill += 1;
 
     console.log(
       "[LEAD DIAGNOSTIC]",
       JSON.stringify({
         type,
-        reason:
-          "wrong-type",
-        title:
-          diagnosticTitle,
-        url:
-          diagnosticUrl,
-        query:
-          diagnosticQuery,
-        snippet:
-          cleanText(
-            result.snippet
-          ).slice(
-            0,
-            500
-          ),
+        reason: "no-skill",
+        title: result.title,
+        url: result.link,
+        query: result.searchQuery,
+        snippet: result.snippet,
       })
     );
 
-    return null;
+    return false;
   }
 
-  const searchText =
-    getSearchText(
-      result
-    );
+  const contact = await improveContact(result);
 
-  const matchedSkill =
-    detectSkill(
-      searchText,
-      skills
-    );
-
-  if (!matchedSkill) {
-    stats.noSkillMatch += 1;
-
-    console.log(
-      "[LEAD DIAGNOSTIC]",
-      JSON.stringify({
-        type,
-        reason:
-          "no-skill-match",
-        title:
-          diagnosticTitle,
-        url:
-          diagnosticUrl,
-        query:
-          diagnosticQuery,
-        text:
-          searchText.slice(
-            0,
-            1000
-          ),
-      })
-    );
-
-    return null;
-  }
-
-  if (
-    type === "SaaS" &&
-    !isIndividualSaasProfile(
-      result
-    )
-  ) {
-    stats.wrongType += 1;
-
-    console.log(
-      "[LEAD DIAGNOSTIC]",
-      JSON.stringify({
-        type,
-        reason:
-          "not-individual-saas-profile",
-        title:
-          diagnosticTitle,
-        url:
-          diagnosticUrl,
-        query:
-          diagnosticQuery,
-      })
-    );
-
-    return null;
-  }
-
-  const contact =
-    await improveContact(
-      result
-    );
-
+  /*
+   * Gold standard:
+   * email, phone, WhatsApp/Telegram/social profile,
+   * named professional profile, or direct contact page.
+   *
+   * A random source/article URL is NOT accepted as contact.
+   */
   if (
     !contact.email &&
     !contact.phone &&
@@ -2604,603 +1372,333 @@ async function processResult(
       "[LEAD DIAGNOSTIC]",
       JSON.stringify({
         type,
-        reason:
-          "no-contact",
-        title:
-          diagnosticTitle,
-        url:
-          diagnosticUrl,
-        query:
-          diagnosticQuery,
+        reason: "no-contact",
+        title: result.title,
+        url: result.link,
+        query: result.searchQuery,
+        skill: skill.name,
       })
     );
 
-    return null;
+    return false;
   }
 
-  const title =
-    cleanText(
-      result.title
-    );
-
-  if (!title) {
-    stats.blocked += 1;
+  if (
+    type === "SaaS" &&
+    !isIndividualSaasProfile(result, contact)
+  ) {
+    stats.wrongType += 1;
 
     console.log(
       "[LEAD DIAGNOSTIC]",
       JSON.stringify({
         type,
-        reason:
-          "empty-title",
-        url:
-          diagnosticUrl,
-        query:
-          diagnosticQuery,
+        reason: "not-individual-saas-profile",
+        title: result.title,
+        url: result.link,
+        query: result.searchQuery,
+        skill: skill.name,
       })
     );
 
-    return null;
+    return false;
   }
 
-  const countryText =
-    [
-      title,
-      result.snippet || "",
-      contact.url || "",
-    ].join(" ");
+  const duplicate = await leadAlreadyExists(
+    type,
+    result,
+    contact
+  );
 
-  const country =
-    detectCountry(
-      countryText
+  if (duplicate) {
+    stats.duplicate += 1;
+
+    console.log(
+      "[LEAD DIAGNOSTIC]",
+      JSON.stringify({
+        type,
+        reason: "duplicate",
+        title: result.title,
+        url: result.link,
+      })
     );
 
-  const city =
-    detectCity(
-      countryText
-    );
-
-  const description =
-    cleanText(
-      result.snippet ||
-        title
-    );
-
-  const source =
-    cleanText(
-      result.link
-    );
-
-  const lead:
-    CollectedLead = {
-    leadType:
-      type,
-
-    source,
-
-    title,
-
-    name:
-      extractPersonName(
-        result
-      ),
-
-    description,
-
-    skill:
-      matchedSkill.name,
-
-    category:
-      matchedSkill.category ||
-      undefined,
-
-    subcategory:
-      matchedSkill.subcategory ||
-      undefined,
-
-    country,
-
-    city,
-
-    contactEmail:
-      contact.email,
-
-    contactPhone:
-      contact.phone,
-
-    contactName:
-      extractPersonName(
-        result
-      ),
-
-    contactUrl:
-      contact.url ||
-      source,
-
-    createdAt:
-      parseResultDate(
-        result
-      )?.toISOString() ||
-      new Date().toISOString(),
-  };
+    return false;
+  }
 
   stats.accepted += 1;
 
-  console.log(
-    "[LEAD DIAGNOSTIC]",
-    JSON.stringify({
+  try {
+    await insertLead(
       type,
-      reason:
-        "accepted",
-      title:
-        diagnosticTitle,
-      url:
-        diagnosticUrl,
-      query:
-        diagnosticQuery,
-      skill:
-        matchedSkill.name,
-      country:
-        country || null,
-    })
-  );
-
-  return lead;
-  }
-async function collectLeadsForType(
-  supabase: ReturnType<
-    typeof createSupabase
-  >,
-  type: LeadType,
-  skills: SkillRow[],
-  stats: CollectionStats
-): Promise<number> {
-  const queries =
-    buildQueries(
-      type,
-      skills
+      result,
+      skill,
+      contact
     );
 
-  if (
-    queries.length === 0
-  ) {
-    return 0;
-  }
-
-  let inserted = 0;
-
-  for (
-    const query of queries
-  ) {
-    let results:
-      SearchResult[] = [];
+    stats.inserted += 1;
 
     console.log(
-      "[LEAD DIAGNOSTIC] SEARCH",
+      "[LEAD DIAGNOSTIC]",
       JSON.stringify({
         type,
-        query,
+        reason: "inserted",
+        title: result.title,
+        url: result.link,
+        skill: skill.name,
+        country: detectCountry(getSearchText(result)),
       })
     );
 
+    return true;
+  } catch (error) {
+    stats.insertErrors += 1;
+
+    console.error(
+      "[LEAD INSERT ERROR]",
+      JSON.stringify({
+        type,
+        title: result.title,
+        url: result.link,
+        skill: skill.name,
+        error:
+          error instanceof Error
+            ? error.message
+            : String(error),
+      })
+    );
+
+    return false;
+  }
+}
+async function collectLeadsForType(
+  type: LeadType,
+  skills: SkillRow[]
+): Promise<CollectorResult> {
+  const stats = emptyStats();
+  const insertedByType = emptyInsertedByType();
+
+  const queries = buildQueries(type, skills);
+
+  /*
+   * Prevent the same URL appearing from multiple searches.
+   */
+  const seenUrls = new Set<string>();
+
+  for (const query of queries) {
+    let results: SearchResult[] = [];
+
     try {
-      results =
-        await searchWithFallback(
-          query,
-          type
-        );
-    } catch (
-      error
-    ) {
-      stats.insertErrors += 1;
-
-      stats.lastInsertError =
-        error instanceof Error
-          ? error.message
-          : String(error);
-
-      console.log(
-        "[LEAD DIAGNOSTIC] SEARCH ERROR",
-        JSON.stringify({
-          type,
-          query,
-          error:
-            stats.lastInsertError,
-        })
+      results = await searchWithFallback(query);
+    } catch (error) {
+      console.error(
+        `[LEAD SEARCH ERROR] ${type}`,
+        error
       );
 
       continue;
     }
 
-    console.log(
-      "[LEAD DIAGNOSTIC] SEARCH RESULTS",
-      JSON.stringify({
+    for (const result of results) {
+      const normalizedSource = normalizeUrl(result.link);
+
+      if (!normalizedSource) continue;
+
+      if (seenUrls.has(normalizedSource)) {
+        continue;
+      }
+
+      seenUrls.add(normalizedSource);
+
+      const beforeInserted = stats.inserted;
+
+      await processResult(
         type,
-        query,
-        count:
-          results.length,
-        results:
-          results.map(
-            (result) => ({
-              title:
-                cleanText(
-                  result.title
-                ),
-              url:
-                cleanText(
-                  result.link
-                ),
-              snippet:
-                cleanText(
-                  result.snippet
-                ).slice(
-                  0,
-                  500
-                ),
-            })
-          ),
-      })
-    );
+        {
+          ...result,
+          searchQuery: query,
+        },
+        skills,
+        stats
+      );
 
-    for (
-      const result of results
-    ) {
-      try {
-        const contextualResult =
-          {
-            ...result,
-            searchQuery:
-              query,
-          };
-
-        const lead =
-          await processResult(
-            contextualResult,
-            type,
-            skills,
-            stats
-          );
-
-        if (!lead) {
-          continue;
-        }
-
-        const exists =
-          await leadAlreadyExists(
-            supabase,
-            lead
-          );
-
-        if (exists) {
-          stats.duplicate += 1;
-
-          console.log(
-            "[LEAD DIAGNOSTIC]",
-            JSON.stringify({
-              type,
-              reason:
-                "duplicate",
-              title:
-                lead.title,
-              url:
-                lead.source,
-              query,
-            })
-          );
-
-          continue;
-        }
-
-        const table =
-          tableForType(
-            type
-          );
-
-        const payload =
-          leadInsertPayload(
-            lead
-          );
-
-        const {
-          error,
-        } = await supabase
-          .from(table)
-          .insert(
-            payload
-          );
-
-        if (error) {
-          stats.insertErrors += 1;
-
-          stats.lastInsertError =
-            error.message;
-
-          console.log(
-            "[LEAD DIAGNOSTIC] INSERT ERROR",
-            JSON.stringify({
-              type,
-              title:
-                lead.title,
-              url:
-                lead.source,
-              error:
-                error.message,
-            })
-          );
-
-          continue;
-        }
-
-        stats.inserted += 1;
-        inserted += 1;
-
-        console.log(
-          "[LEAD DIAGNOSTIC]",
-          JSON.stringify({
-            type,
-            reason:
-              "inserted",
-            title:
-              lead.title,
-            url:
-              lead.source,
-            skill:
-              lead.skill,
-            country:
-              lead.country ||
-              null,
-          })
-        );
-      } catch (
-        error
-      ) {
-        stats.insertErrors += 1;
-
-        stats.lastInsertError =
-          error instanceof Error
-            ? error.message
-            : String(error);
-
-        console.log(
-          "[LEAD DIAGNOSTIC] PROCESS ERROR",
-          JSON.stringify({
-            type,
-            query,
-            error:
-              stats.lastInsertError,
-          })
-        );
+      if (stats.inserted > beforeInserted) {
+        insertedByType[type] += 1;
       }
     }
   }
 
-  return inserted;
+  return {
+    stats,
+    insertedByType,
+  };
 }
 
-async function loadSkills(
-  supabase: ReturnType<
-    typeof createSupabase
-  >
-): Promise<SkillRow[]> {
-  const {
-    data,
-    error,
-  } = await supabase
+async function loadSkills(): Promise<SkillRow[]> {
+  if (!supabase) {
+    throw new Error("Supabase is not configured.");
+  }
+
+  const { data, error } = await supabase
     .from("skills")
     .select(
-      "id,name,category,subcategory,tags"
+      "id,name,category,subcategory,tags,created_at"
     )
-    .order(
-      "name",
-      {
-        ascending: true,
-      }
-    );
+    .order("name", {
+      ascending: true,
+    });
 
   if (error) {
-    throw new Error(
-      `Could not load skills: ${error.message}`
-    );
+    throw error;
   }
 
-  return Array.isArray(data)
-    ? data
-        .filter(
-          (row) =>
-            row &&
-            typeof row.name ===
-              "string" &&
-            row.name.trim()
-        )
-        .map(
-          (row) =>
-            row as SkillRow
-        )
-    : [];
+  return (data || [])
+    .filter(
+      (row: any) =>
+        row &&
+        typeof row.name === "string" &&
+        row.name.trim()
+    )
+    .map((row: any) => ({
+      id: row.id,
+      name: row.name.trim(),
+      category: row.category || undefined,
+      subcategory: row.subcategory || undefined,
+      tags: row.tags,
+    }));
 }
 
-function getBearerToken(
-  req: VercelRequest
-): string | null {
-  const authorization =
-    req.headers.authorization;
+function combineStats(
+  target: LeadStats,
+  source: LeadStats
+): void {
+  target.found += source.found;
+  target.accepted += source.accepted;
+  target.inserted += source.inserted;
+  target.duplicate += source.duplicate;
+  target.stale += source.stale;
+  target.wrongType += source.wrongType;
+  target.noContact += source.noContact;
+  target.noSkill += source.noSkill;
+  target.blocked += source.blocked;
+  target.insertErrors += source.insertErrors;
+}
 
-  if (
-    typeof authorization !==
-    "string"
-  ) {
-    return null;
-  }
-
-  if (
-    !authorization
-      .toLowerCase()
-      .startsWith("bearer ")
-  ) {
-    return null;
-  }
-
-  const token =
-    authorization
-      .slice(7)
-      .trim();
-
-  return token || null;
-    }
 export default async function handler(
   req: VercelRequest,
   res: VercelResponse
 ) {
   /*
-   * Always return JSON.
+   * Always return JSON, including errors.
    * This prevents the old:
-   * "Unexpected token 'A'..."
-   * frontend error.
+   * "Unexpected token 'A' ... is not valid JSON"
+   * problem from returning HTML/text to Admin.tsx.
    */
   res.setHeader(
     "Content-Type",
     "application/json; charset=utf-8"
   );
 
-  if (
-    req.method !== "POST"
-  ) {
-    return res
-      .status(405)
-      .json({
-        success: false,
-        ok: false,
-        error:
-          "Method not allowed. Use POST.",
-        insertedByType: {
-          Demand: 0,
-          Supply: 0,
-          SaaS: 0,
-        },
-        totalInserted: 0,
-      });
+  if (req.method !== "POST") {
+    return res.status(405).json({
+      ok: false,
+      error: "Method not allowed",
+    });
   }
 
   try {
-    const supabase =
-      createSupabase();
-
-    const token =
-      getBearerToken(req);
-
-    if (!token) {
-      return res
-        .status(401)
-        .json({
-          success: false,
-          ok: false,
-          error:
-            "Authentication token is required.",
-          insertedByType: {
-            Demand: 0,
-            Supply: 0,
-            SaaS: 0,
-          },
-          totalInserted: 0,
-        });
+    if (!supabase) {
+      return res.status(500).json({
+        ok: false,
+        error:
+          "Supabase server environment variables are not configured.",
+      });
     }
 
-    const {
-      data: userData,
-      error: userError,
-    } =
-      await supabase.auth.getUser(
-        token
+    const skills = await loadSkills();
+
+    if (!skills.length) {
+      return res.status(200).json({
+        ok: true,
+        message:
+          "No skills were found in the skills table.",
+        added: 0,
+        demand: 0,
+        supply: 0,
+        saas: 0,
+        diagnostics: {
+          overall: emptyStats(),
+          insertedByType: emptyInsertedByType(),
+        },
+      });
+    }
+
+    const overall = emptyStats();
+    const insertedByType = emptyInsertedByType();
+
+    /*
+     * Run all three lead types.
+     */
+    const types: LeadType[] = [
+      "Demand",
+      "Supply",
+      "SaaS",
+    ];
+
+    for (const type of types) {
+      const result = await collectLeadsForType(
+        type,
+        skills
       );
 
-    if (
-      userError ||
-      !userData.user
-    ) {
-      return res
-        .status(401)
-        .json({
-          success: false,
-          ok: false,
-          error:
-            "Invalid or expired authentication token.",
-          insertedByType: {
-            Demand: 0,
-            Supply: 0,
-            SaaS: 0,
-          },
-          totalInserted: 0,
-        });
-    }
-
-    const skills =
-      await loadSkills(
-        supabase
+      combineStats(
+        overall,
+        result.stats
       );
 
-    const stats =
-      emptyStats();
+      insertedByType.Demand +=
+        result.insertedByType.Demand;
 
-    const insertedByType = {
-      Demand: 0,
-      Supply: 0,
-      SaaS: 0,
-    };
+      insertedByType.Supply +=
+        result.insertedByType.Supply;
 
-    const leadTypes:
-      LeadType[] = [
-        "Demand",
-        "Supply",
-        "SaaS",
-      ];
-
-    for (
-      const type of leadTypes
-    ) {
-      insertedByType[type] =
-        await collectLeadsForType(
-          supabase,
-          type,
-          skills,
-          stats
-        );
+      insertedByType.SaaS +=
+        result.insertedByType.SaaS;
     }
 
-    const totalInserted =
+    const added =
       insertedByType.Demand +
       insertedByType.Supply +
       insertedByType.SaaS;
 
-    return res
-      .status(200)
-      .json({
-        success: true,
-        ok: true,
+    return res.status(200).json({
+      ok: true,
+      message: `Added ${added} leads`,
+      added,
+      demand: insertedByType.Demand,
+      supply: insertedByType.Supply,
+      saas: insertedByType.SaaS,
+      diagnostics: {
+        overall,
         insertedByType,
-        totalInserted,
-        stats,
-      });
-  } catch (
-    error
-  ) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : String(error);
+      },
+    });
+  } catch (error) {
+    console.error(
+      "[LEAD COLLECTOR FATAL ERROR]",
+      error
+    );
 
-    return res
-      .status(500)
-      .json({
-        success: false,
-        ok: false,
-        error: message,
-        insertedByType: {
-          Demand: 0,
-          Supply: 0,
-          SaaS: 0,
-        },
-        totalInserted: 0,
-        stats:
-          emptyStats(),
-      });
+    return res.status(500).json({
+      ok: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : String(error),
+      diagnostics: {
+        overall: emptyStats(),
+        insertedByType: emptyInsertedByType(),
+      },
+    });
   }
-    }
+        }
