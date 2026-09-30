@@ -18,9 +18,7 @@ const SERPER_API_KEY =
   "";
 
 const MAX_AGE_HOURS = 72;
-
 const MAX_QUERIES_PER_TYPE = 6;
-
 const RESULTS_PER_SEARCH = 10;
 
 type LeadType =
@@ -42,6 +40,7 @@ type SearchResult = {
   snippet?: string;
   date?: string;
   position?: number;
+  searchQuery?: string;
 };
 
 type ContactInfo = {
@@ -52,63 +51,74 @@ type ContactInfo = {
 
 type CollectedLead = {
   leadType: LeadType;
-
   source: string;
-
   title: string;
-
   name?: string;
-
   description?: string;
-
   skill?: string;
-
   category?: string;
-
   subcategory?: string;
-
   country?: string;
-
   city?: string;
-
   budget?: string | number;
-
   currency?: string;
-
   contactEmail?: string;
-
   contactPhone?: string;
-
   contactName?: string;
-
   contactUrl?: string;
-
   createdAt?: string;
 };
 
 type CollectionStats = {
   found: number;
-
   accepted: number;
-
   inserted: number;
-
   duplicate: number;
-
   stale: number;
-
   wrongType: number;
-
   noContact: number;
-
   noSkillMatch: number;
-
   blocked: number;
-
   insertErrors: number;
-
   lastInsertError?: string;
 };
+
+function createSupabase() {
+  if (
+    !SUPABASE_URL ||
+    !SUPABASE_SERVICE_ROLE_KEY
+  ) {
+    throw new Error(
+      "Supabase server environment variables are missing."
+    );
+  }
+
+  return createClient(
+    SUPABASE_URL,
+    SUPABASE_SERVICE_ROLE_KEY,
+    {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+    }
+  );
+}
+
+function emptyStats(): CollectionStats {
+  return {
+    found: 0,
+    accepted: 0,
+    inserted: 0,
+    duplicate: 0,
+    stale: 0,
+    wrongType: 0,
+    noContact: 0,
+    noSkillMatch: 0,
+    blocked: 0,
+    insertErrors: 0,
+  };
+}
 
 const BLOCKED_DOMAINS = [
   "upwork.com",
@@ -130,11 +140,8 @@ const BLOCKED_DOMAINS = [
   "amazon.co.uk",
   "amazon.ca",
   "amazon.ae",
+  "amazon.sa",
   "amazon.in",
-  "amazon.com.au",
-  "amazon.de",
-  "amazon.fr",
-
   "daraz.pk",
   "daraz.com",
   "ebay.com",
@@ -143,7 +150,7 @@ const BLOCKED_DOMAINS = [
   "aliexpress.com",
 
   "udemy.com",
-  "coursera.com",
+  "coursera.org",
   "skillshare.com",
 
   "wikipedia.org",
@@ -185,8 +192,8 @@ const COUNTRY_ALIASES: Record<
     "united states",
     "usa",
     "u.s.a",
-    "u.s.",
     "us",
+    "u.s.",
     "america",
     "american",
   ],
@@ -197,6 +204,9 @@ const COUNTRY_ALIASES: Record<
     "toronto",
     "vancouver",
     "montreal",
+    "calgary",
+    "ottawa",
+    "edmonton",
   ],
 
   "United Kingdom": [
@@ -204,22 +214,30 @@ const COUNTRY_ALIASES: Record<
     "uk",
     "u.k.",
     "britain",
-    "british",
+    "great britain",
     "england",
     "scotland",
     "wales",
+    "northern ireland",
     "london",
+    "manchester",
+    "birmingham",
+    "glasgow",
+    "liverpool",
   ],
 
-  UAE: [
+  "United Arab Emirates": [
     "united arab emirates",
     "uae",
     "dubai",
     "abu dhabi",
+    "sharjah",
+    "ajman",
   ],
 
   Qatar: [
     "qatar",
+    "qatari",
     "doha",
   ],
 
@@ -228,45 +246,58 @@ const COUNTRY_ALIASES: Record<
     "saudi",
     "riyadh",
     "jeddah",
+    "dammam",
   ],
 
   Kuwait: [
     "kuwait",
+    "kuwaiti",
+    "kuwait city",
   ],
 
   Oman: [
     "oman",
+    "omani",
     "muscat",
   ],
 
   Bahrain: [
     "bahrain",
+    "bahraini",
     "manama",
   ],
 
   Australia: [
     "australia",
     "australian",
+    "sydney",
+    "melbourne",
+    "brisbane",
+    "perth",
   ],
 
   Sweden: [
     "sweden",
     "swedish",
+    "stockholm",
   ],
 
   Norway: [
     "norway",
     "norwegian",
+    "oslo",
   ],
 
   Denmark: [
     "denmark",
     "danish",
+    "copenhagen",
   ],
 
   Finland: [
     "finland",
     "finnish",
+    "helsinki",
   ],
 
   Pakistan: [
@@ -275,31 +306,51 @@ const COUNTRY_ALIASES: Record<
     "karachi",
     "lahore",
     "islamabad",
+    "rawalpindi",
+    "peshawar",
+    "abbottabad",
+    "multan",
+    "faisalabad",
   ],
 
   India: [
     "india",
     "indian",
+    "delhi",
+    "mumbai",
+    "bangalore",
+    "bengaluru",
+    "hyderabad",
+    "chennai",
   ],
 
   Bangladesh: [
     "bangladesh",
     "bangladeshi",
+    "dhaka",
+    "chittagong",
   ],
 
   Germany: [
     "germany",
     "german",
+    "berlin",
+    "munich",
+    "hamburg",
   ],
 
   France: [
     "france",
     "french",
+    "paris",
+    "lyon",
   ],
 
   Netherlands: [
     "netherlands",
     "dutch",
+    "amsterdam",
+    "rotterdam",
   ],
 };
 
@@ -364,28 +415,28 @@ const PROFESSIONAL_TERMS = [
 
 const SAAS_REJECT_TERMS = [
   "dictionary",
-  "meaning",
   "definition",
+  "meaning",
   "wikipedia",
+  "encyclopedia",
 
   "resource",
   "resources",
-  "teaching resources",
-  "teacher resources",
-  "educational resources",
+  "teaching resource",
+  "lesson plan",
 
   "job",
   "jobs",
-  "job board",
   "vacancy",
   "vacancies",
   "hiring",
+  "recruiting",
+  "recruitment",
   "application",
   "applications",
 
   "course",
   "courses",
-  "online course",
   "webinar",
   "webinars",
   "seminar",
@@ -396,25 +447,15 @@ const SAAS_REJECT_TERMS = [
   "blog",
   "blogs",
   "news",
-  "news article",
 
   "book",
   "books",
   "ebook",
-  "e-book",
-
-  "amazon",
-  "daraz",
-  "ebay",
-  "etsy",
-  "walmart",
-  "aliexpress",
+  "ebooks",
 
   "app",
   "apps",
-  "application software",
   "software",
-  "saas product",
   "platform",
   "marketplace",
 
@@ -423,124 +464,121 @@ const SAAS_REJECT_TERMS = [
   "listing",
   "listings",
 
-  "reviews",
   "review",
+  "reviews",
   "comparison",
-  "comparisons",
-
-  "encyclopedia",
-  "wiki",
+  "compare",
 
   "podcast",
   "podcasts",
 
   "school",
-  "schools",
   "academy",
-  "academies",
   "university",
-  "universities",
   "college",
-  "colleges",
   "institute",
-  "institutes",
 
   "admissions",
   "admission",
+
   "join us",
   "join our team",
-  "join the team",
-  "benefits of becoming",
-  "become a teacher",
-  "becoming a teacher",
-  "teacher benefits",
-  "career in teaching",
+  "our team",
+  "benefits",
 
+  "become a teacher",
+  "career in teaching",
   "faculty",
   "staff directory",
-  "faculty directory",
-  "teacher directory",
 ];
-function createSupabase() {
-  if (
-    !SUPABASE_URL ||
-    !SUPABASE_SERVICE_ROLE_KEY
-  ) {
-    throw new Error(
-      "Supabase environment variables are missing."
-    );
-  }
+function cleanText(
+  value?: string | null
+): string {
+  if (!value) return "";
 
-  return createClient(
-    SUPABASE_URL,
-    SUPABASE_SERVICE_ROLE_KEY,
-    {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
-    }
-  );
-}
-
-function emptyStats(): CollectionStats {
-  return {
-    found: 0,
-    accepted: 0,
-    inserted: 0,
-    duplicate: 0,
-    stale: 0,
-    wrongType: 0,
-    noContact: 0,
-    noSkillMatch: 0,
-    blocked: 0,
-    insertErrors: 0,
-  };
+  return value
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function normalize(
   value?: string | null
 ): string {
-  return (value || "")
+  return cleanText(value)
     .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s@._:/-]/gu, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
 
-function cleanText(
-  value?: string | null
+function stripHtml(
+  value: string
 ): string {
-  return (value || "")
-    .replace(/\s+/g, " ")
-    .trim();
+  return value
+    .replace(
+      /<script[\s\S]*?<\/script>/gi,
+      " "
+    )
+    .replace(
+      /<style[\s\S]*?<\/style>/gi,
+      " "
+    )
+    .replace(
+      /<[^>]+>/g,
+      " "
+    );
 }
 
-function tableForType(
-  type: LeadType
+function decodeHtml(
+  value: string
 ): string {
-  if (type === "Demand") {
-    return "demand_leads";
-  }
-
-  if (type === "Supply") {
-    return "supply_leads";
-  }
-
-  return "saas_leads";
+  return value
+    .replace(
+      /&amp;/g,
+      "&"
+    )
+    .replace(
+      /&quot;/g,
+      '"'
+    )
+    .replace(
+      /&#39;/g,
+      "'"
+    )
+    .replace(
+      /&lt;/g,
+      "<"
+    )
+    .replace(
+      /&gt;/g,
+      ">"
+    )
+    .replace(
+      /&#x2F;/gi,
+      "/"
+    )
+    .replace(
+      /&#47;/g,
+      "/"
+    );
 }
 
 function domainFromUrl(
-  url?: string
+  value?: string
 ): string {
-  if (!url) {
-    return "";
-  }
+  if (!value) return "";
 
   try {
-    return new URL(url)
-      .hostname
+    const url = new URL(
+      value
+    );
+
+    return url.hostname
       .toLowerCase()
-      .replace(/^www\./, "");
+      .replace(
+        /^www\./,
+        ""
+      );
   } catch {
     return "";
   }
@@ -552,9 +590,7 @@ function isBlockedDomain(
   const domain =
     domainFromUrl(url);
 
-  if (!domain) {
-    return false;
-  }
+  if (!domain) return true;
 
   return BLOCKED_DOMAINS.some(
     (blocked) =>
@@ -583,47 +619,59 @@ function containsAny(
 function parseResultDate(
   result: SearchResult
 ): Date | null {
-  if (!result.date) {
+  const raw =
+    cleanText(
+      result.date
+    );
+
+  if (!raw) {
     return null;
   }
 
-  const parsed =
-    new Date(result.date);
+  const timestamp =
+    Date.parse(raw);
 
   if (
-    Number.isNaN(
-      parsed.getTime()
-    )
+    Number.isNaN(timestamp)
   ) {
     return null;
   }
 
-  return parsed;
+  return new Date(
+    timestamp
+  );
 }
 
 function isFresh(
   result: SearchResult
 ): boolean {
   const date =
-    parseResultDate(result);
+    parseResultDate(
+      result
+    );
 
+  /*
+   * Google fallback results often do not expose
+   * a machine-readable date. We do not reject those
+   * solely because the date is unavailable.
+   */
   if (!date) {
     return true;
   }
 
-  const ageMs =
+  const age =
     Date.now() -
     date.getTime();
 
-  const maxAgeMs =
+  const maxAge =
     MAX_AGE_HOURS *
     60 *
     60 *
     1000;
 
   return (
-    ageMs >= 0 &&
-    ageMs <= maxAgeMs
+    age >= 0 &&
+    age <= maxAge
   );
 }
 
@@ -660,12 +708,7 @@ function extractPhones(
       matches
         .map(
           (phone) =>
-            phone
-              .replace(
-                /\s+/g,
-                " "
-              )
-              .trim()
+            cleanText(phone)
         )
         .filter(
           (phone) =>
@@ -682,11 +725,10 @@ function getSearchText(
   result: SearchResult
 ): string {
   return [
-    result.title,
-    result.snippet,
-    result.link,
-    result.date,
+    result.title || "",
+    result.snippet || "",
   ]
+    .map(cleanText)
     .filter(Boolean)
     .join(" ");
 }
@@ -719,266 +761,391 @@ function detectCountry(
 
   return undefined;
 }
-function detectSkill(
-  text: string,
-  skills: SkillRow[]
-): SkillRow | undefined {
+
+function detectCity(
+  text: string
+): string | undefined {
   const normalized =
     normalize(text);
 
+  const cities: Array<
+    [string, string]
+  > = [
+    ["London", "london"],
+    ["Manchester", "manchester"],
+    ["Birmingham", "birmingham"],
+    ["Toronto", "toronto"],
+    ["Vancouver", "vancouver"],
+    ["Montreal", "montreal"],
+    ["Dubai", "dubai"],
+    ["Abu Dhabi", "abu dhabi"],
+    ["Doha", "doha"],
+    ["Riyadh", "riyadh"],
+    ["Jeddah", "jeddah"],
+    ["Karachi", "karachi"],
+    ["Lahore", "lahore"],
+    ["Islamabad", "islamabad"],
+    ["Rawalpindi", "rawalpindi"],
+    ["Peshawar", "peshawar"],
+    ["Abbottabad", "abbottabad"],
+    ["Delhi", "delhi"],
+    ["Mumbai", "mumbai"],
+    ["Dhaka", "dhaka"],
+    ["Berlin", "berlin"],
+    ["Paris", "paris"],
+    ["Amsterdam", "amsterdam"],
+  ];
+
+  const found =
+    cities.find(
+      ([, alias]) =>
+        normalized.includes(alias)
+    );
+
+  return found?.[0];
+}
+
+const SKILL_GROUPS: Array<{
+  base: string[];
+  synonyms: string[];
+}> = [
+  {
+    base: [
+      "quran",
+      "tajweed",
+      "qirat",
+      "islamic studies",
+      "islamic education",
+    ],
+    synonyms: [
+      "quran teacher",
+      "quran tutor",
+      "tajweed teacher",
+      "tajweed tutor",
+      "qirat teacher",
+      "qirat tutor",
+      "online quran",
+      "online tajweed",
+      "hifz",
+      "hafiz",
+    ],
+  },
+  {
+    base: [
+      "math",
+      "mathematics",
+      "algebra",
+      "calculus",
+      "geometry",
+      "statistics",
+    ],
+    synonyms: [
+      "math teacher",
+      "math tutor",
+      "mathematics teacher",
+      "mathematics tutor",
+      "calculus tutor",
+      "algebra tutor",
+      "statistics tutor",
+    ],
+  },
+  {
+    base: [
+      "teacher",
+      "teaching",
+      "tutor",
+      "tutoring",
+      "educator",
+      "education",
+      "instructor",
+    ],
+    synonyms: [
+      "online teacher",
+      "online tutor",
+      "private tutor",
+      "private teacher",
+      "online teaching",
+      "education tutor",
+    ],
+  },
+  {
+    base: [
+      "coach",
+      "coaching",
+      "mentor",
+      "mentoring",
+    ],
+    synonyms: [
+      "professional coach",
+      "business coach",
+      "life coach",
+      "career coach",
+      "online coach",
+      "mentor",
+      "professional mentor",
+    ],
+  },
+  {
+    base: [
+      "freelancer",
+      "freelance",
+    ],
+    synonyms: [
+      "freelance professional",
+      "freelance worker",
+      "freelance services",
+    ],
+  },
+  {
+    base: [
+      "developer",
+      "programmer",
+      "development",
+      "coding",
+    ],
+    synonyms: [
+      "web developer",
+      "software developer",
+      "frontend developer",
+      "backend developer",
+      "full stack developer",
+    ],
+  },
+  {
+    base: [
+      "designer",
+      "design",
+    ],
+    synonyms: [
+      "graphic designer",
+      "web designer",
+      "ui designer",
+      "ux designer",
+    ],
+  },
+  {
+    base: [
+      "writer",
+      "writing",
+      "copywriter",
+      "copywriting",
+    ],
+    synonyms: [
+      "content writer",
+      "content writing",
+      "copywriter",
+      "copywriting",
+    ],
+  },
+  {
+    base: [
+      "accountant",
+      "accounting",
+      "bookkeeper",
+      "bookkeeping",
+    ],
+    synonyms: [
+      "accounting professional",
+      "bookkeeping services",
+      "accounting services",
+    ],
+  },
+  {
+    base: [
+      "marketing",
+      "marketer",
+    ],
+    synonyms: [
+      "digital marketing",
+      "social media marketing",
+      "marketing consultant",
+    ],
+  },
+  {
+    base: [
+      "virtual assistant",
+      "virtual assistance",
+    ],
+    synonyms: [
+      "remote assistant",
+      "online assistant",
+      "virtual assistant",
+    ],
+  },
+  {
+    base: [
+      "sociology",
+    ],
+    synonyms: [
+      "sociology teacher",
+      "sociology tutor",
+      "sociology researcher",
+    ],
+  },
+  {
+    base: [
+      "psychology",
+    ],
+    synonyms: [
+      "psychology teacher",
+      "psychology tutor",
+      "psychology coach",
+    ],
+  },
+  {
+    base: [
+      "anthropology",
+    ],
+    synonyms: [
+      "anthropology teacher",
+      "anthropology tutor",
+    ],
+  },
+  {
+    base: [
+      "economics",
+    ],
+    synonyms: [
+      "economics teacher",
+      "economics tutor",
+    ],
+  },
+  {
+    base: [
+      "physics",
+    ],
+    synonyms: [
+      "physics teacher",
+      "physics tutor",
+    ],
+  },
+  {
+    base: [
+      "chemistry",
+    ],
+    synonyms: [
+      "chemistry teacher",
+      "chemistry tutor",
+    ],
+  },
+];
+function detectSkill(
+  text: string,
+  skills: SkillRow[]
+): SkillRow | null {
+  const normalized =
+    normalize(text);
+
+  /*
+   * First use the real skills table.
+   */
   for (
     const skill of skills
   ) {
     const candidates = [
       skill.name,
-      skill.category,
-      skill.subcategory,
-    ].filter(Boolean) as string[];
-
-    const tags =
-      Array.isArray(skill.tags)
-        ? skill.tags
-        : typeof skill.tags === "string"
-        ? skill.tags.split(",")
-        : [];
-
-    candidates.push(
-      ...tags
-    );
+      skill.category || "",
+      skill.subcategory || "",
+    ];
 
     if (
-      candidates.some(
-        (candidate) =>
-          normalize(candidate) &&
-          normalized.includes(
-            normalize(candidate)
-          )
+      Array.isArray(
+        skill.tags
       )
     ) {
-      return skill;
-    }
-  }
-
-  const expandedSkillGroups = [
-    {
-      match: [
-        "quran",
-        "tajweed",
-        "tajwid",
-        "qiraat",
-        "qirat",
-        "hifz",
-        "hafiz",
-        "tafseer",
-        "tafsir",
-        "islamic studies",
-        "islamic education",
-      ],
-      name: "Quran",
-    },
-
-    {
-      match: [
-        "math",
-        "mathematics",
-        "calculus",
-        "algebra",
-        "geometry",
-        "statistics",
-      ],
-      name: "Mathematics",
-    },
-
-    {
-      match: [
-        "teacher",
-        "teaching",
-        "educator",
-        "education",
-        "instructor",
-        "tutor",
-        "tutoring",
-      ],
-      name: "Teaching",
-    },
-
-    {
-      match: [
-        "coach",
-        "coaching",
-        "mentor",
-        "mentoring",
-        "guide",
-        "guidance",
-        "professional coach",
-        "life coach",
-        "career coach",
-      ],
-      name: "Coaching",
-    },
-
-    {
-      match: [
-        "freelancer",
-        "freelance",
-        "freelancing",
-      ],
-      name: "Freelancing",
-    },
-
-    {
-      match: [
-        "developer",
-        "development",
-        "programmer",
-        "programming",
-        "software engineer",
-        "web developer",
-        "app developer",
-      ],
-      name: "Development",
-    },
-
-    {
-      match: [
-        "designer",
-        "design",
-        "graphic designer",
-        "graphic design",
-        "ui designer",
-        "ux designer",
-        "ui/ux",
-        "user interface",
-        "user experience",
-      ],
-      name: "Design",
-    },
-
-    {
-      match: [
-        "writer",
-        "writing",
-        "copywriter",
-        "copywriting",
-        "content writer",
-        "content writing",
-      ],
-      name: "Writing",
-    },
-
-    {
-      match: [
-        "accountant",
-        "accounting",
-        "bookkeeper",
-        "bookkeeping",
-      ],
-      name: "Accounting",
-    },
-
-    {
-      match: [
-        "marketer",
-        "marketing",
-        "digital marketing",
-        "social media marketing",
-        "seo",
-        "search engine optimization",
-      ],
-      name: "Marketing",
-    },
-
-    {
-      match: [
-        "virtual assistant",
-        "virtual assistance",
-        "virtual admin",
-        "remote assistant",
-      ],
-      name: "Virtual Assistant",
-    },
-
-    {
-      match: [
-        "sociology",
-        "sociologist",
-        "social research",
-        "social science",
-      ],
-      name: "Sociology",
-    },
-
-    {
-      match: [
-        "psychology",
-        "psychologist",
-        "psychological",
-      ],
-      name: "Psychology",
-    },
-
-    {
-      match: [
-        "anthropology",
-        "anthropologist",
-        "ethnography",
-      ],
-      name: "Anthropology",
-    },
-
-    {
-      match: [
-        "economics",
-        "economist",
-        "economic research",
-      ],
-      name: "Economics",
-    },
-
-    {
-      match: [
-        "physics",
-        "physicist",
-      ],
-      name: "Physics",
-    },
-
-    {
-      match: [
-        "chemistry",
-        "chemist",
-      ],
-      name: "Chemistry",
-    },
-  ];
-
-  for (
-    const group of expandedSkillGroups
-  ) {
-    if (
-      group.match.some(
-        (term) =>
-          normalized.includes(
-            normalize(term)
-          )
-      )
+      candidates.push(
+        ...skill.tags
+      );
+    } else if (
+      typeof skill.tags ===
+        "string"
     ) {
-      const existing =
-        skills.find(
-          (skill) =>
-            normalize(skill.name) ===
-            normalize(group.name)
-        );
-
-      return (
-        existing || {
-          name: group.name,
-        }
+      candidates.push(
+        skill.tags
       );
     }
+
+    for (
+      const candidate of candidates
+    ) {
+      const value =
+        normalize(
+          candidate
+        );
+
+      if (
+        value &&
+        normalized.includes(
+          value
+        )
+      ) {
+        return skill;
+      }
+    }
   }
 
-  return undefined;
+  /*
+   * Then use the broader synonym groups so
+   * "calculus" can still match a Mathematics skill,
+   * "professional coach" can match Coaching, etc.
+   */
+  for (
+    const group of SKILL_GROUPS
+  ) {
+    const matched =
+      group.base.some(
+        (base) =>
+          normalized.includes(
+            normalize(base)
+          )
+      ) ||
+      group.synonyms.some(
+        (synonym) =>
+          normalized.includes(
+            normalize(synonym)
+          )
+      );
+
+    if (!matched) {
+      continue;
+    }
+
+    const matchingSkill =
+      skills.find(
+        (skill) => {
+          const skillText =
+            normalize(
+              [
+                skill.name,
+                skill.category ||
+                  "",
+                skill.subcategory ||
+                  "",
+                Array.isArray(
+                  skill.tags
+                )
+                  ? skill.tags.join(
+                      " "
+                    )
+                  : skill.tags || "",
+              ].join(" ")
+            );
+
+          return group.base.some(
+            (base) =>
+              skillText.includes(
+                normalize(base)
+              )
+          );
+        }
+      );
+
+    if (matchingSkill) {
+      return matchingSkill;
+    }
+  }
+
+  return null;
 }
 
 function extractContactLinks(
@@ -987,30 +1154,41 @@ function extractContactLinks(
 ): string[] {
   const links: string[] = [];
 
-  const pattern =
+  const anchorPattern =
     /<a\b[^>]*href=["']([^"']+)["'][^>]*>/gi;
 
   const contactTerms = [
     "contact",
-    "contact-us",
     "get-in-touch",
-    "reach-us",
+    "getintouch",
+    "reach",
     "about",
+    "profile",
+    "linkedin",
+    "facebook",
+    "instagram",
+    "twitter",
+    "x.com",
+    "threads",
+    "whatsapp",
+    "telegram",
   ];
 
-  let match:
-    | RegExpExecArray
-    | null;
+  let match: RegExpExecArray | null;
 
   while (
     (match =
-      pattern.exec(html)) !== null
+      anchorPattern.exec(
+        html
+      )) !== null
   ) {
     const href =
-      match[1] || "";
+      decodeHtml(
+        match[1] || ""
+      );
 
     const normalizedHref =
-      href.toLowerCase();
+      normalize(href);
 
     if (
       !contactTerms.some(
@@ -1073,41 +1251,26 @@ function isSocialOrProfileUrl(
       "threads.net/"
     )
   );
-    }
+}
+
 function isLinkedInPersonProfile(
   url?: string
 ): boolean {
-  if (!url) return false;
-
   const normalized =
-    url.toLowerCase();
+    cleanText(url)
+      .toLowerCase();
 
-  return (
-    normalized.includes(
-      "linkedin.com/in/"
-    ) &&
-    !normalized.includes(
-      "/company/"
-    ) &&
-    !normalized.includes(
-      "/jobs/"
-    ) &&
-    !normalized.includes(
-      "/feed/"
-    ) &&
-    !normalized.includes(
-      "/posts/"
-    )
+  return normalized.includes(
+    "linkedin.com/in/"
   );
 }
 
 function isFacebookPersonProfile(
   url?: string
 ): boolean {
-  if (!url) return false;
-
   const normalized =
-    url.toLowerCase();
+    cleanText(url)
+      .toLowerCase();
 
   if (
     !normalized.includes(
@@ -1117,56 +1280,55 @@ function isFacebookPersonProfile(
     return false;
   }
 
-  return (
-    !normalized.includes(
-      "/groups/"
-    ) &&
-    !normalized.includes(
-      "/pages/"
-    ) &&
-    !normalized.includes(
-      "/events/"
-    ) &&
-    !normalized.includes(
-      "/marketplace/"
-    ) &&
-    !normalized.includes(
-      "/watch/"
-    ) &&
-    !normalized.includes(
-      "/jobs/"
-    )
-  );
-}
-
-function isInstagramPersonProfile(
-  url?: string
-): boolean {
-  if (!url) return false;
-
-  const normalized =
-    url.toLowerCase();
-
   if (
-    !normalized.includes(
-      "instagram.com/"
+    normalized.includes(
+      "/pages/"
+    ) ||
+    normalized.includes(
+      "/groups/"
+    ) ||
+    normalized.includes(
+      "/marketplace/"
+    ) ||
+    normalized.includes(
+      "/events/"
     )
   ) {
     return false;
   }
 
-  return !normalized.includes(
-    "/explore/"
+  return true;
+}
+
+function isInstagramPersonProfile(
+  url?: string
+): boolean {
+  const normalized =
+    cleanText(url)
+      .toLowerCase();
+
+  return (
+    normalized.includes(
+      "instagram.com/"
+    ) &&
+    !normalized.includes(
+      "/p/"
+    ) &&
+    !normalized.includes(
+      "/reel/"
+    ) &&
+    !normalized.includes(
+      "/explore/"
+    )
   );
 }
 
 function isXPersonProfile(
   url?: string
 ): boolean {
-  if (!url) return false;
-
   const normalized =
-    url.toLowerCase();
+    cleanText(url)
+      .toLowerCase();
 
   return (
     normalized.includes(
@@ -1175,33 +1337,18 @@ function isXPersonProfile(
     normalized.includes(
       "twitter.com/"
     )
-  ) && 
-    !normalized.includes(
-      "/search"
-    ) &&
-    !normalized.includes(
-      "/hashtag/"
-    ) &&
-    !normalized.includes(
-      "/i/"
-    );
+  );
 }
 
 function isThreadsPersonProfile(
   url?: string
 ): boolean {
-  if (!url) return false;
-
   const normalized =
-    url.toLowerCase();
+    cleanText(url)
+      .toLowerCase();
 
-  return (
-    normalized.includes(
-      "threads.net/@"
-    ) ||
-    normalized.includes(
-      "threads.com/@"
-    )
+  return normalized.includes(
+    "threads.net/@"
   );
 }
 
@@ -1209,11 +1356,21 @@ function isDirectSocialProfile(
   url?: string
 ): boolean {
   return (
-    isLinkedInPersonProfile(url) ||
-    isFacebookPersonProfile(url) ||
-    isInstagramPersonProfile(url) ||
-    isXPersonProfile(url) ||
-    isThreadsPersonProfile(url)
+    isLinkedInPersonProfile(
+      url
+    ) ||
+    isFacebookPersonProfile(
+      url
+    ) ||
+    isInstagramPersonProfile(
+      url
+    ) ||
+    isXPersonProfile(
+      url
+    ) ||
+    isThreadsPersonProfile(
+      url
+    )
   );
 }
 
@@ -1229,33 +1386,46 @@ function extractPersonName(
     return undefined;
   }
 
-  const patterns = [
-    /^(.+?)['’]s\s+(?:post|profile|page)\b/i,
-    /^(.+?)\s*[-|]\s*(?:linkedin|facebook|instagram|x|twitter|threads)\b/i,
-    /^(?:profile|about)\s*[-|]\s*(.+)$/i,
+  const separators = [
+    " - ",
+    " | ",
+    " – ",
+    " — ",
+    " · ",
   ];
 
   for (
-    const pattern of patterns
+    const separator of separators
   ) {
-    const match =
-      title.match(pattern);
+    const parts =
+      title
+        .split(separator)
+        .map(cleanText)
+        .filter(Boolean);
 
     if (
-      match &&
-      match[1]
+      parts.length >= 2
     ) {
-      const name =
-        cleanText(
-          match[1]
-        );
+      const first =
+        parts[0];
 
       if (
-        hasLikelyPersonName(
-          name
-        )
+        first.split(/\s+/)
+          .length >= 2 &&
+        first.length <= 80
       ) {
-        return name;
+        return first;
+      }
+
+      const last =
+        parts[parts.length - 1];
+
+      if (
+        last.split(/\s+/)
+          .length >= 2 &&
+        last.length <= 80
+      ) {
+        return last;
       }
     }
   }
@@ -1270,64 +1440,18 @@ function hasLikelyPersonName(
     return false;
   }
 
-  const cleaned =
-    cleanText(value);
-
-  if (
-    cleaned.length < 4 ||
-    cleaned.length > 100
-  ) {
-    return false;
-  }
-
-  const blocked = [
-    "teachers net",
-    "teacher resources",
-    "education resources",
-    "professional coach",
-    "career coaching",
-    "life coaching",
-    "online tutoring",
-    "tutoring services",
-    "freelance services",
-    "job opening",
-    "job openings",
-    "hiring now",
-    "company",
-    "official",
-    "homepage",
-    "contact us",
-    "about us",
-  ];
-
-  if (
-    blocked.some(
-      (term) =>
-        normalize(cleaned) ===
-        normalize(term)
-    )
-  ) {
-    return false;
-  }
-
   const words =
-    cleaned
+    cleanText(value)
       .split(/\s+/)
       .filter(Boolean);
-
-  if (
-    words.length < 2 ||
-    words.length > 5
-  ) {
-    return false;
-  }
 
   const validWords =
     words.filter(
       (word) =>
-        /^[A-Za-zÀ-ÖØ-öø-ÿ'’-]+$/.test(
+        /^[A-Za-zÀ-ÖØ-öø-ÿ'.-]+$/.test(
           word
-        )
+        ) &&
+        word.length >= 2
     );
 
   return (
@@ -1403,70 +1527,60 @@ function isIndividualSaasProfile(
     linkedinProfile ||
     !!extractedName
   );
-}
+      }
 async function getDirectContact(
   result: SearchResult
 ): Promise<ContactInfo> {
-  const contact: ContactInfo = {};
-
-  const searchText =
-    getSearchText(result);
+  const text =
+    getSearchText(
+      result
+    );
 
   const emails =
-    extractEmails(
-      searchText
-    );
+    extractEmails(text);
 
   const phones =
-    extractPhones(
-      searchText
-    );
+    extractPhones(text);
 
-  if (emails.length > 0) {
-    contact.email =
-      emails[0];
-  }
-
-  if (phones.length > 0) {
-    contact.phone =
-      phones[0];
-  }
+  let url:
+    | string
+    | undefined;
 
   if (
     result.link &&
-    isDirectSocialProfile(
+    isSocialOrProfileUrl(
       result.link
     )
   ) {
-    contact.url =
+    url =
       result.link;
   }
 
-  return contact;
+  return {
+    email: emails[0],
+    phone: phones[0],
+    url,
+  };
 }
 
 async function improveContact(
   result: SearchResult
 ): Promise<ContactInfo> {
-  const contact =
+  const direct =
     await getDirectContact(
       result
     );
 
-  /*
-   * A direct individual social/profile URL
-   * is already a valid contact path.
-   */
   if (
-    contact.url ||
-    contact.email ||
-    contact.phone
+    direct.email ||
+    direct.phone ||
+    direct.url
   ) {
-    return contact;
+    return direct;
   }
 
   if (!result.link) {
-    return contact;
+    return {};
   }
 
   try {
@@ -1474,49 +1588,40 @@ async function improveContact(
       await fetch(
         result.link,
         {
+          method: "GET",
           headers: {
             "User-Agent":
               "Mozilla/5.0 (compatible; OpportunityHubLeadCollector/1.0)",
             Accept:
               "text/html,application/xhtml+xml",
           },
-          redirect:
-            "follow",
+          redirect: "follow",
         }
       );
 
-    if (!response.ok) {
-      return contact;
+    if (
+      !response.ok
+    ) {
+      return {};
     }
 
     const html =
       await response.text();
 
+    const text =
+      cleanText(
+        stripHtml(html)
+      );
+
     const emails =
       extractEmails(
-        html
+        `${text} ${html}`
       );
 
     const phones =
       extractPhones(
-        html
+        `${text} ${html}`
       );
-
-    if (
-      emails.length > 0 &&
-      !contact.email
-    ) {
-      contact.email =
-        emails[0];
-    }
-
-    if (
-      phones.length > 0 &&
-      !contact.phone
-    ) {
-      contact.phone =
-        phones[0];
-    }
 
     const contactLinks =
       extractContactLinks(
@@ -1524,22 +1629,47 @@ async function improveContact(
         result.link
       );
 
-    if (
-      contactLinks.length > 0 &&
-      !contact.url
-    ) {
-      contact.url =
-        contactLinks[0];
-    }
-  } catch {
-    /*
-     * Some public pages block server-side requests.
-     * The search result itself may still provide
-     * a valid direct profile/contact path.
-     */
-  }
+    const socialLink =
+      contactLinks.find(
+        (link) =>
+          isDirectSocialProfile(
+            link
+          )
+      );
 
-  return contact;
+    const directContactPage =
+      contactLinks.find(
+        (link) => {
+          const normalized =
+            normalize(link);
+
+          return (
+            normalized.includes(
+              "contact"
+            ) ||
+            normalized.includes(
+              "get-in-touch"
+            ) ||
+            normalized.includes(
+              "getintouch"
+            )
+          );
+        }
+      );
+
+    return {
+      email:
+        emails[0],
+      phone:
+        phones[0],
+      url:
+        socialLink ||
+        directContactPage ||
+        undefined,
+    };
+  } catch {
+    return {};
+  }
 }
 
 function buildSkillSearchTerms(
@@ -1551,39 +1681,34 @@ function buildSkillSearchTerms(
   for (
     const skill of skills
   ) {
-    if (skill.name) {
+    if (
+      skill.name
+    ) {
       terms.add(
-        skill.name
-      );
-    }
-
-    if (skill.category) {
-      terms.add(
-        skill.category
-      );
-    }
-
-    if (skill.subcategory) {
-      terms.add(
-        skill.subcategory
+        cleanText(
+          skill.name
+        )
       );
     }
 
     if (
-      typeof skill.tags ===
-      "string"
+      skill.category
     ) {
-      skill.tags
-        .split(",")
-        .map(
-          (value) =>
-            value.trim()
+      terms.add(
+        cleanText(
+          skill.category
         )
-        .filter(Boolean)
-        .forEach(
-          (value) =>
-            terms.add(value)
-        );
+      );
+    }
+
+    if (
+      skill.subcategory
+    ) {
+      terms.add(
+        cleanText(
+          skill.subcategory
+        )
+      );
     }
 
     if (
@@ -1591,171 +1716,26 @@ function buildSkillSearchTerms(
         skill.tags
       )
     ) {
-      skill.tags
-        .filter(Boolean)
-        .forEach(
-          (value) =>
-            terms.add(value)
-        );
+      skill.tags.forEach(
+        (tag) =>
+          terms.add(
+            cleanText(tag)
+          )
+      );
+    } else if (
+      typeof skill.tags ===
+        "string"
+    ) {
+      terms.add(
+        cleanText(
+          skill.tags
+        )
+      );
     }
   }
 
-  /*
-   * These are search synonyms only.
-   * They do not change the actual skill stored
-   * against an accepted lead.
-   */
-  const synonymGroups = [
-    {
-      base: [
-        "quran",
-        "tajweed",
-        "tajwid",
-        "qirat",
-        "qiraat",
-        "hifz",
-        "tafseer",
-        "tafsir",
-      ],
-      synonyms: [
-        "Quran teacher",
-        "Quran tutor",
-        "Islamic teacher",
-        "Islamic tutor",
-        "Quran instructor",
-      ],
-    },
-
-    {
-      base: [
-        "teaching",
-        "teacher",
-        "education",
-        "educator",
-        "tutor",
-      ],
-      synonyms: [
-        "teacher",
-        "tutor",
-        "educator",
-        "instructor",
-        "teaching professional",
-      ],
-    },
-
-    {
-      base: [
-        "coaching",
-        "coach",
-        "mentor",
-        "mentoring",
-      ],
-      synonyms: [
-        "coach",
-        "professional coach",
-        "mentor",
-        "career coach",
-        "life coach",
-        "business coach",
-      ],
-    },
-
-    {
-      base: [
-        "freelancing",
-        "freelance",
-        "freelancer",
-      ],
-      synonyms: [
-        "freelancer",
-        "freelance professional",
-        "independent professional",
-      ],
-    },
-
-    {
-      base: [
-        "development",
-        "developer",
-        "programming",
-      ],
-      synonyms: [
-        "developer",
-        "software developer",
-        "web developer",
-        "programmer",
-      ],
-    },
-
-    {
-      base: [
-        "design",
-        "designer",
-      ],
-      synonyms: [
-        "designer",
-        "graphic designer",
-        "web designer",
-        "UI designer",
-        "UX designer",
-      ],
-    },
-
-    {
-      base: [
-        "writing",
-        "writer",
-        "copywriting",
-      ],
-      synonyms: [
-        "writer",
-        "content writer",
-        "copywriter",
-        "freelance writer",
-      ],
-    },
-
-    {
-      base: [
-        "marketing",
-        "marketer",
-      ],
-      synonyms: [
-        "marketer",
-        "digital marketer",
-        "marketing professional",
-        "SEO professional",
-      ],
-    },
-
-    {
-      base: [
-        "accounting",
-        "accountant",
-        "bookkeeping",
-      ],
-      synonyms: [
-        "accountant",
-        "bookkeeper",
-        "accounting professional",
-      ],
-    },
-
-    {
-      base: [
-        "virtual assistant",
-        "virtual assistance",
-      ],
-      synonyms: [
-        "virtual assistant",
-        "remote assistant",
-        "virtual admin",
-      ],
-    },
-  ];
-
   for (
-    const group of synonymGroups
+    const group of SKILL_GROUPS
   ) {
     const matched =
       group.base.some(
@@ -1792,16 +1772,13 @@ function buildSkillSearchTerms(
   return [
     ...terms,
   ]
-    .map(
-      (value) =>
-        cleanText(value)
+    .map((value) =>
+      cleanText(value)
     )
     .filter(Boolean)
-    .slice(
-      0,
-      30
-    );
-      }
+    .slice(0, 30);
+}
+
 function buildQueries(
   type: LeadType,
   skills: SkillRow[]
@@ -1817,9 +1794,12 @@ function buildQueries(
     return [];
   }
 
-  const queries: string[] = [];
+  const queries: string[] =
+    [];
 
-  if (type === "Demand") {
+  if (
+    type === "Demand"
+  ) {
     for (
       const skill of skillTerms
     ) {
@@ -1829,7 +1809,9 @@ function buildQueries(
     }
   }
 
-  if (type === "Supply") {
+  if (
+    type === "Supply"
+  ) {
     for (
       const skill of skillTerms
     ) {
@@ -1839,7 +1821,9 @@ function buildQueries(
     }
   }
 
-  if (type === "SaaS") {
+  if (
+    type === "SaaS"
+  ) {
     for (
       const skill of skillTerms
     ) {
@@ -1876,15 +1860,15 @@ async function searchSerper(
     unknown
   > = {
     q: query,
-    num: RESULTS_PER_SEARCH,
+    num:
+      RESULTS_PER_SEARCH,
   };
 
   if (
     type === "Demand" ||
     type === "Supply"
   ) {
-    body.tbs =
-      "qdr:d3";
+    body.tbs = "qdr:d3";
   }
 
   const response =
@@ -1898,166 +1882,78 @@ async function searchSerper(
           "Content-Type":
             "application/json",
         },
-        body:
-          JSON.stringify(
-            body
-          ),
+        body: JSON.stringify(
+          body
+        ),
       }
     );
 
   const raw =
     await response.text();
 
-  if (!response.ok) {
+  if (
+    !response.ok
+  ) {
     throw new Error(
       `Serper request failed: ${response.status} ${raw}`
     );
   }
 
-  let data: {
-    organic?: SearchResult[];
-  };
+  let data: any;
 
   try {
     data =
       JSON.parse(raw);
   } catch {
     throw new Error(
-      "Serper returned invalid JSON."
+      `Serper returned invalid JSON: ${raw.slice(
+        0,
+        300
+      )}`
     );
   }
 
-  return Array.isArray(
-    data.organic
-  )
-    ? data.organic
-    : [];
-}
-
-/*
- * Free fallback.
- *
- * We deliberately keep this separate from the Serper
- * function so the existing paid search path remains
- * untouched when Serper credits are available.
- */
-async function searchPublicWeb(
-  query: string
-): Promise<SearchResult[]> {
-  const encoded =
-    encodeURIComponent(
-      query
-    );
-
-  const endpoints = [
-    `https://www.google.com/search?q=${encoded}&num=${RESULTS_PER_SEARCH}`,
-    `https://www.google.com/search?q=${encoded}&num=${RESULTS_PER_SEARCH}&filter=0`,
-  ];
-
-  for (
-    const endpoint of endpoints
+  if (
+    !Array.isArray(
+      data?.organic
+    )
   ) {
-    try {
-      const response =
-        await fetch(
-          endpoint,
-          {
-            headers: {
-              "User-Agent":
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131 Safari/537.36",
-              Accept:
-                "text/html,application/xhtml+xml",
-              "Accept-Language":
-                "en-US,en;q=0.9",
-            },
-            redirect:
-              "follow",
-          }
-        );
-
-      if (!response.ok) {
-        continue;
-      }
-
-      const html =
-        await response.text();
-
-      const results =
-        parseGoogleResults(
-          html
-        );
-
-      if (
-        results.length > 0
-      ) {
-        return results;
-      }
-    } catch {
-      continue;
-    }
+    return [];
   }
 
-  return [];
-}
-
-function decodeHtml(
-  value: string
-): string {
-  return value
-    .replace(
-      /&amp;/gi,
-      "&"
+  return data.organic
+    .map(
+      (
+        item: any
+      ): SearchResult => ({
+        title:
+          cleanText(
+            item?.title
+          ),
+        link:
+          cleanText(
+            item?.link
+          ),
+        snippet:
+          cleanText(
+            item?.snippet
+          ),
+        date:
+          cleanText(
+            item?.date
+          ),
+        position:
+          typeof item?.position ===
+          "number"
+            ? item.position
+            : undefined,
+      })
     )
-    .replace(
-      /&quot;/gi,
-      '"'
-    )
-    .replace(
-      /&#39;/gi,
-      "'"
-    )
-    .replace(
-      /&lt;/gi,
-      "<"
-    )
-    .replace(
-      /&gt;/gi,
-      ">"
-    )
-    .replace(
-      /&#x27;/gi,
-      "'"
-    )
-    .replace(
-      /&#x2F;/gi,
-      "/"
+    .filter(
+      (item: SearchResult) =>
+        !!item.link
     );
-}
-
-function stripHtml(
-  value: string
-): string {
-  return decodeHtml(
-    value
-      .replace(
-        /<script[\s\S]*?<\/script>/gi,
-        " "
-      )
-      .replace(
-        /<style[\s\S]*?<\/style>/gi,
-        " "
-      )
-      .replace(
-        /<[^>]+>/g,
-        " "
-      )
-      .replace(
-        /\s+/g,
-        " "
-      )
-      .trim()
-  );
-}
+    }
 function parseGoogleResults(
   html: string
 ): SearchResult[] {
@@ -2157,7 +2053,7 @@ function parseGoogleResults(
 
     /*
      * Capture the surrounding Google result text.
-     * This gives the collector access to the actual
+     * This gives the collector access to actual
      * search-result context, not just the title.
      */
     const anchorStart =
@@ -2220,7 +2116,8 @@ function parseGoogleResults(
         );
     }
 
-    const result: SearchResult = {
+    const result:
+      SearchResult = {
       title,
       link: url,
       snippet:
@@ -2254,14 +2151,64 @@ function parseGoogleResults(
   }
 
   return results;
-    }
+}
+
+async function searchPublicWeb(
+  query: string
+): Promise<SearchResult[]> {
+  const encoded =
+    encodeURIComponent(
+      query
+    );
+
+  const url =
+    `https://www.google.com/search?q=${encoded}&num=${RESULTS_PER_SEARCH}`;
+
+  const response =
+    await fetch(
+      url,
+      {
+        method: "GET",
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0 Safari/537.36",
+          Accept:
+            "text/html,application/xhtml+xml",
+          "Accept-Language":
+            "en-US,en;q=0.9",
+        },
+        redirect: "follow",
+      }
+    );
+
+  if (
+    !response.ok
+  ) {
+    throw new Error(
+      `Free web search failed: ${response.status}`
+    );
+  }
+
+  const html =
+    await response.text();
+
+  if (
+    !html
+  ) {
+    return [];
+  }
+
+  return parseGoogleResults(
+    html
+  );
+}
 
 async function searchWithFallback(
   query: string,
   type: LeadType
 ): Promise<SearchResult[]> {
   /*
-   * Serper remains the first choice.
+   * Serper remains the first choice when available.
    */
   if (
     SERPER_API_KEY
@@ -2273,11 +2220,8 @@ async function searchWithFallback(
       );
     } catch {
       /*
-       * Important:
-       * Do NOT throw here.
-       *
-       * A missing/out-of-credit Serper account
-       * should not stop the entire lead collector.
+       * Do not stop the collector when Serper has
+       * no credits or is temporarily unavailable.
        */
     }
   }
@@ -2288,7 +2232,7 @@ async function searchWithFallback(
   return await searchPublicWeb(
     query
   );
-    }
+}
 function resultMatchesType(
   result: SearchResult,
   type: LeadType
@@ -2298,20 +2242,28 @@ function resultMatchesType(
       result
     );
 
-  const title =
+  /*
+   * IMPORTANT:
+   * searchQuery is classification context only.
+   *
+   * It is deliberately NOT passed into getSearchText()
+   * because the query must never manufacture a skill
+   * match or contact information.
+   */
+  const queryContext =
     normalize(
-      result.title || ""
+      result.searchQuery
     );
 
-  const link =
-    normalize(
-      result.link || ""
-    );
-
-  if (type === "SaaS") {
+  if (
+    type === "SaaS"
+  ) {
     /*
-     * SaaS must still be an individual professional.
-     * First use the full existing SaaS validation.
+     * Keep SaaS strict.
+     *
+     * We want an actual individual professional,
+     * not a job page, article, directory, course,
+     * company listing, or generic homepage.
      */
     if (
       isIndividualSaasProfile(
@@ -2321,14 +2273,11 @@ function resultMatchesType(
       return true;
     }
 
-    /*
-     * Some genuine professional profiles are returned
-     * with profile URLs but their title/snippet does not
-     * contain enough information for the stricter helper.
-     *
-     * Allow only recognizable individual-profile URLs
-     * combined with professional language.
-     */
+    const link =
+      cleanText(
+        result.link
+      ).toLowerCase();
+
     const individualProfileUrl =
       link.includes(
         "linkedin.com/in/"
@@ -2369,147 +2318,198 @@ function resultMatchesType(
     );
   }
 
-  if (type === "Demand") {
-    return containsAny(
-      text,
-      [
-        ...DEMAND_SIGNALS,
+  if (
+    type === "Demand"
+  ) {
+    const directDemand =
+      containsAny(
+        text,
+        [
+          ...DEMAND_SIGNALS,
 
-        "client needs",
-        "help needed",
-        "assistance needed",
+          "client needs",
+          "help needed",
+          "assistance needed",
 
-        "looking for someone",
-        "looking for a",
-        "looking for an",
+          "looking for someone",
+          "looking for a",
+          "looking for an",
 
-        "need help",
-        "need someone",
-        "need a teacher",
-        "need a tutor",
-        "need a coach",
-        "need a consultant",
-        "need a mentor",
+          "need help",
+          "need someone",
+          "need a teacher",
+          "need a tutor",
+          "need a coach",
+          "need a consultant",
+          "need a mentor",
 
-        "teacher needed",
-        "tutor needed",
-        "coach needed",
-        "consultant needed",
-        "mentor needed",
+          "teacher needed",
+          "tutor needed",
+          "coach needed",
+          "consultant needed",
+          "mentor needed",
 
-        "teacher wanted",
-        "tutor wanted",
-        "coach wanted",
+          "teacher wanted",
+          "tutor wanted",
+          "coach wanted",
 
-        "seeking a teacher",
-        "seeking a tutor",
-        "seeking a coach",
-        "seeking a consultant",
-        "seeking a mentor",
+          "seeking a teacher",
+          "seeking a tutor",
+          "seeking a coach",
+          "seeking a consultant",
+          "seeking a mentor",
 
-        "seeking services",
-        "request for",
-        "requesting",
-        "service needed",
-        "services needed",
-        "private tutor needed",
-        "online tutor needed",
-        "online teacher needed",
-      ]
+          "seeking services",
+          "request for",
+          "requesting",
+          "service needed",
+          "services needed",
+          "private tutor needed",
+          "online tutor needed",
+          "online teacher needed",
+        ]
+      );
+
+    if (
+      directDemand
+    ) {
+      return true;
+    }
+
+    /*
+     * FREE SEARCH FALLBACK:
+     * Google may return a valid Demand result whose
+     * scraped surrounding text does not preserve the
+     * exact demand phrase.
+     *
+     * Because buildQueries() created this result from
+     * a Demand query, use the query only as type
+     * context. Skill matching and contact validation
+     * still happen later.
+     */
+    return (
+      queryContext.includes(
+        "looking for"
+      ) ||
+      queryContext.includes(
+        "need a"
+      ) ||
+      queryContext.includes(
+        "need someone"
+      ) ||
+      queryContext.includes(
+        "seeking"
+      ) ||
+      queryContext.includes(
+        "wanted"
+      ) ||
+      queryContext.includes(
+        "recommend a"
+      ) ||
+      queryContext.includes(
+        "looking to hire"
+      )
     );
   }
 
-  return containsAny(
-    text,
-    [
-      ...SUPPLY_SIGNALS,
+  if (
+    type === "Supply"
+  ) {
+    const directSupply =
+      containsAny(
+        text,
+        [
+          ...SUPPLY_SIGNALS,
 
-      "hiring for",
-      "we're hiring",
-      "we are hiring",
-      "we are looking for",
-      "we're looking for",
+          "open positions",
+          "open role",
+          "open roles",
 
-      "join our team",
-      "open position",
-      "open positions",
-      "open role",
-      "open roles",
+          "employment opportunity",
+          "employment opportunities",
+          "career opportunity",
+          "career opportunities",
 
-      "employment opportunity",
-      "employment opportunities",
-      "career opportunity",
-      "career opportunities",
+          "position available",
+          "positions available",
+          "vacant position",
+          "vacancy for",
 
-      "position available",
-      "positions available",
-      "vacant position",
-      "vacancy for",
+          "seeking applicants",
+          "accepting applications",
+          "applications are open",
+          "now recruiting",
+          "currently recruiting",
 
-      "seeking applicants",
-      "accepting applications",
-      "applications are open",
-      "now recruiting",
-      "currently recruiting",
+          "teacher vacancy",
+          "tutor vacancy",
+          "coach vacancy",
+          "teaching position",
+          "teaching opportunity",
+          "tutoring position",
+          "coaching position",
+        ]
+      );
 
-      "teacher vacancy",
-      "tutor vacancy",
-      "coach vacancy",
-      "teaching position",
-      "teaching opportunity",
-      "tutoring position",
-      "coaching position",
-    ]
-  );
+    if (
+      directSupply
+    ) {
+      return true;
+    }
+
+    /*
+     * Same safe query-context fallback for Supply.
+     * The query itself does not count as skill/contact.
+     */
+    return (
+      queryContext.includes(
+        "hiring"
+      ) ||
+      queryContext.includes(
+        "we are hiring"
+      ) ||
+      queryContext.includes(
+        "job opening"
+      ) ||
+      queryContext.includes(
+        "vacancy"
+      ) ||
+      queryContext.includes(
+        "position available"
+      ) ||
+      queryContext.includes(
+        "applications open"
+      ) ||
+      queryContext.includes(
+        "recruiting"
+      )
+    );
+  }
+
+  return false;
 }
-async function loadSkills(
-  supabase: ReturnType<
-    typeof createSupabase
-  >
-): Promise<SkillRow[]> {
-  const {
-    data,
-    error,
-  } = await supabase
-    .from("skills")
-    .select(
-      "id,name,category,subcategory,tags"
-    )
-    .order(
-      "name",
-      {
-        ascending: true,
-      }
-    );
 
-  if (error) {
-    throw new Error(
-      `Could not load skills: ${error.message}`
-    );
+function tableForType(
+  type: LeadType
+): string {
+  if (
+    type === "Demand"
+  ) {
+    return "demand_leads";
   }
 
-  return Array.isArray(data)
-    ? data
-        .filter(
-          (row) =>
-            row &&
-            typeof row.name ===
-              "string" &&
-            row.name.trim()
-        )
-        .map(
-          (row) =>
-            row as SkillRow
-        )
-    : [];
+  if (
+    type === "Supply"
+  ) {
+    return "supply_leads";
+  }
+
+  return "saas_leads";
 }
 
 function leadInsertPayload(
   lead: CollectedLead
-): Record<
-  string,
-  unknown
-> {
+): Record<string, unknown> {
   if (
     lead.leadType ===
     "SaaS"
@@ -2517,7 +2517,6 @@ function leadInsertPayload(
     return {
       name:
         lead.name ||
-        lead.contactName ||
         lead.title,
 
       platform:
@@ -2525,14 +2524,13 @@ function leadInsertPayload(
 
       nich:
         lead.skill ||
-        lead.category ||
-        "Professional",
+        "",
 
       contect:
         lead.contactEmail ||
         lead.contactPhone ||
         lead.contactUrl ||
-        null,
+        "",
 
       status:
         "active",
@@ -2556,7 +2554,7 @@ function leadInsertPayload(
 
       contect_url:
         lead.contactUrl ||
-        null,
+        lead.source,
 
       country:
         lead.country ||
@@ -2606,7 +2604,7 @@ function leadInsertPayload(
 
     category:
       lead.category ||
-      null,
+      "Real Opportunity",
 
     subcategory:
       lead.subcategory ||
@@ -2699,7 +2697,7 @@ async function leadAlreadyExists(
     Array.isArray(data) &&
     data.length > 0
   );
-}
+    }
 async function processResult(
   result: SearchResult,
   type: LeadType,
@@ -2727,8 +2725,6 @@ async function processResult(
 
   /*
    * Reject generic/category/search pages for SaaS.
-   * A professional must lead to an actual profile
-   * or a direct professional page.
    */
   if (
     type === "SaaS"
@@ -2751,8 +2747,7 @@ async function processResult(
 
   /*
    * Demand and Supply must be recent.
-   * SaaS is intentionally not restricted by the
-   * 72-hour freshness rule.
+   * SaaS intentionally has no 72-hour restriction.
    */
   if (
     type === "Demand" ||
@@ -2776,6 +2771,11 @@ async function processResult(
     return null;
   }
 
+  /*
+   * IMPORTANT:
+   * Do NOT include result.searchQuery here.
+   * The search query is classification context only.
+   */
   const searchText =
     getSearchText(
       result
@@ -2831,89 +2831,93 @@ async function processResult(
     return null;
   }
 
-  const extractedName =
-    extractPersonName(
-      result
-    );
-
-  const name =
-    extractedName ||
-    undefined;
-
-  if (
-    type === "SaaS" &&
-    !hasLikelyPersonName(
-      name
-    )
-  ) {
-    stats.wrongType += 1;
-    return null;
-  }
+  const countryText =
+    [
+      title,
+      result.snippet || "",
+      contact.url || "",
+    ].join(" ");
 
   const country =
     detectCountry(
-      searchText
+      countryText
     );
 
-  if (!country) {
-    stats.wrongType += 1;
-    return null;
-  }
+  const city =
+    detectCity(
+      countryText
+    );
 
   const description =
     cleanText(
       result.snippet ||
-        searchText
+        title
     );
 
   const source =
-    link;
+    cleanText(
+      result.link
+    );
 
+  const lead: CollectedLead =
+    {
+      leadType: type,
+
+      source,
+
+      title,
+
+      name:
+        extractPersonName(
+          result
+        ),
+
+      description,
+
+      skill:
+        matchedSkill.name,
+
+      category:
+        matchedSkill.category ||
+        undefined,
+
+      subcategory:
+        matchedSkill.subcategory ||
+        undefined,
+
+      country,
+
+      city,
+
+      contactEmail:
+        contact.email,
+
+      contactPhone:
+        contact.phone,
+
+      contactName:
+        extractPersonName(
+          result
+        ),
+
+      contactUrl:
+        contact.url ||
+        source,
+
+      createdAt:
+        parseResultDate(
+          result
+        )?.toISOString() ||
+        new Date().toISOString(),
+    };
+
+  /*
+   * Demand/Supply and SaaS are all accepted only
+   * after the Gold filters above have passed.
+   */
   stats.accepted += 1;
 
-  return {
-    leadType:
-      type,
-
-    source,
-
-    title,
-
-    name,
-
-    description,
-
-    skill:
-      matchedSkill.name,
-
-    category:
-      matchedSkill.category ||
-      undefined,
-
-    subcategory:
-      matchedSkill.subcategory ||
-      undefined,
-
-    country,
-
-    contactEmail:
-      contact.email,
-
-    contactPhone:
-      contact.phone,
-
-    contactName:
-      name,
-
-    contactUrl:
-      contact.url,
-
-    createdAt:
-      parseResultDate(
-        result
-      )?.toISOString() ||
-      new Date().toISOString(),
-  };
+  return lead;
 }
 
 async function collectLeadsForType(
@@ -2941,8 +2945,8 @@ async function collectLeadsForType(
   for (
     const query of queries
   ) {
-    let results: SearchResult[] =
-      [];
+    let results:
+      SearchResult[] = [];
 
     try {
       results =
@@ -2950,11 +2954,20 @@ async function collectLeadsForType(
           query,
           type
         );
-    } catch {
+    } catch (
+      error
+    ) {
       /*
-       * One failed query must never turn the
-       * entire API response into non-JSON.
+       * One failed query must not stop the other
+       * skill searches.
        */
+      stats.insertErrors += 1;
+
+      stats.lastInsertError =
+        error instanceof Error
+          ? error.message
+          : String(error);
+
       continue;
     }
 
@@ -2962,9 +2975,28 @@ async function collectLeadsForType(
       const result of results
     ) {
       try {
+        /*
+         * THIS IS THE IMPORTANT FIX.
+         *
+         * Preserve the query that produced the result.
+         * resultMatchesType() can then distinguish a
+         * Demand search from a Supply search even when
+         * Google's free HTML does not preserve the
+         * original search phrase in the snippet.
+         *
+         * The query is NOT included in getSearchText(),
+         * so it cannot create a fake skill match.
+         */
+        const contextualResult =
+          {
+            ...result,
+            searchQuery:
+              query,
+          };
+
         const lead =
           await processResult(
-            result,
+            contextualResult,
             type,
             skills,
             stats
@@ -3012,7 +3044,9 @@ async function collectLeadsForType(
 
         stats.inserted += 1;
         inserted += 1;
-      } catch (error) {
+      } catch (
+        error
+      ) {
         stats.insertErrors += 1;
 
         stats.lastInsertError =
@@ -3024,7 +3058,49 @@ async function collectLeadsForType(
   }
 
   return inserted;
+}
+async function loadSkills(
+  supabase: ReturnType<
+    typeof createSupabase
+  >
+): Promise<SkillRow[]> {
+  const {
+    data,
+    error,
+  } = await supabase
+    .from("skills")
+    .select(
+      "id,name,category,subcategory,tags"
+    )
+    .order(
+      "name",
+      {
+        ascending: true,
       }
+    );
+
+  if (error) {
+    throw new Error(
+      `Could not load skills: ${error.message}`
+    );
+  }
+
+  return Array.isArray(data)
+    ? data
+        .filter(
+          (row) =>
+            row &&
+            typeof row.name ===
+              "string" &&
+            row.name.trim()
+        )
+        .map(
+          (row) =>
+            row as SkillRow
+        )
+    : [];
+}
+
 function getBearerToken(
   req: VercelRequest
 ): string | null {
@@ -3062,8 +3138,7 @@ export default async function handler(
    * Always return JSON.
    * This prevents the old:
    * "Unexpected token 'A'..."
-   * frontend error when the server sends
-   * plain-text errors.
+   * frontend error.
    */
   res.setHeader(
     "Content-Type",
@@ -3188,7 +3263,9 @@ export default async function handler(
         totalInserted,
         stats,
       });
-  } catch (error) {
+  } catch (
+    error
+  ) {
     const message =
       error instanceof Error
         ? error.message
@@ -3206,7 +3283,8 @@ export default async function handler(
           SaaS: 0,
         },
         totalInserted: 0,
-        stats: emptyStats(),
+        stats:
+          emptyStats(),
       });
   }
 }
