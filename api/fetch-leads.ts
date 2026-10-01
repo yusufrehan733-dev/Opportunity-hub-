@@ -2109,7 +2109,7 @@ async function insertSupply(
     );
 
   const row = {
-    company:
+   company_name:
       cleanNullable(
         lead.company ||
           lead.name
