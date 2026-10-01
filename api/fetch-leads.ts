@@ -2187,7 +2187,7 @@ async function insertSupply(
         ) ||
           "public"
       ),
-    content:
+    contact:
       cleanNullable(
         lead.description
       ),
