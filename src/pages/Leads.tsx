@@ -3,23 +3,28 @@ import {
   useMemo,
   useState,
 } from "react";
-import { useNavigate } from "react-router-dom";
-import { ArrowLeft } from "lucide-react";
-import { supabase } from "../lib/supabase";
+import { supabase } from "../lib/supabaseClient";
+
+type LeadType =
+  | "Demand"
+  | "Supply"
+  | "SaaS";
 
 type Lead = {
   id: string;
-  leadType:
-    | "Demand"
-    | "Supply"
-    | "SaaS";
+  type?: LeadType;
+  leadType?: LeadType;
+  lead_type?: LeadType;
 
-  title: string;
+  title?: string;
   name?: string;
+  client_name?: string;
   company?: string;
 
   description?: string;
+
   skill?: string;
+  skill_needed?: string;
   category?: string;
   subcategory?: string;
 
@@ -27,166 +32,332 @@ type Lead = {
   city?: string;
 
   budget?: string | number;
-  salary?: string | number;
   currency?: string;
+
+  salary?: string | number;
+  salary_range?: string | number;
+  salary_min?: string | number;
+  salary_max?: string | number;
+
+  contact_name?: string;
+  contact_email?: string;
+  contact_phone?: string;
 
   email?: string;
   phone?: string;
   contact?: string;
+  contact_url?: string;
 
-  source?: string;
+  company_website?: string;
+  apply_url?: string;
+  landing_url?: string;
+  source_url?: string;
+
   openUrl?: string;
+  source?: string;
+
+  platform?: string;
+  niche?: string;
+
+  status?: string;
+
+  created_at?: string;
   createdAt?: string;
 };
 
-type LeadFilter =
-  | "All"
-  | "Demand"
-  | "Supply"
-  | "SaaS";
-
 type SkillInfo = {
+  id?: string;
   name: string;
-  category: string;
-  subcategory: string;
+  category?: string;
+  subcategory?: string;
+  tags?: string[] | string | null;
 };
 
+function clean(value: any): string {
+  return String(value ?? "").trim();
+}
+
 function normalizeText(
-  value: string
-) {
-  return String(value || "")
-    .trim()
+  value: any
+): string {
+  return clean(value)
     .toLowerCase()
-    .replace(/\s+/g, " ");
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function normalizeCountry(
-  value: string
-) {
-  return normalizeText(value);
+  value: any
+): string {
+  const country =
+    normalizeText(value);
+
+  const aliases: Record<
+    string,
+    string
+  > = {
+    usa: "united states",
+    us: "united states",
+    "u s": "united states",
+    "u s a": "united states",
+    america: "united states",
+
+    uk: "united kingdom",
+    britain: "united kingdom",
+    england: "united kingdom",
+
+    uae:
+      "united arab emirates",
+    "u a e":
+      "united arab emirates",
+  };
+
+  return (
+    aliases[country] ||
+    country
+  );
 }
 
-/*
- * Lead matching rule:
- *
- * 1. Exact saved skill -> exact lead skill.
- * 2. A specialized saved skill can match its
- *    broader category.
- *
- * Example:
- * Calculus -> Calculus + Math
- * Tajweed -> Tajweed + Quran
- *
- * 3. A saved skill can also match a lead whose
- *    subcategory represents that saved skill.
- *
- * 4. We do NOT make a broad skill match every
- *    specialization.
- *
- * The category/subcategory information comes
- * from the existing Supabase skills table.
- */
+function toArray(
+  value: any
+): string[] {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => clean(item))
+      .filter(Boolean);
+  }
 
+  if (
+    typeof value === "string"
+  ) {
+    return value
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  return [];
+}
+
+function getLeadType(
+  lead: Lead
+): LeadType {
+  const value =
+    clean(
+      lead.leadType ||
+        lead.lead_type ||
+        lead.type
+    ).toLowerCase();
+
+  if (value === "supply") {
+    return "Supply";
+  }
+
+  if (value === "saas") {
+    return "SaaS";
+  }
+
+  return "Demand";
+      }
 function skillMatches(
   preferredSkill: string,
   leadSkill: string,
   leadCategory: string,
   leadSubcategory: string,
-  skillInfo?: SkillInfo
-) {
+  info?: SkillInfo
+): boolean {
   const preferred =
-    normalizeText(preferredSkill);
-
-  const actual =
-    normalizeText(leadSkill);
-
-  const category =
-    normalizeText(leadCategory);
-
-  const subcategory =
-    normalizeText(leadSubcategory);
+    normalizeText(
+      preferredSkill
+    );
 
   if (!preferred) {
     return false;
   }
 
-  // Exact skill match.
+  const skill =
+    normalizeText(
+      leadSkill
+    );
+
+  const category =
+    normalizeText(
+      leadCategory
+    );
+
+  const subcategory =
+    normalizeText(
+      leadSubcategory
+    );
+
+  /*
+   * Direct normalized matching.
+   *
+   * Examples:
+   * Software engineer
+   * software-engineer
+   * Software Engineer
+   */
   if (
-    actual &&
-    (
-      actual === preferred ||
-      actual.includes(preferred) ||
-      preferred.includes(actual)
+    skill === preferred ||
+    skill.includes(preferred) ||
+    preferred.includes(skill)
+  ) {
+    return true;
+  }
+
+  /*
+   * Compare the individual words.
+   *
+   * This allows:
+   *
+   * Software engineer
+   * ↔ Principal Software Engineer
+   * ↔ Software Engineer AI
+   */
+  const preferredWords =
+    preferred
+      .split(" ")
+      .filter(
+        (word) =>
+          word.length >= 2
+      );
+
+  const leadWords =
+    skill
+      .split(" ")
+      .filter(
+        (word) =>
+          word.length >= 2
+      );
+
+  if (
+    preferredWords.length > 0 &&
+    preferredWords.every(
+      (word) =>
+        leadWords.includes(word)
     )
   ) {
     return true;
   }
 
-  if (!skillInfo) {
+  /*
+   * Skill hierarchy matching.
+   *
+   * The user's selected skill may belong to
+   * a category/subcategory in the global
+   * skills table.
+   */
+  if (info) {
+    const infoName =
+      normalizeText(
+        info.name
+      );
+
+    const infoCategory =
+      normalizeText(
+        info.category
+      );
+
+    const infoSubcategory =
+      normalizeText(
+        info.subcategory
+      );
+
+    const infoTags =
+      toArray(info.tags)
+        .map(normalizeText)
+        .filter(Boolean);
+
+    if (
+      infoName &&
+      (
+        skill.includes(infoName) ||
+        infoName.includes(skill)
+      )
+    ) {
+      return true;
+    }
+
+    if (
+      infoCategory &&
+      category === infoCategory
+    ) {
+      return true;
+    }
+
+    if (
+      infoSubcategory &&
+      (
+        subcategory ===
+          infoSubcategory ||
+        skill.includes(
+          infoSubcategory
+        )
+      )
+    ) {
+      return true;
+    }
+
+    if (
+      infoTags.some(
+        (tag) =>
+          skill.includes(tag) ||
+          tag.includes(skill)
+      )
+    ) {
+      return true;
+    }
+  }
+
+  /*
+   * Final word-overlap check.
+   *
+   * This handles useful real-world variants
+   * without requiring an exact phrase.
+   */
+  const meaningfulWords =
+    preferredWords.filter(
+      (word) =>
+        ![
+          "and",
+          "the",
+          "for",
+          "with",
+          "of",
+          "in",
+          "to",
+        ].includes(word)
+    );
+
+  if (
+    meaningfulWords.length === 0
+  ) {
     return false;
   }
 
-  const parentCategory =
-    normalizeText(
-      skillInfo.category
-    );
+  const overlap =
+    meaningfulWords.filter(
+      (word) =>
+        skill.includes(word) ||
+        category.includes(word) ||
+        subcategory.includes(word)
+    ).length;
 
-  const parentSubcategory =
-    normalizeText(
-      skillInfo.subcategory
-    );
-
-  /*
-   * Specialized skill -> broader category.
-   */
-  if (
-    parentCategory &&
-    (
-      actual === parentCategory ||
-      category === parentCategory ||
-      subcategory === parentCategory
-    )
-  ) {
-    return true;
-  }
-
-  /*
-   * Match the saved skill against the lead's
-   * subcategory.
-   */
-  if (
-    parentSubcategory &&
-    (
-      actual === parentSubcategory ||
-      category === parentSubcategory ||
-      subcategory === parentSubcategory
-    )
-  ) {
-    return true;
-  }
-
-  /*
-   * If the lead explicitly identifies the saved
-   * skill as its subcategory, it is a match.
-   */
-  if (
-    subcategory &&
-    (
-      subcategory === preferred ||
-      subcategory.includes(preferred) ||
-      preferred.includes(subcategory)
-    )
-  ) {
-    return true;
-  }
-
-  return false;
+  return (
+    overlap ===
+    meaningfulWords.length
+  );
 }
 
 function formatDate(
-  value: string
-) {
-  if (!value) return "";
+  value: any
+): string {
+  if (!value) {
+    return "";
+  }
 
   const date =
     new Date(value);
@@ -196,19 +367,38 @@ function formatDate(
       date.getTime()
     )
   ) {
-    return value;
+    return clean(value);
   }
 
-  return date.toLocaleDateString();
+  return date.toLocaleDateString(
+    "en-US",
+    {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    }
+  );
 }
 
 function openLink(
   url: string
-) {
-  if (!url) return;
+): void {
+  const value =
+    clean(url);
+
+  if (!value) {
+    return;
+  }
+
+  const finalUrl =
+    /^https?:\/\//i.test(
+      value
+    )
+      ? value
+      : `https://${value}`;
 
   window.open(
-    url,
+    finalUrl,
     "_blank",
     "noopener,noreferrer"
   );
@@ -216,231 +406,205 @@ function openLink(
 
 function callPhone(
   phone: string
-) {
-  if (!phone) return;
+): void {
+  const value =
+    clean(phone);
 
-  const cleaned =
-    phone.replace(
-      /[^\d+]/g,
-      ""
-    );
+  if (!value) {
+    return;
+  }
 
-  if (!cleaned) return;
-
-  window.open(
-    `https://wa.me/${cleaned.replace(
-      /^\+/,
-      ""
-    )}`,
-    "_blank",
-    "noopener,noreferrer"
-  );
+  window.location.href =
+    `tel:${value}`;
 }
 
 function sendEmail(
   email: string
-) {
-  if (!email) return;
+): void {
+  const value =
+    clean(email);
+
+  if (!value) {
+    return;
+  }
 
   window.location.href =
-    `mailto:${email}`;
+    `mailto:${value}`;
 }
-
-const buttonStyle: React.CSSProperties = {
-  padding: "9px 14px",
-  borderRadius: 8,
-  border: "1px solid #444",
-  background: "#1a1a1a",
-  color: "#fff",
-  cursor: "pointer",
-  fontWeight: 600,
-};
-
 export default function Leads() {
-  const navigate =
-    useNavigate();
-
   const [leads, setLeads] =
     useState<Lead[]>([]);
 
-  const [
-    preferredCountry,
-    setPreferredCountry,
-  ] = useState("");
+  const [preferredCountry, setPreferredCountry] =
+    useState("");
 
-  const [
-    preferredSkills,
-    setPreferredSkills,
-  ] = useState<string[]>(
-    []
-  );
+  const [preferredSkills, setPreferredSkills] =
+    useState<string[]>([]);
 
-  const [
-    typeFilter,
-    setTypeFilter,
-  ] = useState<LeadFilter>(
-    "All"
-  );
+  const [skillInfos, setSkillInfos] =
+    useState<SkillInfo[]>([]);
 
   const [loading, setLoading] =
     useState(true);
 
-  const [
-    preferencesLoading,
-    setPreferencesLoading,
-  ] = useState(true);
-
-  const [errorMsg, setErrorMsg] =
+  const [error, setError] =
     useState("");
 
-  const [
-    preferencesError,
-    setPreferencesError,
-  ] = useState("");
-
-  const [
-    skillInfos,
-    setSkillInfos,
-  ] = useState<
-    SkillInfo[]
-  >([]);
+  const [typeFilter, setTypeFilter] =
+    useState("all");
 
   useEffect(() => {
-    loadLeads();
-  }, []);
+    let cancelled = false;
 
-  async function loadLeads() {
-    try {
-      setLoading(true);
-      setPreferencesLoading(
-        true
-      );
-      setErrorMsg("");
-      setPreferencesError("");
+    async function loadPreferences() {
+      try {
+        setError("");
 
-      const {
-        data: authData,
-        error: authError,
-      } =
-        await supabase.auth.getUser();
+        const {
+          data: {
+            user,
+          },
+          error: authError,
+        } = await supabase.auth.getUser();
 
-      if (authError) {
-        throw new Error(
-          authError.message
-        );
-      }
+        if (
+          authError ||
+          !user
+        ) {
+          throw new Error(
+            "Please log in to view your leads."
+          );
+        }
 
-      const user =
-        authData.user;
-
-      if (!user) {
-        throw new Error(
-          "Please log in before viewing your leads."
-        );
-      }
-
-      const {
-        data: userData,
-        error: userError,
-      } =
-        await supabase
+        const {
+          data: userData,
+          error: userError,
+        } = await supabase
           .from("users")
           .select(
             "country, skill_preference"
           )
-          .eq("id", user.id)
+          .eq(
+            "id",
+            user.id
+          )
           .maybeSingle();
 
-      if (userError) {
-        throw new Error(
-          `Unable to load your preferences: ${userError.message}`
+        if (userError) {
+          throw new Error(
+            `Unable to load your preferences: ${userError.message}`
+          );
+        }
+
+        if (
+          cancelled
+        ) {
+          return;
+        }
+
+        setPreferredCountry(
+          clean(
+            userData?.country
+          )
         );
-      }
 
-      const savedCountry =
-        String(
-          userData?.country || ""
-        ).trim();
-
-      const {
-        data: skillRows,
-        error: skillsError,
-      } =
-        await supabase
+        const {
+          data: skillRows,
+          error: skillsError,
+        } = await supabase
           .from("user_skills")
-          .select("skill")
-          .eq("user_id", user.id)
-          .order("created_at", {
-            ascending: true,
-          });
+          .select(
+            "skill"
+          )
+          .eq(
+            "user_id",
+            user.id
+          );
 
-      if (skillsError) {
-        throw new Error(
-          `Unable to load your skills: ${skillsError.message}`
-        );
-      }
+        if (skillsError) {
+          throw new Error(
+            `Unable to load your skills: ${skillsError.message}`
+          );
+        }
 
-      const currentSkills =
-        Array.isArray(skillRows)
-          ? skillRows
-              .map((row: any) =>
-                String(
-                  row?.skill || ""
-                ).trim()
+        const currentSkills =
+          Array.isArray(
+            skillRows
+          )
+            ? skillRows
+                .map(
+                  (row: any) =>
+                    String(
+                      row?.skill ||
+                        ""
+                    ).trim()
+                )
+                .filter(Boolean)
+            : [];
+
+        let oldSkills: string[] =
+          [];
+
+        const oldPreference =
+          userData?.skill_preference;
+
+        if (
+          Array.isArray(
+            oldPreference
+          )
+        ) {
+          oldSkills =
+            oldPreference
+              .map(
+                (skill: any) =>
+                  String(
+                    skill || ""
+                  ).trim()
               )
-              .filter(Boolean)
-          : [];
+              .filter(Boolean);
+        } else if (
+          typeof oldPreference ===
+          "string"
+        ) {
+          const cleanedPreference =
+            oldPreference.trim();
 
-      let oldSkills: string[] =
-        [];
+          if (
+            cleanedPreference
+          ) {
+            try {
+              const parsed =
+                JSON.parse(
+                  cleanedPreference
+                );
 
-      const oldPreference =
-        userData?.skill_preference;
-            if (
-        Array.isArray(
-          oldPreference
-        )
-      ) {
-        oldSkills =
-          oldPreference
-            .map(
-              (skill: any) =>
-                String(
-                  skill || ""
-                ).trim()
-            )
-            .filter(Boolean);
-      } else if (
-        typeof oldPreference ===
-        "string"
-      ) {
-        const cleaned =
-          oldPreference.trim();
-
-        if (cleaned) {
-          try {
-            const parsed =
-              JSON.parse(
-                cleaned
-              );
-
-            if (
-              Array.isArray(
-                parsed
-              )
-            ) {
+              if (
+                Array.isArray(
+                  parsed
+                )
+              ) {
+                oldSkills =
+                  parsed
+                    .map(
+                      (skill: any) =>
+                        String(
+                          skill || ""
+                        ).trim()
+                    )
+                    .filter(Boolean);
+              } else {
+                oldSkills =
+                  cleanedPreference
+                    .split(",")
+                    .map(
+                      (skill) =>
+                        skill.trim()
+                    )
+                    .filter(Boolean);
+              }
+            } catch {
               oldSkills =
-                parsed
-                  .map(
-                    (skill: any) =>
-                      String(
-                        skill || ""
-                      ).trim()
-                  )
-                  .filter(Boolean);
-            } else {
-              oldSkills =
-                cleaned
+                cleanedPreference
                   .split(",")
                   .map(
                     (skill) =>
@@ -448,307 +612,184 @@ export default function Leads() {
                   )
                   .filter(Boolean);
             }
-          } catch {
-            oldSkills =
-              cleaned
-                .split(",")
-                .map(
-                  (skill) =>
-                    skill.trim()
-                )
-                .filter(Boolean);
           }
         }
-      }
 
-      const mergedSkills = [
-        ...currentSkills,
-        ...oldSkills,
-      ].filter(
-        (
-          skill,
-          index,
-          array
-        ) =>
-          array.findIndex(
-            (item) =>
-              item
-                .toLowerCase() ===
-              skill
-                .toLowerCase()
-          ) === index
-      );
+        const finalSkills =
+          currentSkills.length >
+          0
+            ? currentSkills
+            : oldSkills;
 
-      setPreferredCountry(
-        savedCountry
-      );
+        setPreferredSkills(
+          finalSkills
+        );
 
-      setPreferredSkills(
-        mergedSkills
-      );
-
-      /*
-       * Load the existing global skill
-       * hierarchy. We use this to understand
-       * what broader category a saved skill
-       * belongs to.
-       */
-      const {
-        data: allSkills,
-        error:
-          allSkillsError,
-      } =
-        await supabase
+        const {
+          data: allSkills,
+          error: allSkillsError,
+        } = await supabase
           .from("skills")
           .select(
-            "name, category, subcategory"
+            "id, name, category, subcategory, tags"
+          )
+          .limit(5000);
+
+        if (
+          allSkillsError
+        ) {
+          throw new Error(
+            `Unable to load skill hierarchy: ${allSkillsError.message}`
+          );
+        }
+
+        if (
+          cancelled
+        ) {
+          return;
+        }
+
+        setSkillInfos(
+          Array.isArray(
+            allSkills
+          )
+            ? allSkills
+            : []
+        );
+      } catch (err: any) {
+        if (
+          cancelled
+        ) {
+          return;
+        }
+
+        setError(
+          err?.message ||
+            "Unable to load preferences."
+        );
+      }
+    }
+
+    loadPreferences();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadLeads() {
+      try {
+        setLoading(true);
+        setError("");
+
+        const response =
+          await fetch(
+            "/api/leads"
           );
 
-      if (
-        allSkillsError
-      ) {
-        throw new Error(
-          `Unable to load skill categories: ${allSkillsError.message}`
-        );
-      }
+        const text =
+          await response.text();
 
-      const loadedSkillInfos =
-        Array.isArray(allSkills)
-          ? allSkills.map(
-              (row: any) => ({
-                name: String(
-                  row?.name || ""
-                ).trim(),
-                category: String(
-                  row?.category || ""
-                ).trim(),
-                subcategory:
-                  String(
-                    row?.subcategory ||
-                      ""
-                  ).trim(),
-              })
-            )
-          : [];
+        let result: any;
 
-      setSkillInfos(
-        loadedSkillInfos
-      );
-
-      console.log(
-        "LEAD PREFERENCES:",
-        {
-          userId: user.id,
-          country: savedCountry,
-          currentSkills,
-          oldSkills,
-          mergedSkills,
+        try {
+          result =
+            JSON.parse(text);
+        } catch {
+          throw new Error(
+            "Leads API returned an invalid response."
+          );
         }
-      );
 
-      setPreferencesLoading(
-        false
-      );
+        if (
+          !response.ok ||
+          !result?.success
+        ) {
+          throw new Error(
+            result?.error ||
+              "Unable to load leads."
+          );
+        }
 
-      const response =
-        await fetch(
-          "/api/leads"
+        if (
+          cancelled
+        ) {
+          return;
+        }
+
+        const apiLeads =
+          Array.isArray(
+            result?.leads
+          )
+            ? result.leads
+            : [];
+
+        setLeads(
+          apiLeads.map(
+            (lead: any) => ({
+              ...lead,
+              leadType:
+                getLeadType(
+                  lead
+                ),
+            })
+          )
+        );
+      } catch (err: any) {
+        if (
+          cancelled
+        ) {
+          return;
+        }
+
+        setError(
+          err?.message ||
+            "Unable to load leads."
         );
 
-      if (!response.ok) {
-        throw new Error(
-          `Unable to load leads (${response.status}).`
-        );
+        setLeads([]);
+      } finally {
+        if (
+          !cancelled
+        ) {
+          setLoading(false);
+        }
       }
-
-      const result =
-        await response.json();
-
-      const rows =
-        Array.isArray(result)
-          ? result
-          : Array.isArray(
-              result?.leads
-            )
-          ? result.leads
-          : Array.isArray(
-              result?.data
-            )
-          ? result.data
-          : [];
-            const mapped: Lead[] =
-        rows.map(
-          (row: any) => ({
-            id: String(
-              row.id || ""
-            ),
-
-            leadType:
-              row.lead_type ===
-                "Demand" ||
-              row.type === "Demand"
-                ? "Demand"
-                : row.lead_type ===
-                    "Supply" ||
-                  row.type ===
-                    "Supply"
-                ? "Supply"
-                : "SaaS",
-
-            title:
-              String(
-                row.title ||
-                  row.job_title ||
-                  row.name ||
-                  "Opportunity"
-              ),
-
-            name:
-              row.name ||
-              row.client_name ||
-              row.contact_name ||
-              "",
-
-            company:
-              row.company ||
-              row.company_name ||
-              "",
-
-            description:
-              row.description ||
-              "",
-
-            skill:
-              row.skill ||
-              row.skill_needed ||
-              row.required_skill ||
-              "",
-
-            category:
-              row.category ||
-              "",
-
-            subcategory:
-              row.subcategory ||
-              "",
-
-            country:
-              row.country ||
-              "Global",
-
-            city:
-              row.city ||
-              "",
-
-            budget:
-              row.budget ??
-              "",
-
-            salary:
-              row.salary ??
-              row.salary_range ??
-              row.salary_min ??
-              "",
-
-            currency:
-              row.currency ||
-              "",
-
-            email:
-              row.email ||
-              row.contact_email ||
-              "",
-
-            phone:
-              row.phone ||
-              row.contact_phone ||
-              "",
-
-            contact:
-              row.contact ||
-              row.contact_url ||
-              "",
-
-            source:
-              row.source_url ||
-              row.source ||
-              "",
-
-            openUrl:
-              row.openUrl ||
-              row.open_url ||
-              row.contact_url ||
-              row.apply_url ||
-              row.landing_url ||
-              row.source_url ||
-              "",
-
-            createdAt:
-              row.createdAt ||
-              row.created_at ||
-              "",
-          })
-        );
-
-      setLeads(mapped);
-    } catch (error: any) {
-      const message =
-        error?.message ||
-        "Unable to load leads.";
-
-      setErrorMsg(
-        message
-      );
-
-      if (
-        message
-          .toLowerCase()
-          .includes("preference") ||
-        message
-          .toLowerCase()
-          .includes("country") ||
-        message
-          .toLowerCase()
-          .includes("skill")
-      ) {
-        setPreferencesError(
-          message
-        );
-      }
-
-      setLeads([]);
-    } finally {
-      setLoading(false);
-      setPreferencesLoading(
-        false
-      );
     }
-            }
+
+    loadLeads();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   
-        const filteredLeads =
+    const filteredLeads =
     useMemo(() => {
-      if (!preferredCountry) {
-        return [];
-      }
-
-      if (
-        preferredSkills.length ===
-        0
-      ) {
-        return [];
-      }
-
       const selectedCountry =
         normalizeCountry(
           preferredCountry
         );
 
+      const normalizedType =
+        clean(typeFilter)
+          .toLowerCase();
+
       return leads.filter(
         (lead) => {
+          const leadType =
+            getLeadType(
+              lead
+            );
+
           const typeMatch =
-            typeFilter === "All" ||
-            lead.leadType ===
-              typeFilter;
+            normalizedType ===
+              "all" ||
+            normalizedType ===
+              leadType.toLowerCase();
 
           if (!typeMatch) {
             return false;
@@ -760,8 +801,9 @@ export default function Leads() {
             );
 
           if (
+            selectedCountry &&
             leadCountry !==
-            selectedCountry
+              selectedCountry
           ) {
             return false;
           }
@@ -769,35 +811,28 @@ export default function Leads() {
           /*
            * SaaS DISPLAY RULE:
            *
-           * SaaS leads use the user's country
-           * as the display filter.
-           *
-           * We intentionally do NOT require
-           * SaaS niche/skill wording to match
-           * the saved skill exactly.
-           *
-           * Example:
-           * Professional Coach
-           * can still see a SaaS prospect
-           * described as coach, mentor, guide,
-           * career mentor, etc.
-           *
-           * IMPORTANT:
-           * This changes DISPLAY matching only.
-           * It does not change /api/leads,
-           * Supabase fetching, or Gold rules.
+           * SaaS is filtered by country only.
+           * The user's selected skill does not
+           * restrict SaaS display.
            */
           if (
-            lead.leadType ===
+            leadType ===
             "SaaS"
           ) {
             return true;
           }
 
           /*
-           * Demand and Supply keep their
-           * existing skill matching rules.
+           * Demand and Supply require a
+           * matching selected skill.
            */
+          if (
+            preferredSkills.length ===
+            0
+          ) {
+            return false;
+          }
+
           return preferredSkills.some(
             (preferredSkill) => {
               const info =
@@ -813,9 +848,13 @@ export default function Leads() {
 
               return skillMatches(
                 preferredSkill,
-                lead.skill || "",
-                lead.category || "",
-                lead.subcategory || "",
+                lead.skill ||
+                  lead.skill_needed ||
+                  "",
+                lead.category ||
+                  "",
+                lead.subcategory ||
+                  "",
                 info
               );
             }
@@ -830,57 +869,98 @@ export default function Leads() {
       skillInfos,
     ]);
 
-  const needsPreferences =
-    !preferredCountry ||
-    preferredSkills.length ===
-      0;
-    return (
+  const counts =
+    useMemo(() => {
+      return {
+        total:
+          filteredLeads.length,
+
+        demand:
+          filteredLeads.filter(
+            (lead) =>
+              getLeadType(
+                lead
+              ) === "Demand"
+          ).length,
+
+        supply:
+          filteredLeads.filter(
+            (lead) =>
+              getLeadType(
+                lead
+              ) === "Supply"
+          ).length,
+
+        saas:
+          filteredLeads.filter(
+            (lead) =>
+              getLeadType(
+                lead
+              ) === "SaaS"
+          ).length,
+      };
+    }, [filteredLeads]);
+
+  const buttonStyle: React.CSSProperties =
+    {
+      padding:
+        "10px 14px",
+      borderRadius: 8,
+      border:
+        "1px solid #555",
+      background:
+        "#111",
+      color:
+        "#fff",
+      cursor:
+        "pointer",
+      fontSize:
+        14,
+    };
+
+  return (
     <div
       style={{
-        minHeight: "100vh",
-        background: "#000",
-        color: "#fff",
-        padding: "24px",
+        minHeight:
+          "100vh",
+        background:
+          "#000",
+        color:
+          "#fff",
+        padding:
+          "24px",
       }}
     >
       <div
         style={{
-          maxWidth: 1100,
-          margin: "0 auto",
+          maxWidth:
+            1200,
+          margin:
+            "0 auto",
         }}
       >
-        <button
-          onClick={() =>
-            navigate("/dashboard")
-          }
-          style={{
-            ...buttonStyle,
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 8,
-            marginBottom: 20,
-          }}
-        >
-          <ArrowLeft size={17} />
-          Back
-        </button>
-
         <div
           style={{
-            display: "flex",
+            display:
+              "flex",
             justifyContent:
               "space-between",
-            alignItems: "center",
+            alignItems:
+              "center",
             gap: 16,
-            flexWrap: "wrap",
-            marginBottom: 20,
+            flexWrap:
+              "wrap",
+            marginBottom:
+              24,
           }}
         >
           <div>
             <h1
               style={{
-                margin: 0,
-                fontSize: 30,
+                margin:
+                  0,
+                fontSize:
+                  30,
               }}
             >
               Leads
@@ -888,456 +968,508 @@ export default function Leads() {
 
             <p
               style={{
-                color: "#aaa",
-                marginTop: 8,
+                margin:
+                  "8px 0 0",
+                color:
+                  "#aaa",
               }}
             >
               Real opportunities matched
-              to your preferences.
+              to your country and skills.
             </p>
           </div>
 
-          <button
-            onClick={loadLeads}
-            style={buttonStyle}
-            disabled={loading}
-          >
-            {loading
-              ? "Refreshing..."
-              : "Refresh"}
-          </button>
-        </div>
-
-        <div
-          style={{
-            display: "flex",
-            gap: 8,
-            flexWrap: "wrap",
-            marginBottom: 20,
-          }}
-        >
-          {(
-            [
-              "All",
-              "Demand",
-              "Supply",
-              "SaaS",
-            ] as LeadFilter[]
-          ).map((filter) => (
-            <button
-              key={filter}
-              onClick={() =>
-                setTypeFilter(filter)
-              }
-              style={{
-                ...buttonStyle,
-                background:
-                  typeFilter === filter
-                    ? "#fff"
-                    : "#1a1a1a",
-                color:
-                  typeFilter === filter
-                    ? "#000"
-                    : "#fff",
-              }}
-            >
-              {filter}
-            </button>
-          ))}
-        </div>
-
-        <div
-          style={{
-            border:
-              "1px solid #333",
-            borderRadius: 12,
-            padding: 16,
-            marginBottom: 24,
-            background: "#0b0b0b",
-          }}
-        >
           <div
             style={{
-              fontWeight: 700,
-              marginBottom: 10,
+              display:
+                "flex",
+              gap: 8,
+              flexWrap:
+                "wrap",
             }}
           >
-            Your lead preferences
+            {[
+              "all",
+              "demand",
+              "supply",
+              "saas",
+            ].map(
+              (type) => (
+                <button
+                  key={type}
+                  onClick={() =>
+                    setTypeFilter(
+                      type
+                    )
+                  }
+                  style={{
+                    ...buttonStyle,
+                    background:
+                      typeFilter ===
+                      type
+                        ? "#fff"
+                        : "#111",
+                    color:
+                      typeFilter ===
+                      type
+                        ? "#000"
+                        : "#fff",
+                  }}
+                >
+                  {type
+                    .charAt(0)
+                    .toUpperCase() +
+                    type.slice(
+                      1
+                    )}
+                </button>
+              )
+            )}
           </div>
-
-          {preferencesLoading ? (
-            <div
-              style={{
-                color: "#aaa",
-              }}
-            >
-              Loading preferences...
-            </div>
-          ) : (
-            <>
-              <div
-                style={{
-                  color: "#ccc",
-                  marginBottom: 6,
-                }}
-              >
-                Country:{" "}
-                <strong
-                  style={{
-                    color: "#fff",
-                  }}
-                >
-                  {preferredCountry ||
-                    "Not selected"}
-                </strong>
-              </div>
-
-              <div
-                style={{
-                  color: "#ccc",
-                }}
-              >
-                Skills:{" "}
-                <strong
-                  style={{
-                    color: "#fff",
-                  }}
-                >
-                  {preferredSkills.length
-                    ? preferredSkills.join(
-                        ", "
-                      )
-                    : "Not selected"}
-                </strong>
-              </div>
-            </>
-          )}
-
-          {preferencesError && (
-            <div
-              style={{
-                color: "#ff8a8a",
-                marginTop: 10,
-              }}
-            >
-              {preferencesError}
-            </div>
-          )}
         </div>
 
-        {errorMsg && (
+        <div
+          style={{
+            display:
+              "flex",
+            gap: 10,
+            flexWrap:
+              "wrap",
+            marginBottom:
+              24,
+          }}
+        >
+          <span
+            style={{
+              padding:
+                "8px 12px",
+              border:
+                "1px solid #333",
+              borderRadius:
+                8,
+              color:
+                "#ccc",
+            }}
+          >
+            Country:{" "}
+            {preferredCountry ||
+              "Not selected"}
+          </span>
+
+          <span
+            style={{
+              padding:
+                "8px 12px",
+              border:
+                "1px solid #333",
+              borderRadius:
+                8,
+              color:
+                "#ccc",
+            }}
+          >
+            Matching leads:{" "}
+            {counts.total}
+          </span>
+        </div>
+
+        {preferredSkills.length >
+          0 && (
+          <div
+            style={{
+              marginBottom:
+                24,
+              color:
+                "#aaa",
+              fontSize:
+                14,
+            }}
+          >
+            Skills:{" "}
+            {preferredSkills.join(
+              ", "
+            )}
+          </div>
+        )}
+
+        {error && (
           <div
             style={{
               border:
-                "1px solid #662222",
-              background: "#180909",
-              color: "#ffaaaa",
-              borderRadius: 10,
-              padding: 14,
-              marginBottom: 20,
+                "1px solid #555",
+              background:
+                "#111",
+              padding:
+                16,
+              borderRadius:
+                10,
+              marginBottom:
+                20,
+              color:
+                "#fff",
             }}
           >
-            {errorMsg}
+            {error}
           </div>
         )}
 
         {loading ? (
           <div
             style={{
-              padding: 30,
-              textAlign: "center",
-              color: "#aaa",
-            }}
-          >
-            Loading leads...
-          </div>
-        ) : needsPreferences ? (
-          <div
-            style={{
+              padding:
+                30,
               border:
                 "1px solid #333",
-              borderRadius: 12,
-              padding: 30,
-              textAlign: "center",
-              color: "#aaa",
-              background: "#0b0b0b",
+              borderRadius:
+                12,
+              background:
+                "#080808",
+              color:
+                "#aaa",
             }}
           >
-            Please select your country
-            and at least one skill to view
-            leads.
+            Loading real leads...
           </div>
         ) : filteredLeads.length ===
           0 ? (
           <div
             style={{
+              padding:
+                30,
               border:
                 "1px solid #333",
-              borderRadius: 12,
-              padding: 30,
-              textAlign: "center",
-              color: "#aaa",
-              background: "#0b0b0b",
+              borderRadius:
+                12,
+              background:
+                "#080808",
+              color:
+                "#aaa",
             }}
           >
-            No matching leads found for
-            your selected preferences.
+            No matching leads found
+            for your selected preferences.
           </div>
         ) : (
           <div
             style={{
-              display: "grid",
-              gap: 16,
+              display:
+                "grid",
+              gridTemplateColumns:
+                "repeat(auto-fit, minmax(300px, 1fr))",
+              gap: 18,
             }}
           >
-            {filteredLeads.map(
-              (lead) => (
-                <div
-                  key={lead.id}
-                  style={{
-                    border:
-                      "1px solid #333",
-                    borderRadius: 12,
-                    padding: 20,
-                    background:
-                      "#0b0b0b",
-                  }}
-                >
+                        {filteredLeads.map(
+              (lead) => {
+                const leadType =
+                  getLeadType(
+                    lead
+                  );
+
+                return (
                   <div
+                    key={
+                      lead.id
+                    }
                     style={{
-                      display: "flex",
-                      justifyContent:
-                        "space-between",
-                      alignItems:
-                        "flex-start",
-                      gap: 14,
-                      flexWrap: "wrap",
+                      background:
+                        "#080808",
+                      border:
+                        "1px solid #333",
+                      borderRadius:
+                        12,
+                      padding:
+                        20,
                     }}
                   >
-                    <div>
-                      <div
+                    <div
+                      style={{
+                        display:
+                          "flex",
+                        justifyContent:
+                          "space-between",
+                        alignItems:
+                          "flex-start",
+                        gap: 12,
+                        marginBottom:
+                          12,
+                      }}
+                    >
+                      <span
                         style={{
-                          fontSize: 12,
-                          color: "#aaa",
-                          marginBottom: 6,
+                          padding:
+                            "5px 9px",
+                          border:
+                            "1px solid #555",
+                          borderRadius:
+                            6,
+                          fontSize:
+                            12,
+                          color:
+                            "#ccc",
                         }}
                       >
-                        {lead.leadType}
-                      </div>
+                        {leadType}
+                      </span>
 
-                      <h2
-                        style={{
-                          margin: 0,
-                          fontSize: 21,
-                        }}
-                      >
-                        {lead.title}
-                      </h2>
+                      {lead.country && (
+                        <span
+                          style={{
+                            color:
+                              "#aaa",
+                            fontSize:
+                              13,
+                          }}
+                        >
+                          {lead.country}
+                        </span>
+                      )}
                     </div>
 
-                    {lead.country && (
+                    <h2
+                      style={{
+                        margin:
+                          "0 0 8px",
+                        fontSize:
+                          20,
+                      }}
+                    >
+                      {lead.title ||
+                        lead.name ||
+                        lead.company ||
+                        "Opportunity"}
+                    </h2>
+
+                    {(lead.company ||
+                      lead.client_name) && (
                       <div
                         style={{
-                          border:
-                            "1px solid #444",
-                          borderRadius: 20,
-                          padding:
-                            "5px 10px",
-                          color: "#ccc",
-                          fontSize: 12,
+                          color:
+                            "#ccc",
+                          marginBottom:
+                            10,
                         }}
                       >
-                        {lead.country}
+                        {lead.company ||
+                          lead.client_name}
                       </div>
                     )}
-                  </div>
 
-                  {lead.company && (
-                    <div
-                      style={{
-                        marginTop: 10,
-                        color: "#ddd",
-                      }}
-                    >
-                      {lead.company}
-                    </div>
-                  )}
-
-                  {lead.name && (
-                    <div
-                      style={{
-                        marginTop: 5,
-                        color: "#aaa",
-                      }}
-                    >
-                      Contact: {lead.name}
-                    </div>
-                  )}
-
-                  {lead.description && (
-                    <p
-                      style={{
-                        color: "#ccc",
-                        lineHeight: 1.6,
-                        marginTop: 14,
-                      }}
-                    >
-                      {lead.description}
-                    </p>
-                  )}
-
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: 14,
-                      flexWrap: "wrap",
-                      marginTop: 12,
-                      color: "#aaa",
-                      fontSize: 14,
-                    }}
-                  >
                     {lead.skill && (
-                      <span>
-                        Skill: {lead.skill}
-                      </span>
+                      <div
+                        style={{
+                          color:
+                            "#aaa",
+                          fontSize:
+                            14,
+                          marginBottom:
+                            10,
+                        }}
+                      >
+                        Skill:{" "}
+                        {lead.skill}
+                      </div>
+                    )}
+
+                    {lead.description && (
+                      <div
+                        style={{
+                          color:
+                            "#bbb",
+                          lineHeight:
+                            1.6,
+                          marginBottom:
+                            14,
+                          whiteSpace:
+                            "pre-wrap",
+                        }}
+                      >
+                        {lead.description}
+                      </div>
                     )}
 
                     {lead.city && (
-                      <span>
-                        City: {lead.city}
-                      </span>
+                      <div
+                        style={{
+                          color:
+                            "#999",
+                          fontSize:
+                            14,
+                          marginBottom:
+                            8,
+                        }}
+                      >
+                        Location:{" "}
+                        {lead.city}
+                        {lead.country
+                          ? `, ${lead.country}`
+                          : ""}
+                      </div>
                     )}
 
-                    {lead.budget !==
-                        undefined &&
-                      lead.budget !==
-                        "" && (
-                        <span>
-                          Budget:{" "}
-                          {lead.currency
-                            ? `${lead.currency} `
-                            : ""}
-                          {lead.budget}
-                        </span>
-                      )}
-
-                    {lead.salary !==
-                        undefined &&
-                      lead.salary !==
-                        "" && (
-                        <span>
-                          Salary:{" "}
-                          {lead.currency
-                            ? `${lead.currency} `
-                            : ""}
-                          {lead.salary}
-                        </span>
-                      )}
+                    {(lead.salary ||
+                      lead.salary_range ||
+                      lead.salary_min ||
+                      lead.salary_max ||
+                      lead.budget) && (
+                      <div
+                        style={{
+                          color:
+                            "#ccc",
+                          marginBottom:
+                            8,
+                        }}
+                      >
+                        {lead.budget !=
+                        null
+                          ? `Budget: ${
+                              lead.currency
+                                ? `${lead.currency} `
+                                : ""
+                            }${lead.budget}`
+                          : lead.salary_range
+                          ? `Salary: ${lead.salary_range}`
+                          : lead.salary_min !=
+                              null ||
+                            lead.salary_max !=
+                              null
+                          ? `Salary: ${
+                              lead.salary_min ??
+                              ""
+                            }${
+                              lead.salary_min !=
+                                null &&
+                              lead.salary_max !=
+                                null
+                                ? " - "
+                                : ""
+                            }${
+                              lead.salary_max ??
+                              ""
+                            }`
+                          : `Salary: ${
+                              lead.salary
+                            }`}
+                      </div>
+                    )}
 
                     {lead.createdAt && (
-                      <span>
+                      <div
+                        style={{
+                          color:
+                            "#888",
+                          fontSize:
+                            13,
+                          marginBottom:
+                            16,
+                        }}
+                      >
                         Posted:{" "}
                         {formatDate(
                           lead.createdAt
                         )}
-                      </span>
-                    )}
-                  </div>
-
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: 10,
-                      flexWrap: "wrap",
-                      marginTop: 18,
-                    }}
-                  >
-                    {lead.phone && (
-                      <button
-                        onClick={() =>
-                          callPhone(
-                            lead.phone!
-                          )
-                        }
-                        style={
-                          buttonStyle
-                        }
-                      >
-                        WhatsApp / Call
-                      </button>
+                      </div>
                     )}
 
-                    {lead.email && (
-                      <button
-                        onClick={() =>
-                          sendEmail(
-                            lead.email!
-                          )
-                        }
-                        style={
-                          buttonStyle
-                        }
-                      >
-                        Email
-                      </button>
-                    )}
-
-                    {lead.contact && (
-                      <button
-                        onClick={() =>
-                          openLink(
-                            lead.contact!
-                          )
-                        }
-                        style={
-                          buttonStyle
-                        }
-                      >
-                        Contact
-                      </button>
-                    )}
-
-                    {lead.openUrl && (
-                      <button
-                        onClick={() =>
-                          openLink(
-                            lead.openUrl!
-                          )
-                        }
-                        style={{
-                          ...buttonStyle,
-                          background:
-                            "#fff",
-                          color: "#000",
-                        }}
-                      >
-                        Open Opportunity
-                      </button>
-                    )}
-
-                    {lead.source &&
-                      lead.source !==
-                        lead.openUrl && (
+                    <div
+                      style={{
+                        display:
+                          "flex",
+                        gap: 10,
+                        flexWrap:
+                          "wrap",
+                        marginTop:
+                          18,
+                      }}
+                    >
+                      {lead.phone && (
                         <button
                           onClick={() =>
-                            openLink(
-                              lead.source!
+                            callPhone(
+                              lead.phone!
                             )
                           }
                           style={
                             buttonStyle
                           }
                         >
-                          Source
+                          WhatsApp / Call
                         </button>
                       )}
+
+                      {lead.email && (
+                        <button
+                          onClick={() =>
+                            sendEmail(
+                              lead.email!
+                            )
+                          }
+                          style={
+                            buttonStyle
+                          }
+                        >
+                          Email
+                        </button>
+                      )}
+
+                      {lead.contact && (
+                        <button
+                          onClick={() =>
+                            openLink(
+                              lead.contact!
+                            )
+                          }
+                          style={
+                            buttonStyle
+                          }
+                        >
+                          Contact
+                        </button>
+                      )}
+
+                      {lead.openUrl && (
+                        <button
+                          onClick={() =>
+                            openLink(
+                              lead.openUrl!
+                            )
+                          }
+                          style={{
+                            ...buttonStyle,
+                            background:
+                              "#fff",
+                            color:
+                              "#000",
+                          }}
+                        >
+                          Open Opportunity
+                        </button>
+                      )}
+
+                      {lead.source &&
+                        lead.source !==
+                          lead.openUrl && (
+                          <button
+                            onClick={() =>
+                              openLink(
+                                lead.source!
+                              )
+                            }
+                            style={
+                              buttonStyle
+                            }
+                          >
+                            Source
+                          </button>
+                        )}
+                    </div>
                   </div>
-                </div>
-              )
+                );
+              }
             )}
           </div>
         )}
       </div>
     </div>
   );
- }
+          }
