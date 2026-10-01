@@ -2188,21 +2188,17 @@ async function insertSupply(
           "public"
       ),
     contact:
-      cleanNullable(
-        lead.description
-      ),
-    url:
-      cleanNullable(
-        lead.sourceUrl
-      ),
-    source_url:
-      cleanNullable(
-        lead.sourceUrl
-      ),
-    contact_name:
-      cleanNullable(
-        lead.name
-      ),
+  cleanNullable(
+    lead.description
+  ),
+source_url:
+  cleanNullable(
+    lead.sourceUrl
+  ),
+contact_name:
+  cleanNullable(
+    lead.name
+  ),
     commission:
       null,
     trial_days:
