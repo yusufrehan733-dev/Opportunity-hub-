@@ -2211,7 +2211,7 @@ async function insertSupply(
       cleanNullable(
         lead.contactUrl
       ),
-    nich:
+    niche:
       cleanNullable(
         lead.skill
       ),
