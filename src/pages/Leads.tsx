@@ -1,41 +1,28 @@
-import {
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
-import { createClient } from "@supabase/supabase-js";
+import { useEffect, useMemo, useState } from "react";
+import { supabase } from "../lib/supabase";
 
-const supabaseUrl =
-  import.meta.env.VITE_SUPABASE_URL;
-
-const supabaseAnonKey =
-  import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-const supabase = createClient(
-  supabaseUrl,
-  supabaseAnonKey
-);
-
-type LeadType =
-  | "Demand"
-  | "Supply"
-  | "SaaS";
+type LeadType = "Demand" | "Supply" | "SaaS";
 
 type Lead = {
   id: string;
-  type?: LeadType;
-  leadType?: LeadType;
-  lead_type?: LeadType;
+
+  leadType?: LeadType | string;
+  lead_type?: LeadType | string;
+  type?: LeadType | string;
 
   title?: string;
   name?: string;
   client_name?: string;
   company?: string;
+  company_name?: string;
 
   description?: string;
+  content?: string;
 
   skill?: string;
   skill_needed?: string;
+  required_skill?: string;
+  niche?: string;
   category?: string;
   subcategory?: string;
 
@@ -43,106 +30,91 @@ type Lead = {
   city?: string;
 
   budget?: string | number;
-  currency?: string;
-
   salary?: string | number;
-  salary_range?: string | number;
+  salary_range?: string;
   salary_min?: string | number;
   salary_max?: string | number;
+  currency?: string;
 
-  contact_name?: string;
-  contact_email?: string;
-  contact_phone?: string;
-
-  email?: string;
-  phone?: string;
   contact?: string;
   contact_url?: string;
+  contact_email?: string;
+  contact_phone?: string;
+  email?: string;
+  phone?: string;
 
-  company_website?: string;
-  apply_url?: string;
-  landing_url?: string;
-  source_url?: string;
-
-  openUrl?: string;
   source?: string;
-
+  source_url?: string;
+  url?: string;
   platform?: string;
-  niche?: string;
-
-  status?: string;
 
   created_at?: string;
-  createdAt?: string;
+  status?: string;
 };
 
 type SkillInfo = {
   id?: string;
   name: string;
-  category?: string;
-  subcategory?: string;
+  category?: string | null;
+  subcategory?: string | null;
   tags?: string[] | string | null;
 };
 
-function clean(value: any): string {
+
+function clean(value: unknown): string {
   return String(value ?? "").trim();
 }
 
-function normalizeText(value: any): string {
+
+function normalizeText(value: unknown): string {
   return clean(value)
     .toLowerCase()
-    .replace(/&/g, " and ")
-    .replace(/[^a-z0-9]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
 
-function normalizeCountry(value: any): string {
+
+function normalizeCountry(value: unknown): string {
   const country = normalizeText(value);
+
+  if (!country) {
+    return "";
+  }
 
   const aliases: Record<string, string> = {
     usa: "united states",
+    "u.s.a": "united states",
+    "u.s.": "united states",
     us: "united states",
-    "u s": "united states",
-    "u s a": "united states",
-    america: "united states",
 
     uk: "united kingdom",
-    britain: "united kingdom",
-    england: "united kingdom",
+    "u.k.": "united kingdom",
 
     uae: "united arab emirates",
-    "u a e": "united arab emirates",
+
+    canada: "canada",
+    canadian: "canada",
+
+    pakistan: "pakistan",
+    pakistani: "pakistan",
+
+    india: "india",
+    indian: "india",
+
+    australia: "australia",
+    australian: "australia",
   };
 
   return aliases[country] || country;
 }
 
-function toArray(value: any): string[] {
-  if (Array.isArray(value)) {
-    return value
-      .map((item) => clean(item))
-      .filter(Boolean);
-  }
 
-  if (typeof value === "string") {
-    return value
-      .split(",")
-      .map((item) => item.trim())
-      .filter(Boolean);
-  }
-
-  return [];
-}
-
-function getLeadType(
-  lead: Lead
-): LeadType {
-  const value = clean(
+function getLeadType(lead: Lead): LeadType {
+  const value = normalizeText(
     lead.leadType ||
-      lead.lead_type ||
-      lead.type
-  ).toLowerCase();
+    lead.lead_type ||
+    lead.type
+  );
 
   if (value === "supply") {
     return "Supply";
@@ -153,75 +125,85 @@ function getLeadType(
   }
 
   return "Demand";
-  }
-function getLeadSkillText(
-  lead: Lead
-): string {
+}
+
+
+function getLeadTitle(lead: Lead): string {
+  return clean(
+    lead.title ||
+    lead.name ||
+    lead.client_name ||
+    lead.company_name ||
+    "Untitled lead"
+  );
+}
+
+
+function getLeadDescription(lead: Lead): string {
+  return clean(
+    lead.description ||
+    lead.content
+  );
+}
+
+
+function getLeadSkillText(lead: Lead): string {
   return [
     lead.skill,
     lead.skill_needed,
+    lead.required_skill,
+    lead.niche,
     lead.category,
     lead.subcategory,
     lead.title,
     lead.description,
-    lead.niche,
   ]
     .map(normalizeText)
     .filter(Boolean)
     .join(" ");
 }
 
-function getSkillInfoText(
-  skill: SkillInfo
-): string {
+
+function getSkillInfoText(skill: SkillInfo): string {
+  const tags =
+    Array.isArray(skill.tags)
+      ? skill.tags
+      : clean(skill.tags)
+          .split(",")
+          .map((item) => item.trim())
+          .filter(Boolean);
+
   return [
     skill.name,
     skill.category,
     skill.subcategory,
-    ...toArray(skill.tags),
+    ...tags,
   ]
     .map(normalizeText)
     .filter(Boolean)
     .join(" ");
 }
 
+
 function skillMatches(
   preferredSkill: string,
-  leadSkill?: string,
-  leadCategory?: string,
-  leadSubcategory?: string,
-  leadDescription?: string
+  lead: Lead
 ): boolean {
-  const preferred = normalizeText(
-    preferredSkill
-  );
+  const preferred =
+    normalizeText(preferredSkill);
 
   if (!preferred) {
     return false;
   }
 
-  const leadParts = [
-    leadSkill,
-    leadCategory,
-    leadSubcategory,
-    leadDescription,
-  ]
-    .map(normalizeText)
-    .filter(Boolean);
+  const leadText =
+    getLeadSkillText(lead);
 
-  if (!leadParts.length) {
+  if (!leadText) {
     return false;
   }
 
-  const leadText = leadParts.join(" ");
-
-  if (leadParts.some((part) => part === preferred)) {
-    return true;
-  }
-
-  if (leadParts.some((part) =>
-    part.includes(preferred)
-  )) {
+  if (leadText === preferred) {
     return true;
   }
 
@@ -229,193 +211,159 @@ function skillMatches(
     return true;
   }
 
-  const preferredWords = preferred
-    .split(" ")
-    .filter((word) => word.length >= 3);
+  const preferredWords =
+    preferred
+      .split(" ")
+      .filter(
+        (word) => word.length >= 3
+      );
 
   if (!preferredWords.length) {
     return false;
   }
 
-  const matchedWords =
-    preferredWords.filter((word) =>
-      leadText.includes(word)
-    );
-
-  return (
-    matchedWords.length ===
-    preferredWords.length
+  return preferredWords.every(
+    (word) => leadText.includes(word)
   );
 }
 
-function hierarchySkillMatches(
-  preferredSkill: string,
-  lead: Lead,
-  allSkills: SkillInfo[]
+
+function countryMatches(
+  selectedCountry: string,
+  leadCountry?: string
 ): boolean {
-  const preferred = normalizeText(
-    preferredSkill
-  );
+  const selected =
+    normalizeCountry(selectedCountry);
 
-  if (!preferred) {
-    return false;
-  }
-
-  const directMatch = skillMatches(
-    preferredSkill,
-    lead.skill || lead.skill_needed,
-    lead.category,
-    lead.subcategory,
-    lead.description
-  );
-
-  if (directMatch) {
+  if (!selected) {
     return true;
   }
 
-  const matchingSkill = allSkills.find(
-    (skill) =>
-      normalizeText(skill.name) === preferred
-  );
+  const lead =
+    normalizeCountry(leadCountry);
 
-  if (!matchingSkill) {
+  if (!lead) {
     return false;
   }
 
-  return skillMatches(
-    matchingSkill.name,
-    lead.skill || lead.skill_needed,
-    lead.category,
-    lead.subcategory,
-    lead.description
-  ) ||
-    skillMatches(
-      matchingSkill.category || "",
-      lead.skill,
-      lead.category,
-      lead.subcategory,
-      lead.description
-    ) ||
-    skillMatches(
-      matchingSkill.subcategory || "",
-      lead.skill,
-      lead.category,
-      lead.subcategory,
-      lead.description
-    );
-}
-
-function getLeadCountry(
-  lead: Lead
-): string {
-  return normalizeCountry(
-    lead.country
-  );
-}
-
-function getLeadOpenUrl(
-  lead: Lead
-): string {
   return (
-    clean(lead.openUrl) ||
-    clean(lead.contact_url) ||
-    clean(lead.apply_url) ||
-    clean(lead.company_website) ||
-    clean(lead.landing_url) ||
-    clean(lead.source_url)
+    lead === selected ||
+    lead.includes(selected) ||
+    selected.includes(lead)
   );
-}
-
-function getLeadTitle(
-  lead: Lead
-): string {
-  return (
-    clean(lead.title) ||
-    clean(lead.name) ||
-    clean(lead.client_name) ||
-    clean(lead.company) ||
-    "Opportunity"
-  );
-}
-
+                 }
 function getLeadContact(
   lead: Lead
 ): string {
-  return (
-    clean(lead.contact_email) ||
-    clean(lead.contact_phone) ||
-    clean(lead.contact_url) ||
-    clean(lead.apply_url) ||
-    clean(lead.company_website) ||
-    clean(lead.landing_url) ||
-    clean(lead.source_url)
+  return clean(
+    lead.contact_url ||
+    lead.contact_email ||
+    lead.contact_phone ||
+    lead.contact ||
+    lead.email ||
+    lead.phone ||
+    lead.source_url ||
+    lead.url
   );
 }
 
-function parseSkillPreference(
-  value: any
-): string[] {
-  if (!value) {
-    return [];
+
+function getLeadSource(
+  lead: Lead
+): string {
+  return clean(
+    lead.source ||
+    lead.platform ||
+    lead.company ||
+    lead.company_name
+  );
+}
+
+
+function getLeadLocation(
+  lead: Lead
+): string {
+  return [
+    clean(lead.city),
+    clean(lead.country),
+  ]
+    .filter(Boolean)
+    .join(", ");
+}
+
+
+function getLeadSalary(
+  lead: Lead
+): string {
+  if (clean(lead.salary_range)) {
+    return clean(lead.salary_range);
   }
 
+  if (
+    lead.salary_min !== undefined ||
+    lead.salary_max !== undefined
+  ) {
+    const min = clean(lead.salary_min);
+    const max = clean(lead.salary_max);
+    const currency = clean(lead.currency);
+
+    if (min && max) {
+      return `${currency} ${min} - ${max}`.trim();
+    }
+
+    if (min) {
+      return `${currency} ${min}`.trim();
+    }
+
+    if (max) {
+      return `${currency} ${max}`.trim();
+    }
+  }
+
+  if (lead.salary !== undefined) {
+    return `${clean(lead.currency)} ${clean(lead.salary)}`.trim();
+  }
+
+  if (lead.budget !== undefined) {
+    return `${clean(lead.currency)} ${clean(lead.budget)}`.trim();
+  }
+
+  return "";
+}
+
+
+function isValidLead(
+  lead: Lead
+): boolean {
+  return !!(
+    lead &&
+    clean(lead.id)
+  );
+}
+
+
+function parseTags(
+  value: unknown
+): string[] {
   if (Array.isArray(value)) {
     return value
-      .map((item) => {
-        if (
-          typeof item === "string"
-        ) {
-          return item;
-        }
-
-        if (
-          item &&
-          typeof item === "object"
-        ) {
-          return (
-            item.name ||
-            item.skill ||
-            item.title ||
-            ""
-          );
-        }
-
-        return "";
-      })
       .map(clean)
       .filter(Boolean);
   }
 
-  if (typeof value === "string") {
-    const trimmed = value.trim();
+  return clean(value)
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
 
-    if (!trimmed) {
-      return [];
-    }
 
-    try {
-      const parsed = JSON.parse(trimmed);
-
-      if (Array.isArray(parsed)) {
-        return parseSkillPreference(
-          parsed
-        );
-      }
-    } catch {
-      // Treat it as a normal comma-separated value.
-    }
-
-    return trimmed
-      .split(",")
-      .map((item) => item.trim())
-      .filter(Boolean);
-  }
-
-  return [];
-  }
 export default function Leads() {
-  const [leads, setLeads] = useState<Lead[]>([]);
-  const [allSkills, setAllSkills] = useState<SkillInfo[]>([]);
+  const [leads, setLeads] =
+    useState<Lead[]>([]);
+
+  const [skills, setSkills] =
+    useState<SkillInfo[]>([]);
 
   const [selectedCountry, setSelectedCountry] =
     useState("");
@@ -423,239 +371,209 @@ export default function Leads() {
   const [selectedSkills, setSelectedSkills] =
     useState<string[]>([]);
 
+  const [selectedType, setSelectedType] =
+    useState<"All" | LeadType>("All");
+
   const [loading, setLoading] =
     useState(true);
 
   const [error, setError] =
     useState("");
 
-  const [userLoaded, setUserLoaded] =
-    useState(false);
+  const [userLoading, setUserLoading] =
+    useState(true);
 
-  useEffect(() => {
-    let mounted = true;
 
-    async function loadUserPreferences() {
-      try {
-        setError("");
+  async function loadUserPreferences() {
+    try {
+      setUserLoading(true);
 
-        const {
-          data: { user },
-          error: authError,
-        } = await supabase.auth.getUser();
+      const {
+        data: {
+          user,
+        },
+      } = await supabase.auth.getUser();
 
-        if (authError) {
-          throw authError;
-        }
+      if (!user) {
+        return;
+      }
 
-        if (!user) {
-          if (mounted) {
-            setUserLoaded(true);
-          }
+      const { data: userData } =
+        await supabase
+          .from("users")
+          .select(
+            "country,skill_preference"
+          )
+          .eq("id", user.id)
+          .maybeSingle();
 
-          return;
-        }
-
-        const { data: userRow, error: userError } =
-          await supabase
-            .from("users")
-            .select(
-              "country, skill_preference"
-            )
-            .eq("id", user.id)
-            .maybeSingle();
-
-        if (userError) {
-          throw userError;
-        }
-
-        const country =
-          clean(userRow?.country);
-
-        const oldSkills =
-          parseSkillPreference(
-            userRow?.skill_preference
-          );
-
-        const {
-          data: userSkillRows,
-          error: skillsError,
-        } = await supabase
-          .from("user_skills")
-          .select("skill")
-          .eq("user_id", user.id);
-
-        if (skillsError) {
-          throw skillsError;
-        }
-
-        const newSkills =
-          (userSkillRows || [])
-            .map((row: any) =>
-              clean(row?.skill)
-            )
-            .filter(Boolean);
-
-        const combinedSkills = Array.from(
-          new Set([
-            ...oldSkills,
-            ...newSkills,
-          ])
+      if (userData) {
+        setSelectedCountry(
+          clean(userData.country)
         );
 
-        if (mounted) {
-          setSelectedCountry(country);
+        const preference =
+          userData.skill_preference;
+
+        if (Array.isArray(preference)) {
           setSelectedSkills(
-            combinedSkills
+            preference
+              .map(clean)
+              .filter(Boolean)
           );
-          setUserLoaded(true);
-        }
-      } catch (err: any) {
-        console.error(
-          "Failed to load user preferences:",
-          err
-        );
-
-        if (mounted) {
-          setUserLoaded(true);
-          setError(
-            err?.message ||
-              "Unable to load your preferences."
+        } else if (preference) {
+          setSelectedSkills(
+            String(preference)
+              .split(",")
+              .map((item) => item.trim())
+              .filter(Boolean)
           );
         }
       }
+    } catch (err) {
+      console.error(
+        "Failed to load user preferences:",
+        err
+      );
+    } finally {
+      setUserLoading(false);
     }
+  }
 
-    loadUserPreferences();
 
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    let mounted = true;
-
-    async function loadSkills() {
-      try {
-        const {
-          data,
-          error: skillsError,
-        } = await supabase
+  async function loadSkills() {
+    try {
+      const { data, error } =
+        await supabase
           .from("skills")
           .select(
-            "id, name, category, subcategory, tags"
+            "id,name,category,subcategory,tags"
           )
           .order("name", {
             ascending: true,
           });
 
-        if (skillsError) {
-          throw skillsError;
-        }
+      if (error) {
+        throw error;
+      }
 
-        if (mounted) {
-          setAllSkills(
-            (data || []) as SkillInfo[]
-          );
-        }
-      } catch (err) {
-        console.error(
-          "Failed to load skills:",
-          err
+      setSkills(
+        (data || [])
+          .map((row: any) => ({
+            id: clean(row.id),
+            name: clean(row.name),
+            category:
+              clean(row.category) || null,
+            subcategory:
+              clean(row.subcategory) || null,
+            tags:
+              row.tags ?? null,
+          }))
+          .filter(
+            (row: SkillInfo) =>
+              !!row.name
+          )
+      );
+    } catch (err) {
+      console.error(
+        "Failed to load skills:",
+        err
+      );
+    }
+  }
+
+
+  async function loadLeads() {
+    try {
+      setLoading(true);
+      setError("");
+
+      const response =
+        await fetch("/api/leads");
+
+      const raw =
+        await response.text();
+
+      let payload: any;
+
+      try {
+        payload =
+          raw ? JSON.parse(raw) : null;
+      } catch {
+        throw new Error(
+          "Leads API returned an invalid response."
         );
       }
+
+      if (!response.ok) {
+        throw new Error(
+          payload?.message ||
+          "Failed to load leads."
+        );
+      }
+
+      const rows =
+        Array.isArray(payload)
+          ? payload
+          : Array.isArray(payload?.leads)
+            ? payload.leads
+            : Array.isArray(payload?.data)
+              ? payload.data
+              : [];
+
+      setLeads(
+        rows.filter(isValidLead)
+      );
+    } catch (err) {
+      console.error(
+        "Failed to load leads:",
+        err
+      );
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to load leads."
+      );
+
+      setLeads([]);
+    } finally {
+      setLoading(false);
     }
+  }
 
-    loadSkills();
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
 
   useEffect(() => {
-    let mounted = true;
+    loadUserPreferences();
+    loadSkills();
+    loadLeads();
+  }, []);
+    const availableCountries = useMemo(() => {
+    const countries = new Set<string>();
 
-    async function loadLeads() {
-      try {
-        setLoading(true);
-        setError("");
+    for (const lead of leads) {
+      const country = clean(lead.country);
 
-        const response =
-          await fetch("/api/leads");
-
-        const responseText =
-          await response.text();
-
-        let result: any = null;
-
-        try {
-          result =
-            responseText
-              ? JSON.parse(responseText)
-              : null;
-        } catch {
-          throw new Error(
-            "The leads API returned an invalid response."
-          );
-        }
-
-        if (!response.ok) {
-          throw new Error(
-            result?.error ||
-              result?.message ||
-              `Leads request failed (${response.status}).`
-          );
-        }
-
-        if (
-          !result ||
-          result.success === false
-        ) {
-          throw new Error(
-            result?.error ||
-              result?.message ||
-              "Unable to load leads."
-          );
-        }
-
-        if (mounted) {
-          setLeads(
-            Array.isArray(result.leads)
-              ? result.leads
-              : []
-          );
-        }
-      } catch (err: any) {
-        console.error(
-          "Failed to load leads:",
-          err
-        );
-
-        if (mounted) {
-          setError(
-            err?.message ||
-              "Unable to load leads."
-          );
-          setLeads([]);
-        }
-      } finally {
-        if (mounted) {
-          setLoading(false);
-        }
+      if (country) {
+        countries.add(country);
       }
     }
 
-    if (userLoaded) {
-      loadLeads();
-    }
+    return Array.from(countries).sort(
+      (a, b) =>
+        a.localeCompare(b)
+    );
+  }, [leads]);
 
-    return () => {
-      mounted = false;
-    };
-  }, [userLoaded]);
-    const filteredLeads = useMemo(() => {
+
+  const availableSkills = useMemo(() => {
+    return skills
+      .map((skill) => skill.name)
+      .filter(Boolean);
+  }, [skills]);
+
+
+  const filteredLeads = useMemo(() => {
     const country =
       normalizeCountry(selectedCountry);
 
@@ -668,47 +586,74 @@ export default function Leads() {
       const leadType =
         getLeadType(lead);
 
-      const leadCountry =
-        getLeadCountry(lead);
-
       /*
-       * Country is required for every lead type.
+       * -----------------------------------------------------
+       * TYPE FILTER
+       * -----------------------------------------------------
        */
       if (
-        country &&
-        leadCountry !== country
+        selectedType !== "All" &&
+        leadType !== selectedType
       ) {
         return false;
       }
 
+
       /*
-       * SaaS is country-first.
+       * -----------------------------------------------------
+       * COUNTRY FILTER
+       * -----------------------------------------------------
        *
-       * Once the user's country matches,
-       * any qualifying SaaS professional
-       * from that country can appear.
+       * ALL THREE lead types use the selected country.
+       */
+      if (
+        country &&
+        !countryMatches(
+          country,
+          lead.country
+        )
+      ) {
+        return false;
+      }
+
+
+      /*
+       * -----------------------------------------------------
+       * SAAS
+       * -----------------------------------------------------
        *
-       * We intentionally do NOT require
-       * the user's selected skill here.
+       * SaaS is COUNTRY ONLY.
+       *
+       * We deliberately do NOT require the user's selected
+       * skill here.
+       *
+       * The collector already ensures the SaaS professional
+       * matches an Opportunity Hub skill.
        */
       if (leadType === "SaaS") {
         return true;
       }
 
+
       /*
-       * Demand and Supply remain
-       * country + skill matched.
+       * -----------------------------------------------------
+       * DEMAND / SUPPLY
+       * -----------------------------------------------------
+       *
+       * These two require:
+       *
+       * Country + user's selected skill.
        */
       if (!preferredSkills.length) {
         return false;
       }
 
+
       return preferredSkills.some(
         (preferredSkill) =>
-          hierarchySkillMatches(
+          skillMatches(
             preferredSkill,
-            lead,
-            allSkills
+            lead
           )
       );
     });
@@ -716,140 +661,374 @@ export default function Leads() {
     leads,
     selectedCountry,
     selectedSkills,
-    allSkills,
+    selectedType,
   ]);
 
+
   const counts = useMemo(() => {
-    return {
-      Demand: filteredLeads.filter(
-        (lead) =>
-          getLeadType(lead) === "Demand"
-      ).length,
-
-      Supply: filteredLeads.filter(
-        (lead) =>
-          getLeadType(lead) === "Supply"
-      ).length,
-
-      SaaS: filteredLeads.filter(
-        (lead) =>
-          getLeadType(lead) === "SaaS"
-      ).length,
+    const result = {
+      All: 0,
+      Demand: 0,
+      Supply: 0,
+      SaaS: 0,
     };
+
+    for (const lead of filteredLeads) {
+      const type =
+        getLeadType(lead);
+
+      result.All += 1;
+
+      if (type === "Demand") {
+        result.Demand += 1;
+      }
+
+      if (type === "Supply") {
+        result.Supply += 1;
+      }
+
+      if (type === "SaaS") {
+        result.SaaS += 1;
+      }
+    }
+
+    return result;
   }, [filteredLeads]);
 
-  function formatSalary(
+
+  const selectedCountryLabel =
+    selectedCountry ||
+    "All countries";
+
+
+  function handleCountryChange(
+    event: React.ChangeEvent<HTMLSelectElement>
+  ) {
+    setSelectedCountry(
+      event.target.value
+    );
+  }
+
+
+  function handleTypeChange(
+    event: React.ChangeEvent<HTMLSelectElement>
+  ) {
+    setSelectedType(
+      event.target.value as
+        | "All"
+        | LeadType
+    );
+  }
+
+
+  function handleSkillToggle(
+    skillName: string
+  ) {
+    setSelectedSkills((current) => {
+      const exists =
+        current.some(
+          (skill) =>
+            normalizeText(skill) ===
+            normalizeText(skillName)
+        );
+
+      if (exists) {
+        return current.filter(
+          (skill) =>
+            normalizeText(skill) !==
+            normalizeText(skillName)
+        );
+      }
+
+      return [
+        ...current,
+        skillName,
+      ];
+    });
+  }
+
+
+  function clearFilters() {
+    setSelectedCountry("");
+    setSelectedSkills([]);
+    setSelectedType("All");
+    }
+    function renderLeadTypeBadge(
+    leadType: LeadType
+  ) {
+    return (
+      <span
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          padding: "4px 10px",
+          borderRadius: "999px",
+          border: "1px solid #444",
+          background: "#111",
+          color: "#fff",
+          fontSize: "12px",
+          fontWeight: 600,
+        }}
+      >
+        {leadType}
+      </span>
+    );
+  }
+
+
+  function renderContact(
     lead: Lead
-  ): string {
-    if (clean(lead.salary_range)) {
-      return clean(
-        lead.salary_range
+  ) {
+    const contact =
+      getLeadContact(lead);
+
+    if (!contact) {
+      return (
+        <span
+          style={{
+            color: "#777",
+            fontSize: "13px",
+          }}
+        >
+          No contact available
+        </span>
       );
     }
 
-    const min =
-      clean(lead.salary_min);
+    const isUrl =
+      contact.startsWith("http://") ||
+      contact.startsWith("https://");
 
-    const max =
-      clean(lead.salary_max);
-
-    if (min || max) {
-      const currency =
-        clean(lead.currency);
-
-      const amount =
-        min && max
-          ? `${min} - ${max}`
-          : min || max;
-
-      return currency
-        ? `${currency} ${amount}`
-        : amount;
+    if (isUrl) {
+      return (
+        <a
+          href={contact}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            color: "#fff",
+            textDecoration: "underline",
+            wordBreak: "break-word",
+          }}
+        >
+          Open contact
+        </a>
+      );
     }
 
-    if (clean(lead.salary)) {
-      return clean(lead.salary);
-    }
-
-    if (clean(lead.budget)) {
-      const currency =
-        clean(lead.currency);
-
-      return currency
-        ? `${currency} ${clean(
-            lead.budget
-          )}`
-        : clean(lead.budget);
-    }
-
-    return "";
-  }
-
-  function formatDate(
-    value?: string
-  ): string {
-    if (!value) {
-      return "";
-    }
-
-    const date = new Date(value);
-
-    if (
-      Number.isNaN(date.getTime())
-    ) {
-      return "";
-    }
-
-    return date.toLocaleDateString(
-      "en-US",
-      {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-      }
-    );
-  }
-
-  function getDisplaySkill(
-    lead: Lead
-  ): string {
     return (
-      clean(lead.skill) ||
-      clean(lead.skill_needed) ||
-      clean(lead.subcategory) ||
-      clean(lead.category) ||
-      clean(lead.niche)
+      <span
+        style={{
+          color: "#ddd",
+          wordBreak: "break-word",
+        }}
+      >
+        {contact}
+      </span>
     );
   }
 
-  function getDisplayCompany(
+
+  function renderLeadCard(
     lead: Lead
-  ): string {
+  ) {
+    const leadType =
+      getLeadType(lead);
+
+    const title =
+      getLeadTitle(lead);
+
+    const description =
+      getLeadDescription(lead);
+
+    const skill =
+      clean(
+        lead.skill ||
+        lead.skill_needed ||
+        lead.required_skill ||
+        lead.niche
+      );
+
+    const location =
+      getLeadLocation(lead);
+
+    const source =
+      getLeadSource(lead);
+
+    const salary =
+      getLeadSalary(lead);
+
     return (
-      clean(lead.company) ||
-      clean(lead.client_name) ||
-      clean(lead.name)
+      <article
+        key={`${leadType}-${lead.id}`}
+        style={{
+          background: "#050505",
+          border: "1px solid #292929",
+          borderRadius: "14px",
+          padding: "18px",
+          display: "flex",
+          flexDirection: "column",
+          gap: "13px",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+            gap: "12px",
+          }}
+        >
+          <div
+            style={{
+              flex: 1,
+              minWidth: 0,
+            }}
+          >
+            <h3
+              style={{
+                margin: 0,
+                color: "#fff",
+                fontSize: "18px",
+                lineHeight: 1.35,
+                fontWeight: 700,
+              }}
+            >
+              {title}
+            </h3>
+
+            {source && (
+              <div
+                style={{
+                  marginTop: "5px",
+                  color: "#888",
+                  fontSize: "12px",
+                }}
+              >
+                {source}
+              </div>
+            )}
+          </div>
+
+          {renderLeadTypeBadge(
+            leadType
+          )}
+        </div>
+
+
+        {description && (
+          <p
+            style={{
+              margin: 0,
+              color: "#cfcfcf",
+              fontSize: "14px",
+              lineHeight: 1.55,
+            }}
+          >
+            {description}
+          </p>
+        )}
+
+
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: "8px",
+          }}
+        >
+          {skill && (
+            <span
+              style={{
+                padding: "5px 9px",
+                borderRadius: "7px",
+                background: "#111",
+                border: "1px solid #333",
+                color: "#ddd",
+                fontSize: "12px",
+              }}
+            >
+              {skill}
+            </span>
+          )}
+
+          {location && (
+            <span
+              style={{
+                padding: "5px 9px",
+                borderRadius: "7px",
+                background: "#111",
+                border: "1px solid #333",
+                color: "#ddd",
+                fontSize: "12px",
+              }}
+            >
+              {location}
+            </span>
+          )}
+
+          {salary && (
+            <span
+              style={{
+                padding: "5px 9px",
+                borderRadius: "7px",
+                background: "#111",
+                border: "1px solid #333",
+                color: "#ddd",
+                fontSize: "12px",
+              }}
+            >
+              {salary}
+            </span>
+          )}
+        </div>
+
+
+        <div
+          style={{
+            borderTop: "1px solid #222",
+            paddingTop: "12px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "6px",
+          }}
+        >
+          <span
+            style={{
+              color: "#777",
+              fontSize: "12px",
+            }}
+          >
+            Contact
+          </span>
+
+          <div
+            style={{
+              fontSize: "13px",
+            }}
+          >
+            {renderContact(lead)}
+          </div>
+        </div>
+
+
+        {lead.created_at && (
+          <div
+            style={{
+              color: "#666",
+              fontSize: "11px",
+            }}
+          >
+            Added{" "}
+            {new Date(
+              lead.created_at
+            ).toLocaleDateString()}
+          </div>
+        )}
+      </article>
     );
-  }
-
-  function getDisplayLocation(
-    lead: Lead
-  ): string {
-    const parts = [
-      clean(lead.city),
-      clean(lead.country),
-    ].filter(Boolean);
-
-    return parts.join(", ");
-  }
-
-  function getTypeLabel(
-    lead: Lead
-  ): string {
-    return getLeadType(lead);
-  }
-
-  return (
+            }
+    return (
     <div
       style={{
         minHeight: "100vh",
@@ -866,83 +1045,320 @@ export default function Leads() {
       >
         <div
           style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "flex-start",
-            gap: "16px",
-            flexWrap: "wrap",
             marginBottom: "24px",
           }}
         >
-          <div>
-            <h1
-              style={{
-                margin: 0,
-                fontSize: "28px",
-                fontWeight: 700,
-              }}
-            >
-              Leads
-            </h1>
-
-            <p
-              style={{
-                marginTop: "8px",
-                color: "#aaa",
-              }}
-            >
-              Real opportunities matched to
-              your country and skills.
-            </p>
-          </div>
-
-          <div
+          <h1
             style={{
-              color: "#aaa",
+              margin: 0,
+              fontSize: "28px",
+              fontWeight: 700,
+              color: "#fff",
+            }}
+          >
+            Leads
+          </h1>
+
+          <p
+            style={{
+              marginTop: "7px",
+              marginBottom: 0,
+              color: "#888",
               fontSize: "14px",
             }}
           >
-            Country:{" "}
-            <strong
+            Real opportunities and professional prospects matched
+            to your preferences.
+          </p>
+        </div>
+
+
+        <section
+          style={{
+            background: "#050505",
+            border: "1px solid #292929",
+            borderRadius: "14px",
+            padding: "18px",
+            marginBottom: "22px",
+          }}
+        >
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns:
+                "repeat(auto-fit, minmax(190px, 1fr))",
+              gap: "14px",
+            }}
+          >
+            <div>
+              <label
+                style={{
+                  display: "block",
+                  marginBottom: "7px",
+                  color: "#aaa",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                }}
+              >
+                Country
+              </label>
+
+              <select
+                value={selectedCountry}
+                onChange={handleCountryChange}
+                style={{
+                  width: "100%",
+                  boxSizing: "border-box",
+                  background: "#111",
+                  color: "#fff",
+                  border: "1px solid #444",
+                  borderRadius: "8px",
+                  padding: "10px 11px",
+                  outline: "none",
+                }}
+              >
+                <option value="">
+                  All countries
+                </option>
+
+                {availableCountries.map(
+                  (country) => (
+                    <option
+                      key={country}
+                      value={country}
+                    >
+                      {country}
+                    </option>
+                  )
+                )}
+              </select>
+            </div>
+
+
+            <div>
+              <label
+                style={{
+                  display: "block",
+                  marginBottom: "7px",
+                  color: "#aaa",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                }}
+              >
+                Lead type
+              </label>
+
+              <select
+                value={selectedType}
+                onChange={handleTypeChange}
+                style={{
+                  width: "100%",
+                  boxSizing: "border-box",
+                  background: "#111",
+                  color: "#fff",
+                  border: "1px solid #444",
+                  borderRadius: "8px",
+                  padding: "10px 11px",
+                  outline: "none",
+                }}
+              >
+                <option value="All">
+                  All types
+                </option>
+                <option value="Demand">
+                  Demand
+                </option>
+                <option value="Supply">
+                  Supply
+                </option>
+                <option value="SaaS">
+                  SaaS
+                </option>
+              </select>
+            </div>
+          </div>
+
+
+          <div
+            style={{
+              marginTop: "16px",
+            }}
+          >
+            <div
               style={{
-                color: "#fff",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: "10px",
+                marginBottom: "8px",
               }}
             >
-              {selectedCountry ||
-                "Not selected"}
-            </strong>
+              <label
+                style={{
+                  color: "#aaa",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                }}
+              >
+                Skills
+              </label>
+
+              {selectedSkills.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSelectedSkills([])
+                  }
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    color: "#aaa",
+                    fontSize: "12px",
+                    cursor: "pointer",
+                    padding: 0,
+                  }}
+                >
+                  Clear skills
+                </button>
+              )}
+            </div>
+
+
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: "8px",
+                maxHeight: "180px",
+                overflowY: "auto",
+                padding: "2px",
+              }}
+            >
+              {availableSkills.map(
+                (skillName) => {
+                  const active =
+                    selectedSkills.some(
+                      (skill) =>
+                        normalizeText(skill) ===
+                        normalizeText(skillName)
+                    );
+
+                  return (
+                    <button
+                      key={skillName}
+                      type="button"
+                      onClick={() =>
+                        handleSkillToggle(
+                          skillName
+                        )
+                      }
+                      style={{
+                        background: active
+                          ? "#fff"
+                          : "#111",
+                        color: active
+                          ? "#000"
+                          : "#ccc",
+                        border: active
+                          ? "1px solid #fff"
+                          : "1px solid #333",
+                        borderRadius: "8px",
+                        padding:
+                          "7px 10px",
+                        fontSize: "12px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      {skillName}
+                    </button>
+                  );
+                }
+              )}
+            </div>
           </div>
-        </div>
+
+
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "12px",
+              marginTop: "16px",
+              paddingTop: "14px",
+              borderTop: "1px solid #222",
+              flexWrap: "wrap",
+            }}
+          >
+            <div
+              style={{
+                color: "#888",
+                fontSize: "12px",
+              }}
+            >
+              Showing{" "}
+              <strong
+                style={{
+                  color: "#fff",
+                }}
+              >
+                {filteredLeads.length}
+              </strong>{" "}
+              leads
+              {selectedCountry
+                ? ` in ${selectedCountryLabel}`
+                : ""}
+            </div>
+
+            <button
+              type="button"
+              onClick={clearFilters}
+              style={{
+                background: "#fff",
+                color: "#000",
+                border: "1px solid #fff",
+                borderRadius: "8px",
+                padding: "9px 14px",
+                fontSize: "12px",
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              Clear all filters
+            </button>
+          </div>
+        </section>
+
 
         <div
           style={{
             display: "grid",
             gridTemplateColumns:
-              "repeat(auto-fit, minmax(140px, 1fr))",
-            gap: "12px",
-            marginBottom: "24px",
+              "repeat(4, minmax(0, 1fr))",
+            gap: "10px",
+            marginBottom: "22px",
           }}
         >
-          {(
-            [
-              ["Demand", counts.Demand],
-              ["Supply", counts.Supply],
-              ["SaaS", counts.SaaS],
-            ] as const
-          ).map(([label, count]) => (
+          {[
+            ["All", counts.All],
+            ["Demand", counts.Demand],
+            ["Supply", counts.Supply],
+            ["SaaS", counts.SaaS],
+          ].map(([label, count]) => (
             <div
-              key={label}
+              key={String(label)}
               style={{
-                background: "#080808",
-                border: "1px solid #333",
+                background: "#050505",
+                border: "1px solid #292929",
                 borderRadius: "10px",
-                padding: "16px",
+                padding: "12px",
               }}
             >
               <div
                 style={{
-                  color: "#999",
-                  fontSize: "13px",
+                  color: "#777",
+                  fontSize: "11px",
+                  marginBottom: "4px",
                 }}
               >
                 {label}
@@ -950,8 +1366,8 @@ export default function Leads() {
 
               <div
                 style={{
-                  marginTop: "6px",
-                  fontSize: "24px",
+                  color: "#fff",
+                  fontSize: "20px",
                   fontWeight: 700,
                 }}
               >
@@ -960,48 +1376,65 @@ export default function Leads() {
             </div>
           ))}
         </div>
-
-        {error && (
+                {loading || userLoading ? (
           <div
             style={{
-              background: "#120000",
-              border:
-                "1px solid #5a2222",
-              color: "#ffb3b3",
-              borderRadius: "10px",
-              padding: "14px",
-              marginBottom: "20px",
+              background: "#050505",
+              border: "1px solid #292929",
+              borderRadius: "14px",
+              padding: "40px 20px",
+              textAlign: "center",
+              color: "#aaa",
+            }}
+          >
+            Loading leads...
+          </div>
+        ) : error ? (
+          <div
+            style={{
+              background: "#050505",
+              border: "1px solid #552222",
+              borderRadius: "14px",
+              padding: "24px",
+              color: "#ffb0b0",
             }}
           >
             {error}
           </div>
-        )}
-
-        {loading ? (
-          <div
-            style={{
-              background: "#080808",
-              border: "1px solid #333",
-              borderRadius: "10px",
-              padding: "30px",
-              textAlign: "center",
-              color: "#aaa",
-            }}
-          >
-            Loading real leads...
-          </div>
         ) : filteredLeads.length === 0 ? (
           <div
             style={{
-              background: "#080808",
-              border: "1px solid #333",
-              borderRadius: "10px",
-              padding: "30px",
+              background: "#050505",
+              border: "1px solid #292929",
+              borderRadius: "14px",
+              padding: "40px 20px",
               textAlign: "center",
-              color: "#aaa",
             }}
           >
-            No matching leads found.
+            <div
+              style={{
+                color: "#fff",
+                fontSize: "18px",
+                fontWeight: 600,
+                marginBottom: "8px",
+              }}
+            >
+              No matching leads
+            </div>
+
+            <div
+              style={{
+                color: "#777",
+                fontSize: "13px",
+                lineHeight: 1.5,
+                maxWidth: "520px",
+                margin: "0 auto",
+              }}
+            >
+              Demand and Supply leads require both your selected
+              country and skill. SaaS leads use your selected
+              country only.
+            </div>
           </div>
         ) : (
           <div
@@ -1009,216 +1442,13 @@ export default function Leads() {
               display: "grid",
               gridTemplateColumns:
                 "repeat(auto-fit, minmax(280px, 1fr))",
-              gap: "16px",
+              gap: "14px",
             }}
           >
-                        {filteredLeads.map((lead) => {
-              const leadType =
-                getTypeLabel(lead);
-
-              const title =
-                getLeadTitle(lead);
-
-              const company =
-                getDisplayCompany(lead);
-
-              const location =
-                getDisplayLocation(lead);
-
-              const skill =
-                getDisplaySkill(lead);
-
-              const salary =
-                formatSalary(lead);
-
-              const contact =
-                getLeadContact(lead);
-
-              const openUrl =
-                getLeadOpenUrl(lead);
-
-              const date =
-                formatDate(
-                  lead.created_at ||
-                    lead.createdAt
-                );
-
-              return (
-                <div
-                  key={lead.id}
-                  style={{
-                    background: "#080808",
-                    border:
-                      "1px solid #333",
-                    borderRadius: "12px",
-                    padding: "18px",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "12px",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent:
-                        "space-between",
-                      alignItems: "center",
-                      gap: "10px",
-                    }}
-                  >
-                    <span
-                      style={{
-                        border:
-                          "1px solid #555",
-                        borderRadius: "999px",
-                        padding:
-                          "4px 9px",
-                        fontSize: "12px",
-                        color: "#ddd",
-                      }}
-                    >
-                      {leadType}
-                    </span>
-
-                    {date && (
-                      <span
-                        style={{
-                          color: "#777",
-                          fontSize: "12px",
-                        }}
-                      >
-                        {date}
-                      </span>
-                    )}
-                  </div>
-
-                  <h2
-                    style={{
-                      margin: 0,
-                      fontSize: "19px",
-                      lineHeight: 1.3,
-                    }}
-                  >
-                    {title}
-                  </h2>
-
-                  {company && (
-                    <div
-                      style={{
-                        color: "#ccc",
-                        fontSize: "14px",
-                      }}
-                    >
-                      {company}
-                    </div>
-                  )}
-
-                  {skill && (
-                    <div
-                      style={{
-                        color: "#aaa",
-                        fontSize: "14px",
-                      }}
-                    >
-                      <strong
-                        style={{
-                          color: "#ddd",
-                        }}
-                      >
-                        Skill:
-                      </strong>{" "}
-                      {skill}
-                    </div>
-                  )}
-
-                  {location && (
-                    <div
-                      style={{
-                        color: "#aaa",
-                        fontSize: "14px",
-                      }}
-                    >
-                      <strong
-                        style={{
-                          color: "#ddd",
-                        }}
-                      >
-                        Location:
-                      </strong>{" "}
-                      {location}
-                    </div>
-                  )}
-
-                  {salary && (
-                    <div
-                      style={{
-                        color: "#aaa",
-                        fontSize: "14px",
-                      }}
-                    >
-                      <strong
-                        style={{
-                          color: "#ddd",
-                        }}
-                      >
-                        Budget / Salary:
-                      </strong>{" "}
-                      {salary}
-                    </div>
-                  )}
-
-                  {lead.description && (
-                    <p
-                      style={{
-                        margin: 0,
-                        color: "#aaa",
-                        fontSize: "14px",
-                        lineHeight: 1.5,
-                      }}
-                    >
-                      {lead.description}
-                    </p>
-                  )}
-
-                  {contact && (
-                    <div
-                      style={{
-                        color: "#999",
-                        fontSize: "13px",
-                        wordBreak:
-                          "break-word",
-                      }}
-                    >
-                      Contact: {contact}
-                    </div>
-                  )}
-
-                  {openUrl && (
-                    <a
-                      href={openUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{
-                        display: "inline-block",
-                        marginTop: "4px",
-                        background: "#fff",
-                        color: "#000",
-                        textDecoration:
-                          "none",
-                        textAlign: "center",
-                        borderRadius: "8px",
-                        padding:
-                          "10px 14px",
-                        fontWeight: 600,
-                        fontSize: "14px",
-                      }}
-                    >
-                      View Opportunity
-                    </a>
-                  )}
-                </div>
-              );
-            })}
+            {filteredLeads.map(
+              (lead) =>
+                renderLeadCard(lead)
+            )}
           </div>
         )}
       </div>
