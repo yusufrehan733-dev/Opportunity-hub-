@@ -1,23 +1,16 @@
 import { createClient } from "@supabase/supabase-js";
 
-type LeadType =
-  | "Demand"
-  | "Supply"
-  | "SaaS";
+type LeadType = "Demand" | "Supply" | "SaaS";
 
 function clean(value: any): string {
   return String(value ?? "").trim();
 }
 
 function hasIdentity(...values: any[]): boolean {
-  return values.some(
-    (value) => clean(value).length > 0
-  );
+  return values.some((value) => clean(value).length > 0);
 }
 
-function hasActionableContact(
-  ...values: any[]
-): boolean {
+function hasActionableContact(...values: any[]): boolean {
   return values.some((value) => {
     const text = clean(value);
 
@@ -35,13 +28,12 @@ function hasActionableContact(
   });
 }
 
-function isGoldDemand(
-  lead: any
-): boolean {
+function isGoldDemand(lead: any): boolean {
   return (
     hasIdentity(
       lead.client_name,
-      lead.contact_name
+      lead.contact_name,
+      lead.name
     ) &&
     hasIdentity(
       lead.title,
@@ -50,6 +42,7 @@ function isGoldDemand(
     ) &&
     hasActionableContact(
       lead.contact_email,
+      lead.email,
       lead.contact_phone,
       lead.contact_url,
       lead.source_url
@@ -57,13 +50,12 @@ function isGoldDemand(
   );
 }
 
-function isGoldSupply(
-  lead: any
-): boolean {
+function isGoldSupply(lead: any): boolean {
   return (
     hasIdentity(
       lead.company_name,
-      lead.contact_name
+      lead.contact_name,
+      lead.name
     ) &&
     hasIdentity(
       lead.job_title,
@@ -83,13 +75,9 @@ function isGoldSupply(
   );
 }
 
-function isGoldSaas(
-  lead: any
-): boolean {
+function isGoldSaas(lead: any): boolean {
   return (
-    hasIdentity(
-      lead.name
-    ) &&
+    hasIdentity(lead.name) &&
     hasIdentity(
       lead.niche,
       lead.description,
@@ -102,96 +90,232 @@ function isGoldSaas(
       lead.source_url
     )
   );
+}
+
+function mapDemand(lead: any) {
+  return {
+    id: String(lead.id),
+
+    type: "Demand" as LeadType,
+    lead_type: "Demand",
+
+    source: clean(lead.source),
+    source_url: clean(lead.source_url),
+
+    client_name: clean(lead.client_name),
+
+    name:
+      clean(lead.client_name) ||
+      clean(lead.contact_name) ||
+      clean(lead.name),
+
+    company: clean(lead.client_name),
+
+    title:
+      clean(lead.title) ||
+      "Demand Opportunity",
+
+    description: clean(lead.description),
+
+    skill: clean(lead.skill_needed),
+    skill_needed: clean(lead.skill_needed),
+
+    category: clean(lead.category),
+    subcategory: clean(lead.subcategory),
+
+    country: clean(lead.country),
+    city: clean(lead.city),
+
+    budget: lead.budget ?? null,
+    currency: clean(lead.currency),
+
+    contact_name: clean(lead.contact_name),
+
+    contact_email:
+      clean(lead.contact_email) ||
+      clean(lead.email),
+
+    contact_phone: clean(lead.contact_phone),
+
+    contact_url: clean(lead.contact_url),
+
+    email:
+      clean(lead.contact_email) ||
+      clean(lead.email),
+
+    phone: clean(lead.contact_phone),
+
+    contact:
+      clean(lead.contact_url) ||
+      clean(lead.contact_email) ||
+      clean(lead.email) ||
+      clean(lead.contact_phone),
+
+    openUrl:
+      clean(lead.contact_url) ||
+      clean(lead.source_url),
+
+    status: clean(lead.status),
+
+    created_at: lead.created_at || null,
+    createdAt: lead.created_at || null,
+  };
+}
+
+function mapSupply(lead: any) {
+  return {
+    id: String(lead.id),
+
+    type: "Supply" as LeadType,
+    lead_type: "Supply",
+
+    source: clean(lead.source),
+    source_url: clean(lead.source_url),
+
+    client_name: clean(lead.company_name),
+
+    name:
+      clean(lead.company_name) ||
+      clean(lead.contact_name) ||
+      clean(lead.name),
+
+    company: clean(lead.company_name),
+    company_name: clean(lead.company_name),
+
+    title:
+      clean(lead.job_title) ||
+      clean(lead.position) ||
+      "Supply Opportunity",
+
+    description: clean(lead.description),
+
+    skill:
+      clean(lead.required_skill),
+
+    skill_needed:
+      clean(lead.required_skill),
+
+    required_skill:
+      clean(lead.required_skill),
+
+    category: clean(lead.category),
+    subcategory: clean(lead.subcategory),
+
+    country: clean(lead.country),
+    city: clean(lead.city),
+
+    salary:
+      lead.salary_range ??
+      lead.salary_min ??
+      null,
+
+    salary_range:
+      lead.salary_range ?? null,
+
+    salary_min:
+      lead.salary_min ?? null,
+
+    salary_max:
+      lead.salary_max ?? null,
+
+    currency: clean(lead.currency),
+
+    contact:
+      clean(lead.contact) ||
+      clean(lead.contact_email) ||
+      clean(lead.contact_phone),
+
+    contact_name: clean(lead.contact_name),
+
+    contact_email: clean(lead.contact_email),
+
+    contact_phone: clean(lead.contact_phone),
+
+    contact_url: clean(lead.contact_url),
+
+    email: clean(lead.contact_email),
+
+    phone: clean(lead.contact_phone),
+
+    company_website:
+      clean(lead.company_website),
+
+    apply_url:
+      clean(lead.apply_url),
+
+    openUrl:
+      clean(lead.contact_url) ||
+      clean(lead.apply_url) ||
+      clean(lead.company_website) ||
+      clean(lead.source_url),
+
+    status: clean(lead.status),
+
+    created_at: lead.created_at || null,
+    createdAt: lead.created_at || null,
+  };
       }
-function mapSaas(
-  lead: any
-) {
+function mapSaas(lead: any) {
   return {
     id: String(lead.id),
 
     type: "SaaS" as LeadType,
     lead_type: "SaaS",
 
-    source:
-      clean(lead.source),
+    source: clean(lead.source),
+    source_url: clean(lead.source_url),
 
-    source_url:
-      clean(lead.source_url),
+    name: clean(lead.name),
 
-    name:
-      clean(lead.name),
+    client_name: clean(lead.name),
 
-    client_name:
-      clean(lead.name),
-
-    company:
-      clean(lead.name),
+    company: clean(lead.name),
 
     title:
       clean(lead.name) ||
       "Opportunity Hub Prospect",
 
-    platform:
-      clean(lead.platform),
+    platform: clean(lead.platform),
 
-    niche:
-      clean(lead.niche),
+    niche: clean(lead.niche),
 
-    description:
-      clean(lead.description),
+    description: clean(lead.description),
 
-    skill:
-      clean(lead.niche),
+    skill: clean(lead.niche),
 
-    skill_needed:
-      clean(lead.niche),
+    skill_needed: clean(lead.niche),
 
-    category:
-      "SaaS",
+    category: "SaaS",
 
-    subcategory:
-      clean(lead.niche),
+    subcategory: clean(lead.niche),
 
-    country:
-      clean(lead.country),
+    country: clean(lead.country),
 
-    city:
-      clean(lead.city),
+    city: clean(lead.city),
 
-    contact:
-      clean(lead.contact),
+    contact: clean(lead.contact),
 
-    email:
-      clean(lead.contact),
+    email: clean(lead.contact),
 
-    contact_url:
-      clean(lead.contact_url),
+    contact_url: clean(lead.contact_url),
 
-    landing_url:
-      clean(lead.landing_url),
+    landing_url: clean(lead.landing_url),
 
     openUrl:
       clean(lead.contact_url) ||
       clean(lead.landing_url) ||
       clean(lead.source_url),
 
-    status:
-      clean(lead.status),
+    status: clean(lead.status),
 
-    created_at:
-      lead.created_at || null,
+    created_at: lead.created_at || null,
 
-    createdAt:
-      lead.created_at || null,
+    createdAt: lead.created_at || null,
   };
 }
 
-function getEnv(
-  name: string
-): string {
-  return clean(
-    process.env[name]
-  );
+function getEnv(name: string): string {
+  return clean(process.env[name]);
 }
 
 function getSupabaseClient() {
@@ -200,18 +324,10 @@ function getSupabaseClient() {
     getEnv("VITE_SUPABASE_URL");
 
   const supabaseKey =
-    getEnv(
-      "SUPABASE_SERVICE_ROLE_KEY"
-    ) ||
-    getEnv(
-      "SUPABASE_SERVICE_ROLE"
-    ) ||
-    getEnv(
-      "SUPABASE_ANON_KEY"
-    ) ||
-    getEnv(
-      "VITE_SUPABASE_ANON_KEY"
-    );
+    getEnv("SUPABASE_SERVICE_ROLE_KEY") ||
+    getEnv("SUPABASE_SERVICE_ROLE") ||
+    getEnv("SUPABASE_ANON_KEY") ||
+    getEnv("VITE_SUPABASE_ANON_KEY");
 
   if (!supabaseUrl) {
     throw new Error(
@@ -235,18 +351,16 @@ function sortByCreatedAt(
   a: any,
   b: any
 ): number {
-  const dateA =
-    new Date(
-      a.created_at || 0
-    ).getTime();
+  const dateA = new Date(
+    a.created_at || 0
+  ).getTime();
 
-  const dateB =
-    new Date(
-      b.created_at || 0
-    ).getTime();
+  const dateB = new Date(
+    b.created_at || 0
+  ).getTime();
 
   return dateB - dateA;
-}
+            }
 async function loadDemandLeads(
   supabase: any
 ): Promise<any[]> {
@@ -257,12 +371,9 @@ async function loadDemandLeads(
     } = await supabase
       .from("demand_leads")
       .select("*")
-      .order(
-        "created_at",
-        {
-          ascending: false,
-        }
-      );
+      .order("created_at", {
+        ascending: false,
+      });
 
     if (error) {
       console.error(
@@ -297,12 +408,9 @@ async function loadSupplyLeads(
     } = await supabase
       .from("supply_leads")
       .select("*")
-      .order(
-        "created_at",
-        {
-          ascending: false,
-        }
-      );
+      .order("created_at", {
+        ascending: false,
+      });
 
     if (error) {
       console.error(
@@ -337,12 +445,9 @@ async function loadSaasLeads(
     } = await supabase
       .from("saas_leads")
       .select("*")
-      .order(
-        "created_at",
-        {
-          ascending: false,
-        }
-      );
+      .order("created_at", {
+        ascending: false,
+      });
 
     if (error) {
       console.error(
@@ -372,9 +477,7 @@ async function loadAllLeads(
   requestedCategory: string
 ) {
   const category =
-    clean(
-      requestedCategory
-    ).toLowerCase();
+    clean(requestedCategory).toLowerCase();
 
   let demandLeads: any[] = [];
   let supplyLeads: any[] = [];
@@ -421,18 +524,22 @@ async function loadAllLeads(
 
   return {
     leads,
+
     counts: {
       demand:
         demandLeads.length,
+
       supply:
         supplyLeads.length,
+
       saas:
         saasLeads.length,
+
       total:
         leads.length,
     },
   };
-}
+    }
 export default async function handler(
   req: any,
   res: any
@@ -440,14 +547,18 @@ export default async function handler(
   if (req.method !== "GET") {
     return res.status(405).json({
       success: false,
+
       leads: [],
+
       count: 0,
+
       counts: {
         demand: 0,
         supply: 0,
         saas: 0,
         total: 0,
       },
+
       error: "Method not allowed",
     });
   }
@@ -470,10 +581,13 @@ export default async function handler(
 
     return res.status(200).json({
       success: true,
+
       leads:
         result.leads,
+
       count:
         result.leads.length,
+
       counts:
         result.counts,
     });
@@ -490,15 +604,19 @@ export default async function handler(
 
     return res.status(500).json({
       success: false,
+
       leads: [],
+
       count: 0,
+
       counts: {
         demand: 0,
         supply: 0,
         saas: 0,
         total: 0,
       },
+
       error: message,
     });
   }
-}
+        }
