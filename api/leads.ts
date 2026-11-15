@@ -1,6 +1,4 @@
-
 import { createClient } from "@supabase/supabase-js";
-
 type LeadType =
   | "Demand"
   | "Supply"
@@ -10,53 +8,40 @@ type Lead = {
   id: string;
   type: LeadType;
   lead_type: LeadType;
-
   source?: string;
   source_url?: string;
-
   title?: string;
   name?: string;
   client_name?: string;
   company?: string;
   company_name?: string;
-
   description?: string;
-
   skill?: string;
   skill_needed?: string;
   required_skill?: string;
   category?: string;
   subcategory?: string;
-
   country?: string;
   city?: string;
-
   budget?: string | number;
   currency?: string;
-
   contact?: string;
   contact_name?: string;
   contact_email?: string;
   contact_phone?: string;
   contact_url?: string;
-
   email?: string;
   phone?: string;
-
   company_website?: string;
   apply_url?: string;
   landing_url?: string;
   openUrl?: string;
-
   platform?: string;
   niche?: string;
-
   status?: string;
-
   created_at?: string | null;
   createdAt?: string | null;
 };
-
 function clean(value: unknown): string {
   if (
     value === undefined ||
@@ -67,24 +52,20 @@ function clean(value: unknown): string {
 
   return String(value).trim();
 }
-
 function normalize(value: unknown): string {
   return clean(value)
     .toLowerCase()
     .replace(/\s+/g, " ")
     .trim();
 }
-
 function isEmailAddress(value: unknown): boolean {
   const text = clean(value);
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(text);
 }
-
 function isHttpUrl(value: unknown): boolean {
   const text = clean(value);
   return /^https?:\/\//i.test(text);
 }
-
 function containsAny(
   text: string,
   terms: string[]
@@ -95,7 +76,6 @@ function containsAny(
     value.includes(normalize(term))
   );
 }
-
 function isBlockedUrl(
   value: unknown
 ): boolean {
@@ -119,12 +99,10 @@ function isBlockedUrl(
     "coursera.org",
     "skillshare.com",
   ];
-
   return blocked.some((domain) =>
     url.includes(domain)
   );
 }
-
 function isBlockedContent(
   lead: any
 ): boolean {
@@ -194,7 +172,6 @@ function getLeadText(
       .join(" ")
   );
 }
-
 /*
  * Demand and Supply leads must be recent.
  * SaaS professional profiles are exempt.
@@ -206,14 +183,12 @@ function isFreshWithin72Hours(lead: any): boolean {
 
   const timestamp = new Date(rawDate).getTime();
   if (!Number.isFinite(timestamp)) return false;
-
-  const age = Date.now() - timestamp;
+ const age = Date.now() - timestamp;
   const limit = 72 * 60 * 60 * 1000;
 
   // Allow a small clock difference between source and server.
   return age >= -5 * 60 * 1000 && age <= limit;
 }
-
 /*
  * IMPORTANT:
  * A Demand lead means someone is actually
@@ -279,7 +254,6 @@ const HIRING_TERMS = [
   "recruitment",
   "employment opportunity",
 ];
-
 const SUPPLY_TERMS = [
   ...HIRING_TERMS,
   "remote ok",
@@ -294,7 +268,6 @@ const SUPPLY_TERMS = [
   "work from home",
   "worldwide remote",
 ];
-
 /*
  * SaaS is NOT "someone who needs a service".
  *
@@ -326,7 +299,6 @@ const PROFESSIONAL_TERMS = [
   "therapist",
   "instructor",
 ];
-
 const GENERIC_PAGE_TERMS = [
   "/search",
   "/jobs",
@@ -350,18 +322,15 @@ const GENERIC_PAGE_TERMS = [
   "/webinar/",
   "/events/",
 ];
-
 const GENERIC_HOMEPAGE_HOSTS = [
   "frame.io",
   "hightouch.com",
   "lithic.com",
 ];
-
 function getHost(
   value: unknown
 ): string {
   const url = clean(value);
-
   if (!url) return "";
 
   try {
@@ -372,7 +341,6 @@ function getHost(
     return "";
   }
 }
-
 function isGenericHomepage(
   url: unknown
 ): boolean {
@@ -391,7 +359,6 @@ function isGenericHomepage(
       parsed.pathname
         .toLowerCase()
         .replace(/\/+$/, "");
-
     if (
       GENERIC_HOMEPAGE_HOSTS.includes(
         host
@@ -418,7 +385,6 @@ function isGenericHomepage(
     return true;
   }
 }
-
 function hasRealContact(
   lead: any,
   type: LeadType
@@ -426,11 +392,9 @@ function hasRealContact(
   const email = clean(
     lead.contact_email || lead.email
   );
-
   const phone = clean(
     lead.contact_phone || lead.phone
   );
-
   const contact = clean(lead.contact);
   const contactUrl = clean(lead.contact_url);
   const applyUrl = clean(lead.apply_url);
