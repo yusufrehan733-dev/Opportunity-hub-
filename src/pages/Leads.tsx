@@ -914,15 +914,15 @@ export default function Leads() {
               onClick={clearFilters}
               className="mt-4 rounded-lg border border-gray-600 px-4 py-2 text-sm text-white hover:bg-gray-900"
             >
-              Clear Filters
-            </button
-          </div>
-        ) : (
-          <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            {filteredLeads.map((lead) => renderLeadCard(lead))}
-          </section>
-        )}
-      </div>
+                          Clear Filters
+          </button>
+        </div>
+      ) : (
+        <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {filteredLeads.map((lead) => renderLeadCard(lead))}
+        </section>
+      )}
     </div>
-  );
+  </div>
+);
 }
