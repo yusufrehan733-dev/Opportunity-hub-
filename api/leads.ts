@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+
 type LeadType =
   | "Demand"
   | "Supply"
@@ -8,6 +9,7 @@ type Lead = {
   id: string;
   type: LeadType;
   lead_type: LeadType;
+
   source?: string;
   source_url?: string;
   title?: string;
@@ -16,32 +18,41 @@ type Lead = {
   company?: string;
   company_name?: string;
   description?: string;
+
   skill?: string;
   skill_needed?: string;
   required_skill?: string;
   category?: string;
   subcategory?: string;
+
   country?: string;
   city?: string;
+
   budget?: string | number;
   currency?: string;
+
   contact?: string;
   contact_name?: string;
   contact_email?: string;
   contact_phone?: string;
   contact_url?: string;
+
   email?: string;
   phone?: string;
+
   company_website?: string;
   apply_url?: string;
   landing_url?: string;
   openUrl?: string;
+
   platform?: string;
   niche?: string;
   status?: string;
+
   created_at?: string | null;
   createdAt?: string | null;
 };
+
 function clean(value: unknown): string {
   if (
     value === undefined ||
@@ -52,20 +63,14 @@ function clean(value: unknown): string {
 
   return String(value).trim();
 }
+
 function normalize(value: unknown): string {
   return clean(value)
     .toLowerCase()
     .replace(/\s+/g, " ")
     .trim();
 }
-function isEmailAddress(value: unknown): boolean {
-  const text = clean(value);
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(text);
-}
-function isHttpUrl(value: unknown): boolean {
-  const text = clean(value);
-  return /^https?:\/\//i.test(text);
-}
+
 function containsAny(
   text: string,
   terms: string[]
@@ -76,6 +81,45 @@ function containsAny(
     value.includes(normalize(term))
   );
 }
+
+function isEmailAddress(
+  value: unknown
+): boolean {
+  const text = clean(value);
+
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(text);
+}
+
+function isValidPhone(
+  value: unknown
+): boolean {
+  const digits = clean(value).replace(/\D/g, "");
+
+  return (
+    digits.length >= 7 &&
+    digits.length <= 15
+  );
+}
+
+function isHttpUrl(
+  value: unknown
+): boolean {
+  const text = clean(value);
+
+  if (!text) return false;
+
+  try {
+    const parsed = new URL(text);
+
+    return (
+      parsed.protocol === "http:" ||
+      parsed.protocol === "https:"
+    );
+  } catch {
+    return false;
+  }
+}
+
 function isBlockedUrl(
   value: unknown
 ): boolean {
@@ -99,28 +143,31 @@ function isBlockedUrl(
     "coursera.org",
     "skillshare.com",
   ];
+
   return blocked.some((domain) =>
     url.includes(domain)
   );
 }
+
+/*
+ * Content that is not a genuine
+ * service request, work opportunity
+ * or professional prospect.
+ */
 function isBlockedContent(
   lead: any
 ): boolean {
-  const text = normalize(
-    [
-      lead.title,
-      lead.name,
-      lead.description,
-      lead.niche,
-      lead.platform,
-      lead.source,
-      lead.source_url,
-      lead.contact_url,
-      lead.landing_url,
-    ]
-      .filter(Boolean)
-      .join(" ")
-  );
+  const text = normalize([
+    lead.title,
+    lead.name,
+    lead.description,
+    lead.niche,
+    lead.platform,
+    lead.source,
+    lead.source_url,
+    lead.contact_url,
+    lead.landing_url,
+  ].filter(Boolean).join(" "));
 
   return containsAny(text, [
     "ebook",
@@ -144,62 +191,35 @@ function isBlockedContent(
 function getLeadText(
   lead: any
 ): string {
-  return normalize(
-    [
-      lead.title,
-      lead.name,
-      lead.client_name,
-      lead.company,
-      lead.company_name,
-      lead.description,
-      lead.skill,
-      lead.skill_needed,
-      lead.required_skill,
-      lead.category,
-      lead.subcategory,
-      lead.country,
-      lead.city,
-      lead.contact,
-      lead.contact_name,
-      lead.contact_email,
-      lead.contact_phone,
-      lead.contact_url,
-      lead.source_url,
-      lead.platform,
-      lead.niche,
-    ]
-      .filter(Boolean)
-      .join(" ")
-  );
+  return normalize([
+    lead.title,
+    lead.name,
+    lead.client_name,
+    lead.company,
+    lead.company_name,
+    lead.description,
+    lead.skill,
+    lead.skill_needed,
+    lead.required_skill,
+    lead.category,
+    lead.subcategory,
+    lead.country,
+    lead.city,
+    lead.contact,
+    lead.contact_name,
+    lead.contact_email,
+    lead.contact_phone,
+    lead.contact_url,
+    lead.source,
+    lead.source_url,
+    lead.platform,
+    lead.niche,
+  ].filter(Boolean).join(" "));
 }
-/*
- * Demand and Supply leads must be recent.
- * SaaS professional profiles are exempt.
- * Missing or invalid dates are rejected.
- */
-function isFreshWithin72Hours(lead: any): boolean {
-  const rawDate = lead.created_at || lead.createdAt;
-  if (!rawDate) return false;
 
-  const timestamp = new Date(rawDate).getTime();
-  if (!Number.isFinite(timestamp)) return false;
- const age = Date.now() - timestamp;
-  const limit = 72 * 60 * 60 * 1000;
-
-  // Allow a small clock difference between source and server.
-  return age >= -5 * 60 * 1000 && age <= limit;
-}
 /*
- * IMPORTANT:
- * A Demand lead means someone is actually
- * asking for a service.
- *
- * Examples:
- * "I need a Quran teacher"
- * "Looking for a math tutor"
- * "Need a designer"
- *
- * Hiring/job-opening language is NOT Demand.
+ * DEMAND:
+ * Someone actually requesting a service.
  */
 const DEMAND_TERMS = [
   "i need",
@@ -220,8 +240,8 @@ const DEMAND_TERMS = [
 ];
 
 /*
- * These phrases mean the record is more
- * likely an employment/supply opportunity.
+ * HIRING:
+ * Employer or organization recruiting.
  */
 const HIRING_TERMS = [
   "we are hiring",
@@ -244,16 +264,11 @@ const HIRING_TERMS = [
   "recruitment",
   "employment opportunity",
 ];
-  "career opportunity",
-  "apply now",
-  "apply here",
-  "join our team",
-  "position available",
-  "open position",
-  "recruiting",
-  "recruitment",
-  "employment opportunity",
-];
+
+/*
+ * SUPPLY:
+ * Hiring and genuine remote-work opportunities.
+ */
 const SUPPLY_TERMS = [
   ...HIRING_TERMS,
   "remote ok",
@@ -268,12 +283,11 @@ const SUPPLY_TERMS = [
   "work from home",
   "worldwide remote",
 ];
+
 /*
- * SaaS is NOT "someone who needs a service".
- *
- * SaaS is a professional prospect:
- * teacher, tutor, coach, consultant, etc.
- * who can potentially use Opportunity Hub.
+ * SaaS professional prospects:
+ * teachers, tutors, coaches,
+ * freelancers and other professionals.
  */
 const PROFESSIONAL_TERMS = [
   "teacher",
@@ -299,320 +313,288 @@ const PROFESSIONAL_TERMS = [
   "therapist",
   "instructor",
 ];
-const GENERIC_PAGE_TERMS = [
-  "/search",
-  "/jobs",
-  "/job/",
-  "/category",
-  "/categories",
-  "/tag/",
-  "/tags/",
-  "/topics/",
-  "/forum",
-  "/forums",
-  "/article/",
-  "/articles/",
-  "/blog/",
-  "/news/",
-  "/resources/",
-  "/resource/",
-  "/courses/",
-  "/course/",
-  "/training/",
-  "/webinar/",
-  "/events/",
-];
+  
+/*
+ * Generic homepages are not valid
+ * direct contact destinations.
+ */
 const GENERIC_HOMEPAGE_HOSTS = [
-  "frame.io",
-  "hightouch.com",
-  "lithic.com",
+  "google.com",
+  "facebook.com",
+  "instagram.com",
+  "linkedin.com",
+  "reddit.com",
+  "youtube.com",
+  "tiktok.com",
+  "twitter.com",
+  "x.com",
 ];
-function getHost(
-  value: unknown
-): string {
-  const url = clean(value);
-  if (!url) return "";
 
-  try {
-    return new URL(url).hostname
-      .toLowerCase()
-      .replace(/^www\./, "");
-  } catch {
-    return "";
-  }
-}
 function isGenericHomepage(
-  url: unknown
+  value: unknown
 ): boolean {
-  const value = clean(url);
+  const url = clean(value);
 
-  if (!value) return true;
+  if (!isHttpUrl(url)) return true;
 
   try {
-    const parsed = new URL(value);
-
-    const host = parsed.hostname
-      .toLowerCase()
-      .replace(/^www\./, "");
-
-    const path =
-      parsed.pathname
-        .toLowerCase()
-        .replace(/\/+$/, "");
-    if (
-      GENERIC_HOMEPAGE_HOSTS.includes(
-        host
-      ) &&
-      (path === "" || path === "/")
-    ) {
-      return true;
-    }
-
-    if (
-      GENERIC_PAGE_TERMS.some(
-        (term) =>
-          path.includes(term)
-      )
-    ) {
-      return true;
-    }
+    const parsed = new URL(url);
+    const path = parsed.pathname.replace(/\/+$/, "");
 
     return (
-      path === "" ||
-      path === "/"
+      path === "" &&
+      GENERIC_HOMEPAGE_HOSTS.some(
+        (host) =>
+          parsed.hostname === host ||
+          parsed.hostname.endsWith("." + host)
+      )
     );
   } catch {
     return true;
   }
 }
+
+/*
+ * A contact must be usable.
+ * A generic website homepage alone
+ * is not sufficient.
+ */
 function hasRealContact(
   lead: any,
   type: LeadType
 ): boolean {
-  const email = clean(
-    lead.contact_email || lead.email
-  );
-  const phone = clean(
-    lead.contact_phone || lead.phone
-  );
-  const contact = clean(lead.contact);
-  const contactUrl = clean(lead.contact_url);
-  const applyUrl = clean(lead.apply_url);
-  const sourceUrl = clean(lead.source_url);
+  const email =
+    clean(lead.contact_email) ||
+    clean(lead.email);
 
-  // Direct email, phone, or explicitly supplied contact information.
-  if (email || phone || contact) {
-    return true;
-  }
+  const phone =
+    clean(lead.contact_phone) ||
+    clean(lead.phone);
 
-  // A specific contact page or public contact form is acceptable.
+  const contact =
+    clean(lead.contact);
+
+  const contactUrl =
+    clean(lead.contact_url);
+
+  const applyUrl =
+    clean(lead.apply_url);
+
+  const sourceUrl =
+    clean(lead.source_url);
+
   if (
-    contactUrl &&
-    !isGenericHomepage(contactUrl) &&
-    !isBlockedUrl(contactUrl)
+    email &&
+    isEmailAddress(email)
   ) {
     return true;
   }
 
-  // Supply may use a specific employer application form.
+  if (
+    phone &&
+    isValidPhone(phone)
+  ) {
+    return true;
+  }
+
+  if (
+    contact &&
+    isEmailAddress(contact)
+  ) {
+    return true;
+  }
+
+  if (
+    contact &&
+    isValidPhone(contact)
+  ) {
+    return true;
+  }
+
+  if (
+    contactUrl &&
+    isHttpUrl(contactUrl) &&
+    !isBlockedUrl(contactUrl) &&
+    !isGenericHomepage(contactUrl)
+  ) {
+    return true;
+  }
+
+  /*
+   * Supply opportunities may use
+   * a specific application page.
+   */
   if (
     type === "Supply" &&
     applyUrl &&
-    !isGenericHomepage(applyUrl) &&
-    !isBlockedUrl(applyUrl)
+    isHttpUrl(applyUrl) &&
+    !isBlockedUrl(applyUrl) &&
+    !isGenericHomepage(applyUrl)
   ) {
     return true;
   }
 
-  // A specific source post/profile can be the direct route to contact.
+  /*
+   * A specific source post or profile
+   * can be a contact route when it
+   * is not merely a generic homepage.
+   */
   if (
     sourceUrl &&
-    !isGenericHomepage(sourceUrl) &&
-    !isBlockedUrl(sourceUrl)
+    isHttpUrl(sourceUrl) &&
+    !isBlockedUrl(sourceUrl) &&
+    !isGenericHomepage(sourceUrl)
   ) {
-    if (type !== "SaaS") {
-      return true;
-    }
-
-    const host = getHost(sourceUrl);
-    return (
-      host.includes("linkedin.") ||
-      host.includes("facebook.") ||
-      host.includes("instagram.") ||
-      host.includes("x.com") ||
-      host.includes("twitter.") ||
-      host.includes("t.me") ||
-      host.includes("telegram.")
-    );
+    return true;
   }
 
   return false;
 }
 
+/*
+ * Demand and Supply must be fresh
+ * within the last 72 hours.
+ *
+ * SaaS professional profiles are exempt.
+ */
+function isFreshWithin72Hours(
+  lead: any
+): boolean {
+  const rawDate =
+    lead.created_at ||
+    lead.createdAt;
+
+  if (!rawDate) return false;
+
+  const timestamp =
+    new Date(rawDate).getTime();
+
+  if (!Number.isFinite(timestamp)) {
+    return false;
+  }
+
+  const age =
+    Date.now() - timestamp;
+
+  const limit =
+    72 * 60 * 60 * 1000;
+
+  return (
+    age >= -5 * 60 * 1000 &&
+    age <= limit
+  );
+}
+
+/*
+ * Demand validation:
+ * The record must describe someone
+ * requesting a service.
+ */
 function isGoldDemand(
   lead: any
 ): boolean {
-  const text =
-    getLeadText(lead);
+  if (!lead || isBlockedContent(lead)) {
+    return false;
+  }
 
-  if (!text) return false;
+  if (!isFreshWithin72Hours(lead)) {
+    return false;
+  }
 
-  if (!isFreshWithin72Hours(lead)) return false;
+  const text = getLeadText(lead);
 
+  /*
+   * Hiring announcements belong
+   * to Supply, not Demand.
+   */
   if (
-    isBlockedUrl(
-      lead.source_url
-    ) ||
-    isBlockedUrl(
-      lead.contact_url
-    )
+    containsAny(text, HIRING_TERMS)
   ) {
     return false;
   }
 
   if (
-    isBlockedContent(lead)
+    !containsAny(text, DEMAND_TERMS)
   ) {
     return false;
   }
 
   /*
-   * Demand must contain actual
-   * service-request language.
+   * Reject service providers
+   * advertising their own services.
    */
   if (
-    !containsAny(
-      text,
-      DEMAND_TERMS
-    )
+    containsAny(text, [
+      "looking for students",
+      "looking for clients",
+      "looking for customers",
+      "seeking students",
+      "seeking clients",
+      "seeking customers",
+      "i offer",
+      "i provide",
+      "my services",
+      "hire me",
+      "book my service",
+    ])
   ) {
     return false;
   }
 
-  /*
-   * Hiring is Supply, not Demand.
-   */
   if (
-      
-    containsAny(
-      text,
-      HIRING_TERMS
-    )
+    !hasRealContact(lead, "Demand")
   ) {
     return false;
   }
 
-  /*
-   * Demand must have a real
-   * contact path.
-   */
-  if (
-    !hasRealContact(
-      lead,
-      "Demand"
-    )
-  ) {
-    return false;
-  }
-
-  /*
-   * Demand needs a skill.
-   */
-  const skill =
-    clean(
-      lead.skill_needed ||
-        lead.skill ||
-        lead.required_skill ||
-        lead.niche
-    );
+  const skill = clean(
+    lead.skill_needed ||
+    lead.required_skill ||
+    lead.skill ||
+    lead.niche ||
+    lead.category
+  );
 
   if (!skill) {
     return false;
   }
 
-  /*
-   * Demand needs country information
-   * because the Leads page filters it
-   * by country.
-   */
-  if (
-    !clean(lead.country)
-  ) {
+  const country = clean(lead.country);
+
+  if (!country) {
     return false;
   }
 
   return true;
 }
 
+/*
+ * Supply validation:
+ * The record must describe an actual
+ * hiring or work opportunity.
+ */
 function isGoldSupply(
   lead: any
 ): boolean {
-  const text =
-    getLeadText(lead);
-
-  if (!text) return false;
-
-  if (!isFreshWithin72Hours(lead)) return false;
-
-  if (
-    isBlockedUrl(
-      lead.source_url
-    ) ||
-    isBlockedUrl(
-      lead.contact_url
-    )
-  ) {
+  if (!lead || isBlockedContent(lead)) {
     return false;
   }
 
+  if (!isFreshWithin72Hours(lead)) {
+    return false;
+  }
+
+  const text = getLeadText(lead);
+
   if (
-    isBlockedContent(lead)
+    !containsAny(text, SUPPLY_TERMS)
   ) {
     return false;
   }
 
   /*
-   * Supply must represent an
-   * organization/opportunity.
-   */
-  const organization =
-    Boolean(clean(lead.company_name) || clean(lead.company)) ||
-    containsAny(text, [
-      "school",
-      "academy",
-      "institute",
-      "university",
-      "college",
-      "company",
-      "agency",
-      "organization",
-      "organisation",
-      "center",
-      "centre",
-      "training center",
-      "training centre",
-    ]);
-
-  if (!organization) {
-    return false;
-  }
-
-  /*
-   * Supply must contain hiring or
-   * a clear remote-work opportunity phrase.
-   */
-  if (
-    !containsAny(
-      text,
-      SUPPLY_TERMS
-    )
-  ) {
-    return false;
-  }
-
-  /*
-   * A Supply record cannot simply
-   * be a person looking for clients.
+   * A service provider looking
+   * for clients is not an employer.
    */
   if (
     containsAny(text, [
@@ -631,171 +613,34 @@ function isGoldSupply(
   }
 
   if (
-    !hasRealContact(
-      lead,
-      "Supply"
-    )
+    !hasRealContact(lead, "Supply")
   ) {
     return false;
   }
 
-  const skill =
-    clean(
-      lead.required_skill ||
-        lead.skill_needed ||
-        lead.skill ||
-        lead.niche
-    );
+  const skill = clean(
+    lead.required_skill ||
+    lead.skill_needed ||
+    lead.skill ||
+    lead.niche
+  );
 
   if (!skill) {
     return false;
   }
 
-  if (
-    !clean(lead.country)
-  ) {
+  const country = clean(lead.country);
+
+  if (!country) {
     return false;
   }
 
   return true;
 }
-
-function isGoldSaas(
-  lead: any
-): boolean {
-  const text =
-    getLeadText(lead);
-
-  if (!text) return false;
-
-  if (
-    isBlockedUrl(
-      lead.source_url
-    ) ||
-    isBlockedUrl(
-      lead.contact_url
-    ) ||
-    isBlockedUrl(
-      lead.landing_url
-    )
-  ) {
-    return false;
-  }
-
-  if (
-    isBlockedContent(lead)
-  ) {
-    return false;
-  }
-
-  /*
-   * SaaS must represent a real
-   * professional prospect.
-   */
-  if (
-    !containsAny(
-      text,
-      PROFESSIONAL_TERMS
-    )
-  ) {
-    return false;
-  }
-
-  /*
-   * VERY IMPORTANT:
-   * Someone actively requesting
-   * a service is Demand, not SaaS.
-   */
-  if (
-    containsAny(
-      text,
-      DEMAND_TERMS
-    )
-  ) {
-    return false;
-  }
-
-  /*
-   * Hiring/job records are not SaaS.
-   */
-  if (
-    containsAny(
-      text,
-      HIRING_TERMS
-    )
-  ) {
-    return false;
-  }
-
-  /*
-   * Reject obvious employment
-   * and application pages.
-   */
-  if (
-    containsAny(text, [
-      "job listing",
-      "job posting",
-      "employment opportunity",
-      "apply now",
-      "apply here",
-      "application deadline",
-      "submit application",
-      "careers page",
-      "career page",
-    ])
-  ) {
-    return false;
-  }
-
-  /*
-   * Reject generic educational
-   * content and training pages.
-   */
-  if (
-    containsAny(text, [
-      "why should i become",
-    
-      "how to become",
-      "teacher training",
-      "teacher certification",
-      "teaching resources",
-      "lesson resources",
-      "training program",
-      "course curriculum",
-      "online course",
-    ])
-  ) {
-    return false;
-  }
-
-  /*
-   * SaaS needs a country.
-   * Unlike Demand/Supply, we do
-   * NOT require a selected skill here.
-   */
-  if (
-    !clean(lead.country)
-  ) {
-    return false;
-  }
-
-  /*
-   * Most important SaaS Gold rule:
-   * a generic company homepage is
-   * not a contact path.
-   */
-  if (
-    !hasRealContact(
-      lead,
-      "SaaS"
-    )
-  ) {
-    return false;
-  }
-
-  return true;
-}
-
+/*
+ * Convert Demand database records
+ * into the Leads page format.
+ */
 function mapDemand(
   lead: any
 ): Lead {
@@ -805,101 +650,72 @@ function mapDemand(
     type: "Demand",
     lead_type: "Demand",
 
-    source:
-      clean(lead.source),
-
-    source_url:
-      clean(lead.source_url),
+    source: clean(lead.source),
+    source_url: clean(lead.source_url),
 
     title:
       clean(lead.title) ||
       clean(lead.skill_needed) ||
       "Service Request",
 
-    name:
-      clean(lead.client_name),
-
-    client_name:
-      clean(lead.client_name),
+    name: clean(lead.client_name),
+    client_name: clean(lead.client_name),
 
     company:
       clean(lead.company_name) ||
       clean(lead.company),
 
-    description:
-      clean(lead.description),
+    description: clean(lead.description),
 
-    skill:
-      clean(
-        lead.skill_needed ||
-          lead.required_skill ||
-          lead.skill
-      ),
+    skill: clean(
+      lead.skill_needed ||
+      lead.required_skill ||
+      lead.skill
+    ),
 
-    skill_needed:
-      clean(
-        lead.skill_needed ||
-          lead.required_skill ||
-          lead.skill
-      ),
+    skill_needed: clean(
+      lead.skill_needed ||
+      lead.required_skill ||
+      lead.skill
+    ),
 
-    category:
-      clean(lead.category),
+    category: clean(lead.category),
+    subcategory: clean(lead.subcategory),
 
-    subcategory:
-      clean(lead.subcategory),
+    country: clean(lead.country),
+    city: clean(lead.city),
 
-    country:
-      clean(lead.country),
-
-    city:
-      clean(lead.city),
-
-    budget:
-      lead.budget ??
-      "",
-
-    currency:
-      clean(lead.currency),
+    budget: lead.budget ?? "",
+    currency: clean(lead.currency),
 
     contact:
       clean(lead.contact) ||
       clean(lead.contact_email) ||
       clean(lead.contact_phone),
 
-    contact_name:
-      clean(lead.contact_name),
+    contact_name: clean(lead.contact_name),
+    contact_email: clean(lead.contact_email),
+    contact_phone: clean(lead.contact_phone),
+    contact_url: clean(lead.contact_url),
 
-    contact_email:
-      clean(lead.contact_email),
-
-    contact_phone:
-      clean(lead.contact_phone),
-
-    contact_url:
-      clean(lead.contact_url),
-
-    email:
-      clean(lead.contact_email),
-
-    phone:
-      clean(lead.contact_phone),
+    email: clean(lead.contact_email),
+    phone: clean(lead.contact_phone),
 
     openUrl:
       clean(lead.contact_url) ||
       clean(lead.source_url),
 
-    status:
-      clean(lead.status),
+    status: clean(lead.status),
 
-    created_at:
-      lead.created_at || null,
-
-    createdAt:
-      lead.created_at || null,
+    created_at: lead.created_at || null,
+    createdAt: lead.created_at || null,
   };
 }
 
+/*
+ * Convert Supply database records
+ * into the Leads page format.
+ */
 function mapSupply(
   lead: any
 ): Lead {
@@ -909,11 +725,8 @@ function mapSupply(
     type: "Supply",
     lead_type: "Supply",
 
-    source:
-      clean(lead.source),
-
-    source_url:
-      clean(lead.source_url),
+    source: clean(lead.source),
+    source_url: clean(lead.source_url),
 
     title:
       clean(lead.job_title) ||
@@ -921,83 +734,54 @@ function mapSupply(
       clean(lead.name) ||
       "Opportunity",
 
-    name:
-      clean(lead.name),
+    name: clean(lead.name),
+    client_name: clean(lead.name),
 
-    client_name:
-      clean(lead.name),
+    company: clean(lead.company_name),
 
-    company:
-      clean(lead.company_name),
+    description: clean(lead.description),
 
-    description:
-      clean(lead.description),
+    skill: clean(
+      lead.required_skill ||
+      lead.skill_needed ||
+      lead.skill
+    ),
 
-    skill:
-      clean(
-        lead.required_skill ||
-          lead.skill_needed ||
-          lead.skill
-      ),
+    skill_needed: clean(
+      lead.required_skill ||
+      lead.skill_needed ||
+      lead.skill
+    ),
 
-    skill_needed:
-      clean(
-        lead.required_skill ||
-          lead.skill_needed ||
-          lead.skill
-      ),
+    category: clean(lead.category),
+    subcategory: clean(lead.subcategory),
 
-    category:
-      clean(lead.category),
-
-    subcategory:
-      clean(lead.subcategory),
-
-    country:
-      clean(lead.country),
-
-    city:
-      clean(lead.city),
+    country: clean(lead.country),
+    city: clean(lead.city),
 
     budget:
-      clean(
-        lead.salary_range
-      ) ||
+      clean(lead.salary_range) ||
       lead.salary_max ||
       lead.salary_min ||
       "",
 
-    currency:
-      clean(lead.currency),
+    currency: clean(lead.currency),
 
     contact:
       clean(lead.contact) ||
       clean(lead.contact_email) ||
       clean(lead.contact_phone),
 
-    contact_name:
-      clean(lead.contact_name),
+    contact_name: clean(lead.contact_name),
+    contact_email: clean(lead.contact_email),
+    contact_phone: clean(lead.contact_phone),
+    contact_url: clean(lead.contact_url),
 
-    contact_email:
-      clean(lead.contact_email),
+    email: clean(lead.contact_email),
+    phone: clean(lead.contact_phone),
 
-    contact_phone:
-      clean(lead.contact_phone),
-
-    contact_url:
-      clean(lead.contact_url),
-
-    email:
-      clean(lead.contact_email),
-
-    phone:
-      clean(lead.contact_phone),
-
-    company_website:
-      clean(lead.company_website),
-
-    apply_url:
-      clean(lead.apply_url),
+    company_website: clean(lead.company_website),
+    apply_url: clean(lead.apply_url),
 
     openUrl:
       clean(lead.contact_url) ||
@@ -1005,174 +789,105 @@ function mapSupply(
       clean(lead.company_website) ||
       clean(lead.source_url),
 
-    status:
-      clean(lead.status),
+    status: clean(lead.status),
 
-    created_at:
-      lead.created_at || null,
-
-    createdAt:
-      lead.created_at || null,
+    created_at: lead.created_at || null,
+    createdAt: lead.created_at || null,
   };
-      }
+}
+
+/*
+ * Convert SaaS professional prospects
+ * into the Leads page format.
+ */
 function mapSaas(
   lead: any
 ): Lead {
+  const contact = clean(lead.contact);
+
+  const contactEmail =
+    isEmailAddress(contact)
+      ? contact
+      : clean(lead.contact_email);
+
+  const contactUrl =
+    clean(lead.contact_url) ||
+    (isHttpUrl(contact) ? contact : "");
+
   return {
     id: String(lead.id),
 
     type: "SaaS",
     lead_type: "SaaS",
 
-    source:
-      clean(lead.source),
+    source: clean(lead.source),
+    source_url: clean(lead.source_url),
 
-    source_url:
-      clean(lead.source_url),
-
-    name:
-      clean(lead.name),
-
-    client_name:
-      clean(lead.name),
-
-    company:
-      clean(lead.name),
+    name: clean(lead.name),
+    client_name: clean(lead.name),
+    company: clean(lead.name),
 
     title:
       clean(lead.name) ||
       "Opportunity Hub Prospect",
 
-    platform:
-      clean(lead.platform),
+    platform: clean(lead.platform),
+    niche: clean(lead.niche),
 
-    niche:
-      clean(lead.niche),
+    description: clean(lead.description),
 
-    description:
-      clean(lead.description),
+    skill: clean(lead.niche),
+    skill_needed: clean(lead.niche),
 
-    skill:
-      clean(lead.niche),
+    category: "SaaS",
+    subcategory: clean(lead.niche),
 
-    skill_needed:
-      clean(lead.niche),
-
-    category:
-      "SaaS",
-
-    subcategory:
-      clean(lead.niche),
-
-    country:
-      clean(lead.country),
-
-    city:
-      clean(lead.city),
+    country: clean(lead.country),
+    city: clean(lead.city),
 
     contact:
-      clean(lead.contact),
+      contact ||
+      contactEmail ||
+      clean(lead.contact_phone),
 
-    email:
-      isEmailAddress(lead.contact)
-        ? clean(lead.contact)
-        : "",
+    email: contactEmail,
+    contact_email: contactEmail,
 
-    contact_email:
-      isEmailAddress(lead.contact)
-        ? clean(lead.contact)
-        : "",
+    contact_url: contactUrl,
 
-    contact_url:
-      clean(lead.contact_url) ||
-      (isHttpUrl(lead.contact)
-        ? clean(lead.contact)
-        : ""),
-
-    landing_url:
-      clean(lead.landing_url),
+    landing_url: clean(lead.landing_url),
 
     openUrl:
-      clean(lead.contact_url) ||
-      (isHttpUrl(lead.contact)
-        ? clean(lead.contact)
-        : "") ||
+      contactUrl ||
       clean(lead.landing_url) ||
       clean(lead.source_url),
 
-    status:
-      clean(lead.status),
+    status: clean(lead.status),
 
-    created_at:
-      lead.created_at || null,
-
-    createdAt:
-      lead.created_at || null,
+    created_at: lead.created_at || null,
+    createdAt: lead.created_at || null,
   };
 }
 
-function getEnv(
-  name: string
-): string {
-  return clean(
-    process.env[name]
-  );
-}
-
-function getSupabaseClient() {
-  const supabaseUrl =
-    getEnv("SUPABASE_URL") ||
-    getEnv("VITE_SUPABASE_URL");
-
-  const supabaseKey =
-    getEnv(
-      "SUPABASE_SERVICE_ROLE_KEY"
-    ) ||
-    getEnv(
-      "SUPABASE_SERVICE_ROLE"
-    ) ||
-    getEnv(
-      "SUPABASE_ANON_KEY"
-    ) ||
-    getEnv(
-      "VITE_SUPABASE_ANON_KEY"
-    );
-
-  if (!supabaseUrl) {
-    throw new Error(
-      "Missing Supabase URL environment variable."
-    );
-  }
-
-  if (!supabaseKey) {
-    throw new Error(
-      "Missing Supabase key environment variable."
-    );
-  }
-
-  return createClient(
-    supabaseUrl,
-    supabaseKey
-  );
-}
-
+/*
+ * Sort newest records first.
+ */
 function sortByCreatedAt(
   a: any,
   b: any
 ): number {
   const dateA =
-    new Date(
-      a.created_at || 0
-    ).getTime();
+    new Date(a.created_at || 0).getTime();
 
   const dateB =
-    new Date(
-      b.created_at || 0
-    ).getTime();
+    new Date(b.created_at || 0).getTime();
 
   return dateB - dateA;
 }
 
+/*
+ * Load Demand records.
+ */
 async function loadDemandLeads(
   supabase: any
 ): Promise<Lead[]> {
@@ -1197,23 +912,22 @@ async function loadDemandLeads(
     }
 
     return (data || [])
-      .filter(
-        isGoldDemand
-      )
-      .map(
-        mapDemand
-      );
+      .filter(isGoldDemand)
+      .map(mapDemand);
+
   } catch (error: any) {
     console.error(
       "Demand leads exception:",
-      error?.message ||
-        String(error)
+      error?.message || String(error)
     );
 
     return [];
   }
 }
 
+/*
+ * Load Supply records.
+ */
 async function loadSupplyLeads(
   supabase: any
 ): Promise<Lead[]> {
@@ -1238,23 +952,22 @@ async function loadSupplyLeads(
     }
 
     return (data || [])
-      .filter(
-        isGoldSupply
-      )
-      .map(
-        mapSupply
-      );
+      .filter(isGoldSupply)
+      .map(mapSupply);
+
   } catch (error: any) {
     console.error(
       "Supply leads exception:",
-      error?.message ||
-        String(error)
+      error?.message || String(error)
     );
 
     return [];
   }
 }
 
+/*
+ * Load SaaS professional prospects.
+ */
 async function loadSaasLeads(
   supabase: any
 ): Promise<Lead[]> {
@@ -1268,102 +981,146 @@ async function loadSaasLeads(
       .order("created_at", {
         ascending: false,
       });
-    
+
+    if (error) {
+      console.error(
+        "SaaS leads load error:",
+        error.message
+      );
+
       return [];
     }
 
     return (data || [])
-      .filter(
-        isGoldSaas
-      )
-      .map(
-        mapSaas
-      );
+      .filter(isGoldSaas)
+      .map(mapSaas);
+
   } catch (error: any) {
     console.error(
       "SaaS leads exception:",
-      error?.message ||
-        String(error)
+      error?.message || String(error)
     );
 
     return [];
   }
+    }
+function isGoldSaas(lead: Lead): boolean {
+  const text = getLeadText(lead);
+
+  if (!text || isBlockedContent(text)) {
+    return false;
+  }
+
+  if (!containsAny(text, PROFESSIONAL_TERMS)) {
+    return false;
+  }
+
+  if (
+    containsAny(text, DEMAND_TERMS) ||
+    containsAny(text, HIRING_TERMS)
+  ) {
+    return false;
+  }
+
+  const skill = clean(
+    lead.skill ||
+    lead.skill_needed ||
+    lead.required_skill ||
+    lead.niche ||
+    lead.category
+  );
+
+  const country = clean(lead.country);
+
+  if (!skill || !country) {
+    return false;
+  }
+
+  return hasRealContact(lead, "SaaS");
+}
+
+function getEnv(name: string): string {
+  return clean(process.env[name]);
+}
+
+function getSupabaseClient() {
+  const supabaseUrl =
+    getEnv("SUPABASE_URL") ||
+    getEnv("VITE_SUPABASE_URL");
+
+  const supabaseKey =
+    getEnv("SUPABASE_SERVICE_ROLE_KEY") ||
+    getEnv("SUPABASE_SERVICE_ROLE") ||
+    getEnv("SUPABASE_ANON_KEY") ||
+    getEnv("VITE_SUPABASE_ANON_KEY");
+
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error(
+      "Missing Supabase URL or API key environment variable."
+    );
+  }
+
+  return createClient(supabaseUrl, supabaseKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  });
 }
 
 async function loadAllLeads(
   supabase: any,
   requestedCategory: string
 ) {
-  const category =
-    normalize(
-      requestedCategory
-    ) || "all";
+  const normalizedCategory =
+    normalize(requestedCategory);
 
-  let demandLeads: Lead[] = [];
-  let supplyLeads: Lead[] = [];
-  let saasLeads: Lead[] = [];
+  const includeAll =
+    !normalizedCategory ||
+    normalizedCategory === "all";
 
-  /*
-   * Only load the table requested.
-   *
-   * Demand -> demand_leads
-   * Supply -> supply_leads
-   * SaaS    -> saas_leads
-   * All     -> all three
-   */
-  if (
-    category === "all" ||
-    category === "demand"
-  ) {
-    demandLeads =
-      await loadDemandLeads(
-        supabase
-      );
-  }
+  const includeDemand =
+    includeAll || normalizedCategory === "demand";
 
-  if (
-    category === "all" ||
-    category === "supply"
-  ) {
-    supplyLeads =
-      await loadSupplyLeads(
-        supabase
-      );
-  }
+  const includeSupply =
+    includeAll || normalizedCategory === "supply";
 
-  if (
-    category === "all" ||
-    category === "saas"
-  ) {
-    saasLeads =
-      await loadSaasLeads(
-        supabase
-      );
-  }
+  const includeSaas =
+    includeAll || normalizedCategory === "saas";
 
-  const leads: Lead[] = [
+  const [
+    demandLeads,
+    supplyLeads,
+    saasLeads,
+  ] = await Promise.all([
+    includeDemand
+      ? loadDemandLeads(supabase)
+      : Promise.resolve([]),
+
+    includeSupply
+      ? loadSupplyLeads(supabase)
+      : Promise.resolve([]),
+
+    includeSaas
+      ? loadSaasLeads(supabase)
+      : Promise.resolve([]),
+  ]);
+
+  const leads = [
     ...demandLeads,
     ...supplyLeads,
     ...saasLeads,
-  ].sort(
-    sortByCreatedAt
-  );
+  ];
+
+  sortByCreatedAt(leads);
 
   return {
     leads,
-
     counts: {
-      demand:
-        demandLeads.length,
-
-      supply:
-        supplyLeads.length,
-
-      saas:
-        saasLeads.length,
-
-      total:
-        leads.length,
+      demand: demandLeads.length,
+      supply: supplyLeads.length,
+      saas: saasLeads.length,
+      total: leads.length,
     },
   };
 }
@@ -1372,284 +1129,22 @@ export default async function handler(
   req: any,
   res: any
 ) {
-  if (
-    req.method !== "GET"
-  ) {
-    return res.status(405).json({
-      success: false,
-
-      leads: [],
-
-      count: 0,
-
-      counts: {
-        demand: 0,
-        supply: 0,
-        saas: 0,
-        total: 0,
-      },
-
-      error:
-        "Method not allowed",
-    });
-  }
-
-  try {
-    const supabase =
-      getSupabaseClient();
-
-    /*
-     * The Leads page may send:
-     *
-     * ?category=demand
-     * ?category=supply
-     * ?category=saas
-     * ?category=all
-     *
-     * Default = all.
-     */
-    const requestedCategory =
-      clean(
-        req.query?.category ||
-          "all"
-      );
-
-    const allowedCategories = [
-      "all",
-      "demand",
-      "supply",
-      "saas",
-    ];
-
-    const normalizedCategory =
-      normalize(
-        requestedCategory
-      );
-
-    /*
-     * Never silently interpret an
-     * unknown category as a different
-     * lead type.
-     */
-    if (
-      !allowedCategories.includes(
-        normalizedCategory
-      )
-    ) {
-      return res.status(400).json({
-        success: false,
-
-        leads: [],
-
-        count: 0,
-
-        counts: {
-          demand: 0,
-          supply: 0,
-          saas: 0,
-          total: 0,
-        },
-
-        error:
-          "Invalid lead category. Use all, demand, supply, or saas.",
-      });
-    }
-
-    const result =
-      await loadAllLeads(
-        supabase,
-        normalizedCategory
-      );
-
-    return res.status(200).json({
-      success: true,
-
-      leads:
-        result.leads,
-
-      count:
-        result.leads.length,
-
-      counts:
-        result.counts,
-
-      category:
-        normalizedCategory,
-    });
-  } catch (error: any) {
-    const message =
-      error?.message ||
-      String(error) ||
-      "Unable to load leads";
-
-    console.error(
-      "LEADS_API_REAL_ERROR:",
-      message
-    );
-
-    return res.status(500).json({
-      success: false,
-
-      leads: [],
-
-      count: 0,
-
-      counts: {
-        demand: 0,
-        supply: 0,
-        saas: 0,
-        total: 0,
-      },
-
-      error: message,
-    });
-  }
-  }
-  
-      return [];
-    }
-
-    return (data || [])
-      .filter(
-        isGoldSaas
-      )
-      .map(
-        mapSaas
-      );
-  } catch (error: any) {
-    console.error(
-      "SaaS leads exception:",
-      error?.message ||
-        String(error)
-    );
-
-    return [];
-  }
-}
-
-async function loadAllLeads(
-  supabase: any,
-  requestedCategory: string
-) {
-  const category =
-    normalize(
-      requestedCategory
-    ) || "all";
-
-  let demandLeads: Lead[] = [];
-  let supplyLeads: Lead[] = [];
-  let saasLeads: Lead[] = [];
-
-  /*
-   * Only load the table requested.
-   *
-   * Demand -> demand_leads
-   * Supply -> supply_leads
-   * SaaS    -> saas_leads
-   * All     -> all three
-   */
-  if (
-    category === "all" ||
-    category === "demand"
-  ) {
-    demandLeads =
-      await loadDemandLeads(
-        supabase
-      );
-  }
-
-  if (
-    category === "all" ||
-    category === "supply"
-  ) {
-    supplyLeads =
-      await loadSupplyLeads(
-        supabase
-      );
-  }
-
-  if (
-    category === "all" ||
-    category === "saas"
-  ) {
-    saasLeads =
-      await loadSaasLeads(
-        supabase
-      );
-  }
-
-  const leads: Lead[] = [
-    ...demandLeads,
-    ...supplyLeads,
-    ...saasLeads,
-  ].sort(
-    sortByCreatedAt
+  res.setHeader(
+    "Content-Type",
+    "application/json; charset=utf-8"
   );
 
-  return {
-    leads,
-
-    counts: {
-      demand:
-        demandLeads.length,
-
-      supply:
-        supplyLeads.length,
-
-      saas:
-        saasLeads.length,
-
-      total:
-        leads.length,
-    },
-  };
-}
-
-export default async function handler(
-  req: any,
-  res: any
-) {
-  if (
-    req.method !== "GET"
-  ) {
+  if (req.method !== "GET") {
     return res.status(405).json({
       success: false,
-
-      leads: [],
-
-      count: 0,
-
-      counts: {
-        demand: 0,
-        supply: 0,
-        saas: 0,
-        total: 0,
-      },
-
-      error:
-        "Method not allowed",
+      message: "Method not allowed. Use GET.",
     });
   }
 
   try {
-    const supabase =
-      getSupabaseClient();
-
-    /*
-     * The Leads page may send:
-     *
-     * ?category=demand
-     * ?category=supply
-     * ?category=saas
-     * ?category=all
-     *
-     * Default = all.
-     */
-    const requestedCategory =
-      clean(
-        req.query?.category ||
-          "all"
-      );
+    const requestedCategory = clean(
+      req.query?.category || "all"
+    ).toLowerCase();
 
     const allowedCategories = [
       "all",
@@ -1658,87 +1153,37 @@ export default async function handler(
       "saas",
     ];
 
-    const normalizedCategory =
-      normalize(
-        requestedCategory
-      );
-
-    /*
-     * Never silently interpret an
-     * unknown category as a different
-     * lead type.
-     */
-    if (
-      !allowedCategories.includes(
-        normalizedCategory
-      )
-    ) {
+    if (!allowedCategories.includes(requestedCategory)) {
       return res.status(400).json({
         success: false,
-
-        leads: [],
-
-        count: 0,
-
-        counts: {
-          demand: 0,
-          supply: 0,
-          saas: 0,
-          total: 0,
-        },
-
-        error:
-          "Invalid lead category. Use all, demand, supply, or saas.",
+        message:
+          "Invalid category. Use all, demand, supply, or saas.",
       });
     }
 
-    const result =
-      await loadAllLeads(
-        supabase,
-        normalizedCategory
-      );
+    const supabase = getSupabaseClient();
+
+    const result = await loadAllLeads(
+      supabase,
+      requestedCategory
+    );
 
     return res.status(200).json({
       success: true,
-
-      leads:
-        result.leads,
-
-      count:
-        result.leads.length,
-
-      counts:
-        result.counts,
-
-      category:
-        normalizedCategory,
+      leads: result.leads,
+      count: result.leads.length,
+      counts: result.counts,
+      category: requestedCategory,
     });
   } catch (error: any) {
     const message =
-      error?.message ||
-      String(error) ||
-      "Unable to load leads";
+      error?.message || "Unable to load leads.";
 
-    console.error(
-      "LEADS_API_REAL_ERROR:",
-      message
-    );
+    console.error("API /api/leads error:", error);
 
     return res.status(500).json({
       success: false,
-
-      leads: [],
-
-      count: 0,
-
-      counts: {
-        demand: 0,
-        supply: 0,
-        saas: 0,
-        total: 0,
-      },
-
-      error: message,
+      message,
     });
   }
 }
