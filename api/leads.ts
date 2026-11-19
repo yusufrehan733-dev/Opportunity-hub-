@@ -1,15 +1,12 @@
+
 import { createClient } from "@supabase/supabase-js";
 
-type LeadType =
-  | "Demand"
-  | "Supply"
-  | "SaaS";
+type LeadType = "Demand" | "Supply" | "SaaS";
 
 type Lead = {
   id: string;
   type: LeadType;
   lead_type: LeadType;
-
   source?: string;
   source_url?: string;
   title?: string;
@@ -18,46 +15,37 @@ type Lead = {
   company?: string;
   company_name?: string;
   description?: string;
-
+  short_description?: string;
   skill?: string;
   skill_needed?: string;
   required_skill?: string;
   category?: string;
   subcategory?: string;
-
   country?: string;
   city?: string;
-
   budget?: string | number;
   currency?: string;
-
+  salary_range?: string;
   contact?: string;
   contact_name?: string;
   contact_email?: string;
   contact_phone?: string;
   contact_url?: string;
-
   email?: string;
   phone?: string;
-
   company_website?: string;
   apply_url?: string;
   landing_url?: string;
   openUrl?: string;
-
   platform?: string;
   niche?: string;
   status?: string;
-
   created_at?: string | null;
   createdAt?: string | null;
 };
 
 function clean(value: unknown): string {
-  if (
-    value === undefined ||
-    value === null
-  ) {
+  if (value === null || value === undefined) {
     return "";
   }
 
@@ -67,583 +55,87 @@ function clean(value: unknown): string {
 function normalize(value: unknown): string {
   return clean(value)
     .toLowerCase()
-    .replace(/\s+/g, " ")
-    .trim();
+    .replace(/\s+/g, " ");
 }
 
-function containsAny(
-  text: string,
-  terms: string[]
-): boolean {
-  const value = normalize(text);
-
-  return terms.some((term) =>
-    value.includes(normalize(term))
+function isEmailAddress(value: unknown): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+    clean(value)
   );
 }
 
-function isEmailAddress(
-  value: unknown
-): boolean {
-  const text = clean(value);
-
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(text);
-}
-
-function isValidPhone(
-  value: unknown
-): boolean {
-  const digits = clean(value).replace(/\D/g, "");
-
-  return (
-    digits.length >= 7 &&
-    digits.length <= 15
-  );
-}
-
-function isHttpUrl(
-  value: unknown
-): boolean {
-  const text = clean(value);
-
-  if (!text) return false;
-
+function isHttpUrl(value: unknown): boolean {
   try {
-    const parsed = new URL(text);
+    const url = new URL(clean(value));
 
     return (
-      parsed.protocol === "http:" ||
-      parsed.protocol === "https:"
+      url.protocol === "http:" ||
+      url.protocol === "https:"
     );
   } catch {
     return false;
   }
 }
 
-function isBlockedUrl(
-  value: unknown
-): boolean {
-  const url = normalize(value);
+function shortDescription(
+  value: unknown,
+  limit = 180
+): string {
+  const description = clean(value)
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\s+/g, " ")
+    .trim();
 
-  if (!url) return false;
+  if (description.length <= limit) {
+    return description;
+  }
 
-  const blocked = [
-    "amazon.",
-    "daraz.",
-    "ebay.",
-    "fiverr.",
-    "upwork.",
-    "freelancer.com",
-    "peopleperhour.com",
-    "guru.com",
-    "indeed.com",
-    "glassdoor.com",
-    "ziprecruiter.com",
-    "udemy.com",
-    "coursera.org",
-    "skillshare.com",
-  ];
+  const shortened = description.slice(0, limit);
+  const lastSpace = shortened.lastIndexOf(" ");
 
-  return blocked.some((domain) =>
-    url.includes(domain)
+  return (
+    shortened.slice(
+      0,
+      lastSpace > 100 ? lastSpace : limit
+    ).trim() + "..."
   );
 }
 
-/*
- * Content that is not a genuine
- * service request, work opportunity
- * or professional prospect.
- */
-function isBlockedContent(
-  lead: any
-): boolean {
-  const text = normalize([
-    lead.title,
-    lead.name,
-    lead.description,
-    lead.niche,
-    lead.platform,
-    lead.source,
-    lead.source_url,
-    lead.contact_url,
-    lead.landing_url,
-  ].filter(Boolean).join(" "));
+function sortByCreatedAt(
+  a: Lead,
+  b: Lead
+): number {
+  const dateA = new Date(
+    a.created_at || 0
+  ).getTime();
 
-  return containsAny(text, [
-    "ebook",
-    "webinar",
-    "newsletter",
-    "blog post",
-    "news article",
-    "directory",
-    "marketplace",
-    "software download",
-    "app download",
-    "shopping",
-    "coupon",
-    "product listing",
-    "course",
-    "online course",
-    "training course",
-  ]);
+  const dateB = new Date(
+    b.created_at || 0
+  ).getTime();
+
+  return (
+    (Number.isFinite(dateB) ? dateB : 0) -
+    (Number.isFinite(dateA) ? dateA : 0)
+  );
 }
+function mapDemand(lead: any): Lead {
+  const description = shortDescription(
+    lead.description || lead.content
+  );
 
-function getLeadText(
-  lead: any
-): string {
-  return normalize([
-    lead.title,
-    lead.name,
-    lead.client_name,
-    lead.company,
-    lead.company_name,
-    lead.description,
-    lead.skill,
-    lead.skill_needed,
-    lead.required_skill,
-    lead.category,
-    lead.subcategory,
-    lead.country,
-    lead.city,
-    lead.contact,
-    lead.contact_name,
-    lead.contact_email,
-    lead.contact_phone,
-    lead.contact_url,
-    lead.source,
-    lead.source_url,
-    lead.platform,
-    lead.niche,
-  ].filter(Boolean).join(" "));
-}
+  const contactEmail =
+    clean(lead.contact_email);
 
-/*
- * DEMAND:
- * Someone actually requesting a service.
- */
-const DEMAND_TERMS = [
-  "i need",
-  "need a",
-  "need an",
-  "looking for",
-  "seeking",
-  "wanted",
-  "want a",
-  "want an",
-  "need someone",
-  "hire someone",
-  "can anyone recommend",
-  "recommend a",
-  "does anyone know",
-  "help me find",
-  "trying to find",
-];
-
-/*
- * HIRING:
- * Employer or organization recruiting.
- */
-const HIRING_TERMS = [
-  "we are hiring",
-  "we're hiring",
-  "hiring a",
-  "hiring an",
-  "hiring teachers",
-  "hiring tutors",
-  "hiring coaches",
-  "job opening",
-  "job vacancy",
-  "vacancy",
-  "career opportunity",
-  "apply now",
-  "apply here",
-  "join our team",
-  "position available",
-  "open position",
-  "recruiting",
-  "recruitment",
-  "employment opportunity",
-];
-
-/*
- * SUPPLY:
- * Hiring and genuine remote-work opportunities.
- */
-const SUPPLY_TERMS = [
-  ...HIRING_TERMS,
-  "remote ok",
-  "remote-ok",
-  "remote friendly",
-  "remote-friendly",
-  "we work remotely",
-  "work remotely",
-  "remote position",
-  "remote role",
-  "remote opportunity",
-  "work from home",
-  "worldwide remote",
-];
-
-/*
- * SaaS professional prospects:
- * teachers, tutors, coaches,
- * freelancers and other professionals.
- */
-const PROFESSIONAL_TERMS = [
-  "teacher",
-  "tutor",
-  "educator",
-  "coach",
-  "consultant",
-  "mentor",
-  "advisor",
-  "adviser",
-  "trainer",
-  "developer",
-  "programmer",
-  "designer",
-  "writer",
-  "marketer",
-  "accountant",
-  "translator",
-  "freelancer",
-  "professional",
-  "specialist",
-  "engineer",
-  "therapist",
-  "instructor",
-];
-  
-/*
- * Generic homepages are not valid
- * direct contact destinations.
- */
-const GENERIC_HOMEPAGE_HOSTS = [
-  "google.com",
-  "facebook.com",
-  "instagram.com",
-  "linkedin.com",
-  "reddit.com",
-  "youtube.com",
-  "tiktok.com",
-  "twitter.com",
-  "x.com",
-];
-
-function isGenericHomepage(
-  value: unknown
-): boolean {
-  const url = clean(value);
-
-  if (!isHttpUrl(url)) return true;
-
-  try {
-    const parsed = new URL(url);
-    const path = parsed.pathname.replace(/\/+$/, "");
-
-    return (
-      path === "" &&
-      GENERIC_HOMEPAGE_HOSTS.some(
-        (host) =>
-          parsed.hostname === host ||
-          parsed.hostname.endsWith("." + host)
-      )
-    );
-  } catch {
-    return true;
-  }
-}
-
-/*
- * A contact must be usable.
- * A generic website homepage alone
- * is not sufficient.
- */
-function hasRealContact(
-  lead: any,
-  type: LeadType
-): boolean {
-  const email =
-    clean(lead.contact_email) ||
-    clean(lead.email);
-
-  const phone =
-    clean(lead.contact_phone) ||
-    clean(lead.phone);
-
-  const contact =
-    clean(lead.contact);
+  const contactPhone =
+    clean(lead.contact_phone);
 
   const contactUrl =
     clean(lead.contact_url);
 
-  const applyUrl =
-    clean(lead.apply_url);
-
-  const sourceUrl =
-    clean(lead.source_url);
-
-  if (
-    email &&
-    isEmailAddress(email)
-  ) {
-    return true;
-  }
-
-  if (
-    phone &&
-    isValidPhone(phone)
-  ) {
-    return true;
-  }
-
-  if (
-    contact &&
-    isEmailAddress(contact)
-  ) {
-    return true;
-  }
-
-  if (
-    contact &&
-    isValidPhone(contact)
-  ) {
-    return true;
-  }
-
-  if (
-    contactUrl &&
-    isHttpUrl(contactUrl) &&
-    !isBlockedUrl(contactUrl) &&
-    !isGenericHomepage(contactUrl)
-  ) {
-    return true;
-  }
-
-  /*
-   * Supply opportunities may use
-   * a specific application page.
-   */
-  if (
-    type === "Supply" &&
-    applyUrl &&
-    isHttpUrl(applyUrl) &&
-    !isBlockedUrl(applyUrl) &&
-    !isGenericHomepage(applyUrl)
-  ) {
-    return true;
-  }
-
-  /*
-   * A specific source post or profile
-   * can be a contact route when it
-   * is not merely a generic homepage.
-   */
-  if (
-    sourceUrl &&
-    isHttpUrl(sourceUrl) &&
-    !isBlockedUrl(sourceUrl) &&
-    !isGenericHomepage(sourceUrl)
-  ) {
-    return true;
-  }
-
-  return false;
-}
-
-/*
- * Demand and Supply must be fresh
- * within the last 72 hours.
- *
- * SaaS professional profiles are exempt.
- */
-function isFreshWithin72Hours(
-  lead: any
-): boolean {
-  const rawDate =
-    lead.created_at ||
-    lead.createdAt;
-
-  if (!rawDate) return false;
-
-  const timestamp =
-    new Date(rawDate).getTime();
-
-  if (!Number.isFinite(timestamp)) {
-    return false;
-  }
-
-  const age =
-    Date.now() - timestamp;
-
-  const limit =
-    72 * 60 * 60 * 1000;
-
-  return (
-    age >= -5 * 60 * 1000 &&
-    age <= limit
-  );
-}
-
-/*
- * Demand validation:
- * The record must describe someone
- * requesting a service.
- */
-function isGoldDemand(
-  lead: any
-): boolean {
-  if (!lead || isBlockedContent(lead)) {
-    return false;
-  }
-
-  if (!isFreshWithin72Hours(lead)) {
-    return false;
-  }
-
-  const text = getLeadText(lead);
-
-  /*
-   * Hiring announcements belong
-   * to Supply, not Demand.
-   */
-  if (
-    containsAny(text, HIRING_TERMS)
-  ) {
-    return false;
-  }
-
-  if (
-    !containsAny(text, DEMAND_TERMS)
-  ) {
-    return false;
-  }
-
-  /*
-   * Reject service providers
-   * advertising their own services.
-   */
-  if (
-    containsAny(text, [
-      "looking for students",
-      "looking for clients",
-      "looking for customers",
-      "seeking students",
-      "seeking clients",
-      "seeking customers",
-      "i offer",
-      "i provide",
-      "my services",
-      "hire me",
-      "book my service",
-    ])
-  ) {
-    return false;
-  }
-
-  if (
-    !hasRealContact(lead, "Demand")
-  ) {
-    return false;
-  }
-
-  const skill = clean(
-    lead.skill_needed ||
-    lead.required_skill ||
-    lead.skill ||
-    lead.niche ||
-    lead.category
-  );
-
-  if (!skill) {
-    return false;
-  }
-
-  const country = clean(lead.country);
-
-  if (!country) {
-    return false;
-  }
-
-  return true;
-}
-
-/*
- * Supply validation:
- * The record must describe an actual
- * hiring or work opportunity.
- */
-function isGoldSupply(
-  lead: any
-): boolean {
-  if (!lead || isBlockedContent(lead)) {
-    return false;
-  }
-
-  if (!isFreshWithin72Hours(lead)) {
-    return false;
-  }
-
-  const text = getLeadText(lead);
-
-  if (
-    !containsAny(text, SUPPLY_TERMS)
-  ) {
-    return false;
-  }
-
-  /*
-   * A service provider looking
-   * for clients is not an employer.
-   */
-  if (
-    containsAny(text, [
-      "looking for students",
-      "looking for clients",
-      "looking for customers",
-      "seeking students",
-      "seeking clients",
-      "seeking customers",
-      "i offer",
-      "i provide",
-      "my services",
-    ])
-  ) {
-    return false;
-  }
-
-  if (
-    !hasRealContact(lead, "Supply")
-  ) {
-    return false;
-  }
-
-  const skill = clean(
-    lead.required_skill ||
-    lead.skill_needed ||
-    lead.skill ||
-    lead.niche
-  );
-
-  if (!skill) {
-    return false;
-  }
-
-  const country = clean(lead.country);
-
-  if (!country) {
-    return false;
-  }
-
-  return true;
-}
-/*
- * Convert Demand database records
- * into the Leads page format.
- */
-function mapDemand(
-  lead: any
-): Lead {
   return {
     id: String(lead.id),
 
@@ -658,25 +150,30 @@ function mapDemand(
       clean(lead.skill_needed) ||
       "Service Request",
 
-    name: clean(lead.client_name),
-    client_name: clean(lead.client_name),
+    name: clean(lead.client_name || lead.name),
+    client_name: clean(
+      lead.client_name || lead.name
+    ),
 
-    company:
-      clean(lead.company_name) ||
-      clean(lead.company),
+    company: clean(
+      lead.company_name || lead.company
+    ),
 
-    description: clean(lead.description),
+    description,
+    short_description: description,
 
     skill: clean(
       lead.skill_needed ||
       lead.required_skill ||
-      lead.skill
+      lead.skill ||
+      lead.category
     ),
 
     skill_needed: clean(
       lead.skill_needed ||
       lead.required_skill ||
-      lead.skill
+      lead.skill ||
+      lead.category
     ),
 
     category: clean(lead.category),
@@ -690,19 +187,20 @@ function mapDemand(
 
     contact:
       clean(lead.contact) ||
-      clean(lead.contact_email) ||
-      clean(lead.contact_phone),
+      contactEmail ||
+      contactPhone ||
+      contactUrl,
 
     contact_name: clean(lead.contact_name),
-    contact_email: clean(lead.contact_email),
-    contact_phone: clean(lead.contact_phone),
-    contact_url: clean(lead.contact_url),
+    contact_email: contactEmail,
+    contact_phone: contactPhone,
+    contact_url: contactUrl,
 
-    email: clean(lead.contact_email),
-    phone: clean(lead.contact_phone),
+    email: contactEmail,
+    phone: contactPhone,
 
     openUrl:
-      clean(lead.contact_url) ||
+      contactUrl ||
       clean(lead.source_url),
 
     status: clean(lead.status),
@@ -712,13 +210,35 @@ function mapDemand(
   };
 }
 
-/*
- * Convert Supply database records
- * into the Leads page format.
- */
-function mapSupply(
-  lead: any
-): Lead {
+function mapSupply(lead: any): Lead {
+  const description = shortDescription(
+    lead.description
+  );
+
+  const contactEmail =
+    clean(lead.contact_email);
+
+  const contactPhone =
+    clean(lead.contact_phone);
+
+  const contactUrl =
+    clean(lead.contact_url);
+
+  const applyUrl =
+    clean(lead.apply_url);
+
+  const companyWebsite =
+    clean(lead.company_website);
+
+  const salaryRange =
+    clean(lead.salary_range) ||
+    (
+      lead.salary_min !== null &&
+      lead.salary_min !== undefined
+        ? String(lead.salary_min)
+        : ""
+    );
+
   return {
     id: String(lead.id),
 
@@ -731,6 +251,7 @@ function mapSupply(
     title:
       clean(lead.job_title) ||
       clean(lead.position) ||
+      clean(lead.title) ||
       clean(lead.name) ||
       "Opportunity",
 
@@ -738,16 +259,26 @@ function mapSupply(
     client_name: clean(lead.name),
 
     company: clean(lead.company_name),
+    company_name: clean(lead.company_name),
 
-    description: clean(lead.description),
+    description,
+    short_description: description,
 
     skill: clean(
       lead.required_skill ||
       lead.skill_needed ||
-      lead.skill
+      lead.skill ||
+      lead.niche
     ),
 
     skill_needed: clean(
+      lead.required_skill ||
+      lead.skill_needed ||
+      lead.skill ||
+      lead.niche
+    ),
+
+    required_skill: clean(
       lead.required_skill ||
       lead.skill_needed ||
       lead.skill
@@ -765,44 +296,41 @@ function mapSupply(
       lead.salary_min ||
       "",
 
+    salary_range: salaryRange,
     currency: clean(lead.currency),
 
     contact:
       clean(lead.contact) ||
-      clean(lead.contact_email) ||
-      clean(lead.contact_phone),
+      contactEmail ||
+      contactPhone ||
+      contactUrl,
 
     contact_name: clean(lead.contact_name),
-    contact_email: clean(lead.contact_email),
-    contact_phone: clean(lead.contact_phone),
-    contact_url: clean(lead.contact_url),
+    contact_email: contactEmail,
+    contact_phone: contactPhone,
+    contact_url: contactUrl,
 
-    email: clean(lead.contact_email),
-    phone: clean(lead.contact_phone),
+    email: contactEmail,
+    phone: contactPhone,
 
-    company_website: clean(lead.company_website),
-    apply_url: clean(lead.apply_url),
+    company_website: companyWebsite,
+    apply_url: applyUrl,
 
     openUrl:
-      clean(lead.contact_url) ||
-      clean(lead.apply_url) ||
-      clean(lead.company_website) ||
-      clean(lead.source_url),
+      contactUrl ||
+      applyUrl ||
+      clean(lead.source_url) ||
+      companyWebsite ||
+      clean(lead.landing_url),
 
     status: clean(lead.status),
 
     created_at: lead.created_at || null,
     createdAt: lead.created_at || null,
   };
-}
-
-/*
- * Convert SaaS professional prospects
- * into the Leads page format.
- */
-function mapSaas(
-  lead: any
-): Lead {
+  }
+  
+function mapSaas(lead: any): Lead {
   const contact = clean(lead.contact);
 
   const contactEmail =
@@ -814,13 +342,20 @@ function mapSaas(
     clean(lead.contact_url) ||
     (isHttpUrl(contact) ? contact : "");
 
+  const description = shortDescription(
+    lead.description
+  );
+
   return {
     id: String(lead.id),
 
     type: "SaaS",
     lead_type: "SaaS",
 
-    source: clean(lead.source),
+    source:
+      clean(lead.source) ||
+      clean(lead.platform),
+
     source_url: clean(lead.source_url),
 
     name: clean(lead.name),
@@ -829,12 +364,14 @@ function mapSaas(
 
     title:
       clean(lead.name) ||
-      "Opportunity Hub Prospect",
+      clean(lead.niche) ||
+      "Professional Prospect",
 
     platform: clean(lead.platform),
     niche: clean(lead.niche),
 
-    description: clean(lead.description),
+    description,
+    short_description: description,
 
     skill: clean(lead.niche),
     skill_needed: clean(lead.niche),
@@ -848,11 +385,10 @@ function mapSaas(
     contact:
       contact ||
       contactEmail ||
-      clean(lead.contact_phone),
+      contactUrl,
 
     email: contactEmail,
     contact_email: contactEmail,
-
     contact_url: contactUrl,
 
     landing_url: clean(lead.landing_url),
@@ -867,176 +403,6 @@ function mapSaas(
     created_at: lead.created_at || null,
     createdAt: lead.created_at || null,
   };
-}
-
-/*
- * Sort newest records first.
- */
-function sortByCreatedAt(
-  a: any,
-  b: any
-): number {
-  const dateA =
-    new Date(a.created_at || 0).getTime();
-
-  const dateB =
-    new Date(b.created_at || 0).getTime();
-
-  return dateB - dateA;
-}
-
-/*
- * Load Demand records.
- */
-async function loadDemandLeads(
-  supabase: any
-): Promise<Lead[]> {
-  try {
-    const {
-      data,
-      error,
-    } = await supabase
-      .from("demand_leads")
-      .select("*")
-      .order("created_at", {
-        ascending: false,
-      });
-
-    if (error) {
-      console.error(
-        "Demand leads load error:",
-        error.message
-      );
-
-      return [];
-    }
-
-    return (data || [])
-      .filter(isGoldDemand)
-      .map(mapDemand);
-
-  } catch (error: any) {
-    console.error(
-      "Demand leads exception:",
-      error?.message || String(error)
-    );
-
-    return [];
-  }
-}
-
-/*
- * Load Supply records.
- */
-async function loadSupplyLeads(
-  supabase: any
-): Promise<Lead[]> {
-  try {
-    const {
-      data,
-      error,
-    } = await supabase
-      .from("supply_leads")
-      .select("*")
-      .order("created_at", {
-        ascending: false,
-      });
-
-    if (error) {
-      console.error(
-        "Supply leads load error:",
-        error.message
-      );
-
-      return [];
-    }
-
-    return (data || [])
-      .filter(isGoldSupply)
-      .map(mapSupply);
-
-  } catch (error: any) {
-    console.error(
-      "Supply leads exception:",
-      error?.message || String(error)
-    );
-
-    return [];
-  }
-}
-
-/*
- * Load SaaS professional prospects.
- */
-async function loadSaasLeads(
-  supabase: any
-): Promise<Lead[]> {
-  try {
-    const {
-      data,
-      error,
-    } = await supabase
-      .from("saas_leads")
-      .select("*")
-      .order("created_at", {
-        ascending: false,
-      });
-
-    if (error) {
-      console.error(
-        "SaaS leads load error:",
-        error.message
-      );
-
-      return [];
-    }
-
-    return (data || [])
-      .filter(isGoldSaas)
-      .map(mapSaas);
-
-  } catch (error: any) {
-    console.error(
-      "SaaS leads exception:",
-      error?.message || String(error)
-    );
-
-    return [];
-  }
-    }
-function isGoldSaas(lead: Lead): boolean {
-  const text = getLeadText(lead);
-
-  if (!text || isBlockedContent(text)) {
-    return false;
-  }
-
-  if (!containsAny(text, PROFESSIONAL_TERMS)) {
-    return false;
-  }
-
-  if (
-    containsAny(text, DEMAND_TERMS) ||
-    containsAny(text, HIRING_TERMS)
-  ) {
-    return false;
-  }
-
-  const skill = clean(
-    lead.skill ||
-    lead.skill_needed ||
-    lead.required_skill ||
-    lead.niche ||
-    lead.category
-  );
-
-  const country = clean(lead.country);
-
-  if (!skill || !country) {
-    return false;
-  }
-
-  return hasRealContact(lead, "SaaS");
 }
 
 function getEnv(name: string): string {
@@ -1060,68 +426,166 @@ function getSupabaseClient() {
     );
   }
 
-  return createClient(supabaseUrl, supabaseKey, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-    },
-  });
+  return createClient(
+    supabaseUrl,
+    supabaseKey,
+    {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+    }
+  );
+      }
+    
+async function loadTable(
+  supabase: any,
+  table: string
+): Promise<{
+  rows: any[];
+  error: string | null;
+}> {
+  try {
+    const { data, error } = await supabase
+      .from(table)
+      .select("*")
+      .order("created_at", {
+        ascending: false,
+      });
+
+    if (error) {
+      console.error(
+        `${table} load error:`,
+        error.message
+      );
+
+      return {
+        rows: [],
+        error: error.message,
+      };
+    }
+
+    return {
+      rows: Array.isArray(data) ? data : [],
+      error: null,
+    };
+  } catch (error: any) {
+    const message =
+      error?.message ||
+      `Unable to load ${table}.`;
+
+    console.error(
+      `${table} exception:`,
+      message
+    );
+
+    return {
+      rows: [],
+      error: message,
+    };
+  }
 }
 
 async function loadAllLeads(
   supabase: any,
   requestedCategory: string
 ) {
-  const normalizedCategory =
-    normalize(requestedCategory);
-
   const includeAll =
-    !normalizedCategory ||
-    normalizedCategory === "all";
+    requestedCategory === "all";
 
   const includeDemand =
-    includeAll || normalizedCategory === "demand";
+    includeAll ||
+    requestedCategory === "demand";
 
   const includeSupply =
-    includeAll || normalizedCategory === "supply";
+    includeAll ||
+    requestedCategory === "supply";
 
   const includeSaas =
-    includeAll || normalizedCategory === "saas";
+    includeAll ||
+    requestedCategory === "saas";
 
   const [
-    demandLeads,
-    supplyLeads,
-    saasLeads,
+    demandResult,
+    supplyResult,
+    saasResult,
   ] = await Promise.all([
     includeDemand
-      ? loadDemandLeads(supabase)
-      : Promise.resolve([]),
+      ? loadTable(supabase, "demand_leads")
+      : Promise.resolve({
+          rows: [],
+          error: null,
+        }),
 
     includeSupply
-      ? loadSupplyLeads(supabase)
-      : Promise.resolve([]),
+      ? loadTable(supabase, "supply_leads")
+      : Promise.resolve({
+          rows: [],
+          error: null,
+        }),
 
     includeSaas
-      ? loadSaasLeads(supabase)
-      : Promise.resolve([]),
+      ? loadTable(supabase, "saas_leads")
+      : Promise.resolve({
+          rows: [],
+          error: null,
+        }),
   ]);
 
-  const leads = [
+  const demandLeads =
+    demandResult.rows.map(mapDemand);
+
+  const supplyLeads =
+    supplyResult.rows.map(mapSupply);
+
+  const saasLeads =
+    saasResult.rows.map(mapSaas);
+
+  const leads: Lead[] = [
     ...demandLeads,
     ...supplyLeads,
     ...saasLeads,
   ];
 
-  sortByCreatedAt(leads);
+  leads.sort(sortByCreatedAt);
+
+  const errors: Record<string, string> = {};
+
+  if (demandResult.error) {
+    errors.demand = demandResult.error;
+  }
+
+  if (supplyResult.error) {
+    errors.supply = supplyResult.error;
+  }
+
+  if (saasResult.error) {
+    errors.saas = saasResult.error;
+  }
+
+  const requestedTables = [
+    ...(includeDemand ? ["demand"] : []),
+    ...(includeSupply ? ["supply"] : []),
+    ...(includeSaas ? ["saas"] : []),
+  ];
+
+  const successfulTables =
+    requestedTables.length -
+    Object.keys(errors).length;
 
   return {
     leads,
+
     counts: {
       demand: demandLeads.length,
       supply: supplyLeads.length,
       saas: saasLeads.length,
       total: leads.length,
     },
+
+    errors,
+    successfulTables,
+    requestedTables: requestedTables.length,
   };
 }
 
@@ -1142,9 +606,9 @@ export default async function handler(
   }
 
   try {
-    const requestedCategory = clean(
+    const requestedCategory = normalize(
       req.query?.category || "all"
-    ).toLowerCase();
+    );
 
     const allowedCategories = [
       "all",
@@ -1153,7 +617,11 @@ export default async function handler(
       "saas",
     ];
 
-    if (!allowedCategories.includes(requestedCategory)) {
+    if (
+      !allowedCategories.includes(
+        requestedCategory
+      )
+    ) {
       return res.status(400).json({
         success: false,
         message:
@@ -1168,22 +636,40 @@ export default async function handler(
       requestedCategory
     );
 
+    if (
+      result.successfulTables === 0 &&
+      result.requestedTables > 0
+    ) {
+      return res.status(500).json({
+        success: false,
+        message: "Unable to load leads from Supabase.",
+        errors: result.errors,
+      });
+    }
+
     return res.status(200).json({
       success: true,
       leads: result.leads,
       count: result.leads.length,
       counts: result.counts,
       category: requestedCategory,
+      errors: result.errors,
+      partial:
+        Object.keys(result.errors).length > 0,
     });
   } catch (error: any) {
     const message =
-      error?.message || "Unable to load leads.";
+      error?.message ||
+      "Unable to load leads.";
 
-    console.error("API /api/leads error:", error);
+    console.error(
+      "API /api/leads error:",
+      error
+    );
 
     return res.status(500).json({
       success: false,
       message,
     });
   }
-}
+        }
