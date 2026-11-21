@@ -56,6 +56,7 @@ type SearchResult = {
   salaryMin?: number | null;
   salaryMax?: number | null;
   companyWebsite?: string;
+  saasRole?: "teacher" | "freelancer" | "coach";
 };
 
 type ProcessedLead = {
@@ -99,7 +100,7 @@ const MAX_RESULTS_PER_SOURCE = 100;
 const MAX_AGE_HOURS = 72;
 
 const USER_AGENT =
-  "OpportunityHub/1.0 (public opportunity discovery)";
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 
 const DEMAND_TEACHER_QUERIES = [
   '"looking for a tutor"',
@@ -147,27 +148,44 @@ const DEMAND_COACH_QUERIES = [
 
 /*
  * SaaS discovery:
- * Three separate professional categories.
- * Each category searches LinkedIn, Instagram and Facebook.
- * These are public search results, not private-account scraping.
+ * Three separate professional categories (teachers, freelancers, coaches).
+ * Targets public LinkedIn, Instagram, and Facebook profiles across key countries.
  */
 
+const SAAS_COUNTRIES = [
+  "United States",
+  "United Kingdom",
+  "Canada",
+  "Australia",
+  "Pakistan",
+  "United Arab Emirates"
+];
+
 const SAAS_TEACHER_QUERIES = [
-  'site:linkedin.com/in teacher OR tutor OR educator "online lessons"',
-  'site:instagram.com teacher OR tutor OR educator "online classes"',
-  'site:facebook.com teacher OR tutor OR educator "online tutoring"'
+  'site:linkedin.com/in (teacher OR tutor OR educator) ("online lessons" OR "online classes" OR "tutoring")',
+  'site:instagram.com (teacher OR tutor OR educator) ("online classes" OR "tutoring" OR "lessons") -inurl:/p/ -inurl:/reel/',
+  'site:facebook.com (teacher OR tutor OR educator) ("online tutoring" OR "online classes") -inurl:/groups/ -inurl:/watch/',
+  ...SAAS_COUNTRIES.map(
+    c => `site:linkedin.com/in (teacher OR tutor OR educator) "${c}"`
+  )
 ];
 
 const SAAS_FREELANCER_QUERIES = [
-  'site:linkedin.com/in freelancer OR designer OR developer "available for projects"',
-  'site:instagram.com freelancer OR designer OR developer "my services"',
-  'site:facebook.com freelancer OR designer OR developer "freelance services"'
+  'site:linkedin.com/in (freelancer OR designer OR developer OR consultant) ("freelance" OR "available for projects")',
+  'site:instagram.com (freelancer OR designer OR developer) ("freelance" OR "my services" OR "portfolio") -inurl:/p/ -inurl:/reel/',
+  'site:facebook.com (freelancer OR designer OR developer) ("freelance" OR "available for hire") -inurl:/groups/ -inurl:/watch/',
+  ...SAAS_COUNTRIES.map(
+    c => `site:linkedin.com/in (freelancer OR designer OR developer) "${c}"`
+  )
 ];
 
 const SAAS_COACH_QUERIES = [
-  'site:linkedin.com/in "business coach" OR "career coach" OR "life coach"',
-  'site:instagram.com "business coach" OR "life coach" OR "fitness coach"',
-  'site:facebook.com "business coach" OR "career coach" OR "fitness coach"'
+  'site:linkedin.com/in ("business coach" OR "career coach" OR "life coach" OR "fitness coach")',
+  'site:instagram.com ("business coach" OR "life coach" OR "fitness coach" OR "career coach") -inurl:/p/ -inurl:/reel/',
+  'site:facebook.com ("business coach" OR "career coach" OR "fitness coach" OR "life coach") -inurl:/groups/ -inurl:/watch/',
+  ...SAAS_COUNTRIES.map(
+    c => `site:linkedin.com/in ("business coach" OR "career coach" OR "life coach") "${c}"`
+  )
 ];
 
 const DEMAND_INTENT_TERMS = [
@@ -320,8 +338,6 @@ const BLOCKED_TERMS = [
   "crypto giveaway",
   "get rich quick",
   "ebook",
-  "buy my course",
-  "paid course",
   "affiliate spam",
   "investment scheme",
   "guaranteed income"
@@ -359,6 +375,47 @@ const SOCIAL_PROFILE_DOMAINS = [
   "instagram.com",
   "facebook.com"
 ];
+
+const SUBDOMAIN_COUNTRY_MAP: Record<string, string> = {
+  ca: "Canada",
+  uk: "United Kingdom",
+  gb: "United Kingdom",
+  us: "United States",
+  au: "Australia",
+  pk: "Pakistan",
+  in: "India",
+  ae: "United Arab Emirates",
+  sa: "Saudi Arabia",
+  de: "Germany",
+  fr: "France",
+  nl: "Netherlands",
+  ie: "Ireland",
+  nz: "New Zealand",
+  sg: "Singapore",
+  za: "South Africa"
+};
+
+const CITY_COUNTRY_MAP: Record<string, string> = {
+  toronto: "Canada",
+  vancouver: "Canada",
+  montreal: "Canada",
+  calgary: "Canada",
+  london: "United Kingdom",
+  manchester: "United Kingdom",
+  birmingham: "United Kingdom",
+  "new york": "United States",
+  "los angeles": "United States",
+  chicago: "United States",
+  austin: "United States",
+  sydney: "Australia",
+  melbourne: "Australia",
+  dubai: "United Arab Emirates",
+  "abu dhabi": "United Arab Emirates",
+  lahore: "Pakistan",
+  karachi: "Pakistan",
+  islamabad: "Pakistan",
+  rawalpindi: "Pakistan"
+};
 
 function clean(value: unknown): string {
   return String(value ?? "")
@@ -408,7 +465,6 @@ function cleanUrl(value: unknown): string {
       return "";
     }
 
-    // Unwrap Bing / DuckDuckGo redirect links so social profile URLs pass validation
     if (
       url.hostname.toLowerCase().includes("bing.com") &&
       url.pathname.toLowerCase().startsWith("/ck/")
@@ -416,8 +472,8 @@ function cleanUrl(value: unknown): string {
       const uParam = url.searchParams.get("u") || "";
       const encoded = uParam.startsWith("a1") ? uParam.slice(2) : uParam;
       if (encoded) {
-        const normalizedB64 = encoded.replace(/-/g, "+").replace(/_/g, "/");
-        const decoded = Buffer.from(normalizedB64, "base64").toString("utf8");
+        const normalized = encoded.replace(/-/g, "+").replace(/_/g, "/");
+        const decoded = Buffer.from(normalized, "base64").toString("utf8");
         if (/^https?:\/\//i.test(decoded)) {
           return cleanUrl(decoded);
         }
@@ -554,7 +610,8 @@ async function fetchText(
       headers: {
         "User-Agent": USER_AGENT,
         "Accept":
-          "application/rss+xml, application/atom+xml, application/json, text/xml, text/plain, */*"
+          "text/html, application/rss+xml, application/atom+xml, application/json, text/xml, text/plain, */*",
+        "Accept-Language": "en-US,en;q=0.9"
       },
       signal: controller.signal
     });
@@ -704,7 +761,6 @@ function parseRssFeed(
 const COUNTRY_ALIASES: Record<string, string> = {
   "united states": "United States",
   "usa": "United States",
-  "us": "United States",
   "united kingdom": "United Kingdom",
   "uk": "United Kingdom",
   "canada": "Canada",
@@ -723,7 +779,7 @@ const COUNTRY_ALIASES: Record<string, string> = {
   "south africa": "South Africa"
 };
 
-function getCountry(value: string): string {
+function getCountry(value: string, urlValue = ""): string {
   const text = normalizeText(value);
 
   for (const [alias, country] of Object.entries(
@@ -736,6 +792,26 @@ function getCountry(value: string): string {
 
     if (expression.test(text)) {
       return country;
+    }
+  }
+
+  for (const [city, country] of Object.entries(
+    CITY_COUNTRY_MAP
+  )) {
+    const cityExpr = new RegExp(
+      `\\b${city.replace(/\s+/g, "\\s+")}\\b`,
+      "i"
+    );
+    if (cityExpr.test(text)) {
+      return country;
+    }
+  }
+
+  const host = getHostname(urlValue);
+  if (host) {
+    const parts = host.split(".");
+    if (parts.length >= 3 && SUBDOMAIN_COUNTRY_MAP[parts[0]]) {
+      return SUBDOMAIN_COUNTRY_MAP[parts[0]];
     }
   }
 
@@ -877,13 +953,17 @@ function getContactUrl(
     result.contactUrl || ""
   );
 
-  if (direct) return direct;
+  if (direct && (type !== "SaaS" || isSocialProfileUrl(direct))) {
+    return direct;
+  }
 
   const application = cleanUrl(
     result.applicationUrl || ""
   );
 
-  if (application) return application;
+  if (application && type !== "SaaS") {
+    return application;
+  }
 
   const link = cleanUrl(
     result.link || result.sourceUrl || ""
@@ -967,7 +1047,7 @@ function hasRealContact(
   }
 
   return isSpecificContactPage(contact);
-  }
+    }
 function getResultText(result: SearchResult): string {
   return normalizeText([
     result.title,
@@ -1047,11 +1127,11 @@ function isProfessionalProfile(
     return false;
   }
 
-  if (!hasProfessionalIntent(text)) {
-    return false;
+  if (result.saasRole) {
+    return true;
   }
 
-  return true;
+  return hasProfessionalIntent(text);
 }
 
 function classifyLead(
@@ -1071,12 +1151,6 @@ function classifyLead(
     return null;
   }
 
-  /*
-   * SaaS is restricted to real public
-   * LinkedIn, Instagram and Facebook profiles.
-   * Reddit and job sites cannot become SaaS.
-   */
-
   if (
     result.sourceType === "social-profile" &&
     isProfessionalProfile(result, text)
@@ -1084,18 +1158,9 @@ function classifyLead(
     return "SaaS";
   }
 
-  /*
-   * Hiring announcements and job listings
-   * belong to Supply.
-   */
-
   if (hasSupplyIntent(text)) {
     return "Supply";
   }
-
-  /*
-   * Provider advertisements are not Demand.
-   */
 
   if (hasDemandReject(text)) {
     return null;
@@ -1108,9 +1173,53 @@ function classifyLead(
   return null;
 }
 
+function getSaasRoleFallbackSkill(
+  result: SearchResult,
+  text: string
+): SkillRow | null {
+  if (
+    result.saasRole === "teacher" ||
+    /\b(teacher|tutor|educator|instructor|lessons|tutoring)\b/i.test(text)
+  ) {
+    return {
+      name: "Online Teaching",
+      category: "SaaS Prospects",
+      subcategory: "Education",
+      tags: ["teacher", "tutor", "educator"]
+    };
+  }
+
+  if (
+    result.saasRole === "freelancer" ||
+    /\b(freelancer|designer|developer|consultant|writer|editor|marketer)\b/i.test(text)
+  ) {
+    return {
+      name: "Freelancing",
+      category: "SaaS Prospects",
+      subcategory: "Independent Services",
+      tags: ["freelancer", "designer", "developer"]
+    };
+  }
+
+  if (
+    result.saasRole === "coach" ||
+    /\b(coach|mentor|coaching)\b/i.test(text)
+  ) {
+    return {
+      name: "Coaching",
+      category: "SaaS Prospects",
+      subcategory: "Coaching",
+      tags: ["coach", "mentor"]
+    };
+  }
+
+  return null;
+}
+
 function findMatchingSkill(
   result: SearchResult,
-  skills: SkillRow[]
+  skills: SkillRow[],
+  type?: LeadType
 ): SkillRow | null {
   const text = getResultText(result);
 
@@ -1136,9 +1245,15 @@ function findMatchingSkill(
     })
     .filter(item => item.matched);
 
-  return matches.length
-    ? matches[0].skill
-    : null;
+  if (matches.length) {
+    return matches[0].skill;
+  }
+
+  if (type === "SaaS") {
+    return getSaasRoleFallbackSkill(result, text);
+  }
+
+  return null;
 }
 
 function checkRejectionReason(
@@ -1186,7 +1301,7 @@ function checkRejectionReason(
   }
 
   if (
-    !findMatchingSkill(result, skills)
+    !findMatchingSkill(result, skills, type)
   ) {
     return "no_matching_skill";
   }
@@ -1210,12 +1325,14 @@ function getProfileName(
     return author.replace(/^@/, "");
   }
 
-  const title = clean(result.title)
+  const stripped = clean(result.title)
     .replace(/\s*[|–-]\s*(LinkedIn|Instagram|Facebook).*$/i, "")
-    .replace(/\s*\(@[^)]+\)/g, "")
+    .replace(/\s*\(@[^)]+\).*/g, "")
+    .replace(/\s*[•·].*$/g, "")
     .trim();
 
-  return title.slice(0, 100);
+  const leadName = stripped.split(/\s+[-–|]\s+/)[0] || stripped;
+  return clean(leadName).slice(0, 100);
 }
 
 function buildProcessedLead(
@@ -1225,7 +1342,8 @@ function buildProcessedLead(
 ): ProcessedLead | null {
   const skill = findMatchingSkill(
     result,
-    skills
+    skills,
+    type
   );
 
   if (!skill) return null;
@@ -1258,7 +1376,8 @@ function buildProcessedLead(
         result.location,
         title,
         description
-      ].join(" ")
+      ].join(" "),
+      sourceUrl
     )
   );
 
@@ -1321,8 +1440,7 @@ function buildProcessedLead(
     )
   };
 }
-
-/*
+  /*
  * Reddit is retained for Demand only.
  * Reddit usernames are not accepted as SaaS contacts.
  */
@@ -1405,19 +1523,17 @@ async function collectRedditDemandCoaches(): Promise<SearchResult[]> {
   );
 }
 
-/*
- * Free DuckDuckGo HTML discovery for public SaaS profiles
- * (LinkedIn, Instagram, Facebook) when RSS/search feeds return empty or redirect.
- */
-
-function parseDuckDuckGoHtmlProfiles(
+function parseDuckDuckGoProfiles(
   html: string,
   sourceName: string,
-  query: string
+  query: string,
+  saasRole: "teacher" | "freelancer" | "coach"
 ): SearchResult[] {
   const results: SearchResult[] = [];
-  const anchorRegex = /<a\b[^>]*class=["'][^"']*result__a[^"']*["'][^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
-  const snippetRegex = /<a\b[^>]*class=["'][^"']*result__snippet[^"']*["'][^>]*>([\s\S]*?)<\/a>|<div\b[^>]*class=["'][^"']*result__snippet[^"']*["'][^>]*>([\s\S]*?)<\/div>/gi;
+  const linkRegex =
+    /<a\b[^>]*class=["'][^"']*result__a[^"']*["'][^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+  const snippetRegex =
+    /<a\b[^>]*class=["'][^"']*result__snippet[^"']*["'][^>]*>([\s\S]*?)<\/a>|<div\b[^>]*class=["'][^"']*result__snippet[^"']*["'][^>]*>([\s\S]*?)<\/div>/gi;
 
   const snippets: string[] = [];
   let snippetMatch: RegExpExecArray | null;
@@ -1426,27 +1542,28 @@ function parseDuckDuckGoHtmlProfiles(
   }
 
   let match: RegExpExecArray | null;
-  let index = 0;
-  while ((match = anchorRegex.exec(html)) !== null) {
+  let idx = 0;
+  while ((match = linkRegex.exec(html)) !== null) {
     const rawHref = match[1] || "";
     const title = stripHtml(match[2] || "");
-    const snippet = clean(snippets[index] || "");
-    index++;
+    const snippet = clean(snippets[idx] || "");
+    idx++;
 
-    const resolvedLink = cleanUrl(rawHref);
-    if (!title || !resolvedLink || !isSocialProfileUrl(resolvedLink)) {
+    const cleaned = cleanUrl(rawHref);
+    if (!title || !cleaned || !isSocialProfileUrl(cleaned)) {
       continue;
     }
 
     results.push({
       title,
-      link: resolvedLink,
-      sourceUrl: resolvedLink,
-      contactUrl: resolvedLink,
+      link: cleaned,
+      sourceUrl: cleaned,
+      contactUrl: cleaned,
       description: snippet,
       snippet,
       source: sourceName,
       sourceType: "social-profile",
+      saasRole,
       searchQuery: query
     });
   }
@@ -1454,9 +1571,10 @@ function parseDuckDuckGoHtmlProfiles(
   return results;
 }
 
-async function collectFreeSaaSProfiles(
+async function collectFreeSocialSaaS(
   queries: string[],
-  sourceName: string
+  sourceName: string,
+  saasRole: "teacher" | "freelancer" | "coach"
 ): Promise<SearchResult[]> {
   const collected: SearchResult[] = [];
 
@@ -1466,10 +1584,15 @@ async function collectFreeSaaSProfiles(
         "https://html.duckduckgo.com/html/?q=" +
         encodeURIComponent(query);
       const html = await fetchText(ddgUrl);
-      const parsed = parseDuckDuckGoHtmlProfiles(html, sourceName, query);
-      collected.push(...parsed);
+      collected.push(
+        ...parseDuckDuckGoProfiles(html, sourceName, query, saasRole)
+      );
     } catch (error) {
-      console.error(`[${sourceName}] Free SaaS query failed:`, query, error);
+      console.error(
+        `[${sourceName}] Free social search failed:`,
+        query,
+        error
+      );
     }
   }
 
@@ -1483,16 +1606,10 @@ async function collectFreeSaaSProfiles(
 
   return Array.from(unique.values()).slice(0, MAX_RESULTS_PER_SOURCE);
 }
-
-/*
- * Bing public RSS discovery for SaaS profiles.
- * The category-specific collectors are kept separate
- * so teachers, freelancers and coaches are all searched.
- */
-
 async function collectBingSaaSProfiles(
   queries: string[],
-  sourceName: string
+  sourceName: string,
+  saasRole: "teacher" | "freelancer" | "coach"
 ): Promise<SearchResult[]> {
   const batches = await Promise.all(
     queries.map(async query => {
@@ -1509,17 +1626,22 @@ async function collectBingSaaSProfiles(
         );
 
         return results
+          .map(result => {
+            const cleanLink = cleanUrl(result.link);
+            return {
+              ...result,
+              link: cleanLink,
+              source: sourceName,
+              sourceType: "social-profile",
+              saasRole,
+              searchQuery: query,
+              sourceUrl: cleanLink,
+              contactUrl: cleanLink
+            };
+          })
           .filter(result =>
             isSocialProfileUrl(result.link)
-          )
-          .map(result => ({
-            ...result,
-            source: sourceName,
-            sourceType: "social-profile",
-            searchQuery: query,
-            sourceUrl: cleanUrl(result.link),
-            contactUrl: cleanUrl(result.link)
-          }));
+          );
       } catch (error) {
         console.error(
           `[${sourceName}] Search failed:`,
@@ -1551,19 +1673,21 @@ async function collectBingSaaSProfiles(
 }
 
 async function collectBingSaaSTeachers(): Promise<SearchResult[]> {
-  const [bingResults, freeResults] = await Promise.all([
+  const [bingRows, freeRows] = await Promise.all([
     collectBingSaaSProfiles(
       SAAS_TEACHER_QUERIES,
-      "Bing SaaS Teachers"
+      "Bing SaaS Teachers",
+      "teacher"
     ),
-    collectFreeSaaSProfiles(
+    collectFreeSocialSaaS(
       SAAS_TEACHER_QUERIES,
-      "Bing SaaS Teachers"
+      "Bing SaaS Teachers",
+      "teacher"
     )
   ]);
 
   const merged = new Map<string, SearchResult>();
-  for (const item of [...bingResults, ...freeResults]) {
+  for (const item of [...bingRows, ...freeRows]) {
     const key = cleanUrl(item.link).toLowerCase();
     if (key && !merged.has(key)) {
       merged.set(key, item);
@@ -1573,19 +1697,21 @@ async function collectBingSaaSTeachers(): Promise<SearchResult[]> {
 }
 
 async function collectBingSaaSFreelancers(): Promise<SearchResult[]> {
-  const [bingResults, freeResults] = await Promise.all([
+  const [bingRows, freeRows] = await Promise.all([
     collectBingSaaSProfiles(
       SAAS_FREELANCER_QUERIES,
-      "Bing SaaS Freelancers"
+      "Bing SaaS Freelancers",
+      "freelancer"
     ),
-    collectFreeSaaSProfiles(
+    collectFreeSocialSaaS(
       SAAS_FREELANCER_QUERIES,
-      "Bing SaaS Freelancers"
+      "Bing SaaS Freelancers",
+      "freelancer"
     )
   ]);
 
   const merged = new Map<string, SearchResult>();
-  for (const item of [...bingResults, ...freeResults]) {
+  for (const item of [...bingRows, ...freeRows]) {
     const key = cleanUrl(item.link).toLowerCase();
     if (key && !merged.has(key)) {
       merged.set(key, item);
@@ -1595,26 +1721,29 @@ async function collectBingSaaSFreelancers(): Promise<SearchResult[]> {
 }
 
 async function collectBingSaaSCoaches(): Promise<SearchResult[]> {
-  const [bingResults, freeResults] = await Promise.all([
+  const [bingRows, freeRows] = await Promise.all([
     collectBingSaaSProfiles(
       SAAS_COACH_QUERIES,
-      "Bing SaaS Coaches"
+      "Bing SaaS Coaches",
+      "coach"
     ),
-    collectFreeSaaSProfiles(
+    collectFreeSocialSaaS(
       SAAS_COACH_QUERIES,
-      "Bing SaaS Coaches"
+      "Bing SaaS Coaches",
+      "coach"
     )
   ]);
 
   const merged = new Map<string, SearchResult>();
-  for (const item of [...bingResults, ...freeResults]) {
+  for (const item of [...bingRows, ...freeRows]) {
     const key = cleanUrl(item.link).toLowerCase();
     if (key && !merged.has(key)) {
       merged.set(key, item);
     }
   }
-  return Array.from(merged.values()).slice(0, MAX_RESULTS_PER_SOURCE);}
-    async function collectJobicy(): Promise<SearchResult[]> {
+  return Array.from(merged.values()).slice(0, MAX_RESULTS_PER_SOURCE);
+}
+async function collectJobicy(): Promise<SearchResult[]> {
   const results: SearchResult[] = [];
 
   try {
@@ -1819,7 +1948,6 @@ async function collectRemoteOK(): Promise<SearchResult[]> {
     MAX_RESULTS_PER_SOURCE
   );
 }
-
 const sourceCollectionErrors: Record<
   string,
   string
@@ -2020,410 +2148,4 @@ async function leadAlreadyExists(
   }
 
   return false;
-}
-async function insertProcessedLead(
-  supabase: ReturnType<typeof createClient>,
-  lead: ProcessedLead
-): Promise<boolean> {
-  const now = new Date().toISOString();
-
-  let table = "";
-  let record: Record<string, any> = {};
-
-  if (lead.type === "Demand") {
-    table = "demand_leads";
-
-    record = {
-      type: "Demand",
-      source: lead.source,
-      client_name: lead.contactName || lead.name,
-      name: lead.name,
-      title: lead.title,
-      skill_needed: lead.skill,
-      description: lead.description,
-      contact_email: lead.email || null,
-      contact_phone: lead.phone || null,
-      contact_url: lead.contactUrl || null,
-      source_url: lead.sourceUrl,
-      category: lead.category,
-      subcategory: lead.subcategory,
-      country: lead.country || null,
-      city: lead.city || null,
-      content: lead.description,
-      status: "active",
-      created_at: now
-    };
-  } else if (lead.type === "Supply") {
-    table = "supply_leads";
-
-    record = {
-      company_name: lead.company || lead.name,
-      name: lead.name,
-      description: lead.description,
-      position: lead.title,
-      job_title: lead.title,
-      required_skill: lead.skill,
-      category: lead.category,
-      subcategory: lead.subcategory,
-      country: lead.country || null,
-      city: lead.city || null,
-      salary_range: lead.salaryRange || null,
-      salary_min: lead.salaryMin ?? null,
-      salary_max: lead.salaryMax ?? null,
-      company_website: lead.companyWebsite || null,
-      apply_url: lead.contactUrl || lead.sourceUrl,
-      contact_url: lead.contactUrl || null,
-      contact_name: lead.contactName || null,
-      contact: lead.email || lead.phone || lead.contactUrl || null,
-      source: lead.source,
-      source_url: lead.sourceUrl,
-      status: "active"
-    };
-  } else {
-    table = "saas_leads";
-
-    record = {
-      name: lead.name || lead.contactName,
-      platform: lead.platform,
-      niche: lead.skill,
-      contact: lead.contactUrl,
-      description: lead.description,
-      source_url: lead.sourceUrl,
-      contact_url: lead.contactUrl,
-      country: lead.country || null,
-      city: lead.city || null,
-      status: "active",
-      created_at: now
-    };
   }
-
-  const { error } = await supabase
-    .from(table)
-    .insert(record);
-
-  if (error) {
-    console.error(
-      `[${table}] Insert failed:`,
-      error.message
-    );
-
-    return false;
-  }
-
-  return true;
-}
-
-function createEmptyStats(): LeadStats {
-  return {
-    found: 0,
-    accepted: 0,
-    inserted: 0,
-    demand: 0,
-    supply: 0,
-    saas: 0,
-    total: 0,
-    duplicates: 0,
-    rejected: 0,
-    wrongType: 0,
-    noSkill: 0,
-    noContact: 0,
-    stale: 0,
-    errors: 0,
-    sources: {}
-  };
-}
-
-function incrementTypeCount(
-  stats: LeadStats,
-  type: LeadType
-): void {
-  if (type === "Demand") {
-    stats.demand++;
-  } else if (type === "Supply") {
-    stats.supply++;
-  } else {
-    stats.saas++;
-  }
-
-  stats.total++;
-}
-
-async function processCollectedResults(
-  results: SearchResult[],
-  sourceJobs: SourceJob[],
-  supabase: ReturnType<typeof createClient>
-): Promise<LeadStats> {
-  const stats = createEmptyStats();
-
-  const skills = await loadSkills(supabase);
-
-  const seenSourceUrls = new Set<string>();
-  const seenContactUrls = new Set<string>();
-
-  const sourceDiagnostics: Record<
-    string,
-    {
-      category: LeadType;
-      found: number;
-      accepted: number;
-      inserted: number;
-      rejected: number;
-      duplicates: number;
-      errors: number;
-      wrongType: number;
-      noSkill: number;
-      noContact: number;
-      stale: number;
-    }
-  > = {};
-
-  for (const source of sourceJobs) {
-    sourceDiagnostics[source.name] = {
-      category: source.category,
-      found: 0,
-      accepted: 0,
-      inserted: 0,
-      rejected: 0,
-      duplicates: 0,
-      errors: 0,
-      wrongType: 0,
-      noSkill: 0,
-      noContact: 0,
-      stale: 0
-    };
-  }
-
-  stats.found = results.length;
-
-  for (const result of results) {
-    const sourceName =
-      clean(result.source || "Unknown");
-
-    if (!sourceDiagnostics[sourceName]) {
-      sourceDiagnostics[sourceName] = {
-        category: "Demand",
-        found: 0,
-        accepted: 0,
-        inserted: 0,
-        rejected: 0,
-        duplicates: 0,
-        errors: 0,
-        wrongType: 0,
-        noSkill: 0,
-        noContact: 0,
-        stale: 0
-      };
-    }
-
-    const diagnostic =
-      sourceDiagnostics[sourceName];
-
-    diagnostic.found++;
-
-    try {
-      const type = classifyLead(result);
-
-      if (!type) {
-        diagnostic.wrongType++;
-        diagnostic.rejected++;
-        stats.wrongType++;
-        stats.rejected++;
-        continue;
-      }
-
-      const expectedSource =
-        sourceJobs.find(
-          source => source.name === sourceName
-        );
-
-      if (
-        expectedSource &&
-        expectedSource.category !== type
-      ) {
-        diagnostic.wrongType++;
-        diagnostic.rejected++;
-        stats.wrongType++;
-        stats.rejected++;
-        continue;
-      }
-
-      const rejectionReason =
-        checkRejectionReason(
-          result,
-          type,
-          skills
-        );
-
-      if (rejectionReason) {
-        if (rejectionReason === "no_matching_skill") {
-          diagnostic.noSkill++;
-          stats.noSkill++;
-        }
-
-        if (rejectionReason === "no_real_contact") {
-          diagnostic.noContact++;
-          stats.noContact++;
-        }
-
-        if (rejectionReason === "not_fresh") {
-          diagnostic.stale++;
-          stats.stale++;
-        }
-
-        diagnostic.rejected++;
-        stats.rejected++;
-        continue;
-      }
-
-      const lead = buildProcessedLead(
-        result,
-        type,
-        skills
-      );
-
-      if (!lead) {
-        diagnostic.rejected++;
-        stats.rejected++;
-        continue;
-      }
-
-      const sourceKey =
-        lead.sourceUrl.toLowerCase();
-
-      const contactKey =
-        lead.contactUrl.toLowerCase();
-
-      if (
-        sourceKey &&
-        seenSourceUrls.has(sourceKey)
-      ) {
-        diagnostic.duplicates++;
-        stats.duplicates++;
-        continue;
-      }
-
-      if (
-        contactKey &&
-        seenContactUrls.has(contactKey)
-      ) {
-        diagnostic.duplicates++;
-        stats.duplicates++;
-        continue;
-      }
-
-      if (
-        await leadAlreadyExists(
-          supabase,
-          lead
-        )
-      ) {
-        if (sourceKey) {
-          seenSourceUrls.add(sourceKey);
-        }
-
-        if (contactKey) {
-          seenContactUrls.add(contactKey);
-        }
-
-        diagnostic.duplicates++;
-        stats.duplicates++;
-        continue;
-      }
-
-      stats.accepted++;
-      diagnostic.accepted++;
-
-      const inserted =
-        await insertProcessedLead(
-          supabase,
-          lead
-        );
-
-      if (!inserted) {
-        diagnostic.errors++;
-        stats.errors++;
-        continue;
-      }
-
-      if (sourceKey) {
-        seenSourceUrls.add(sourceKey);
-      }
-
-      if (contactKey) {
-        seenContactUrls.add(contactKey);
-      }
-
-      stats.inserted++;
-      diagnostic.inserted++;
-
-      incrementTypeCount(
-        stats,
-        lead.type
-      );
-    } catch (error: any) {
-      diagnostic.errors++;
-      stats.errors++;
-
-      console.error(
-        `[${sourceName}] Processing failed:`,
-        error?.message || error
-      );
-    }
-  }
-
-  stats.sources = sourceDiagnostics;
-
-  return stats;
-}
-
-export default async function handler(
-  req: VercelRequest,
-  res: VercelResponse
-) {
-  res.setHeader(
-    "Content-Type",
-    "application/json; charset=utf-8"
-  );
-
-  if (req.method !== "POST") {
-    return res.status(405).json({
-      success: false,
-      message: "Method not allowed. Use POST."
-    });
-  }
-
-  try {
-    const supabase = getSupabaseClient();
-
-    const collection =
-      await collectAllSources();
-
-    const stats =
-      await processCollectedResults(
-        collection.results,
-        collection.sourceJobs,
-        supabase
-      );
-
-    return res.status(200).json({
-      success: true,
-      message: "Lead collection completed.",
-      stats,
-      sources: sourceCollectionErrors
-    });
-  } catch (error: any) {
-    const message =
-      error?.message ||
-      "Unexpected error while collecting leads.";
-
-    console.error(
-      "[Fetch Leads] Handler failed:",
-      message
-    );
-
-    return res.status(500).json({
-      success: false,
-      message
-    });
-  }
-}
