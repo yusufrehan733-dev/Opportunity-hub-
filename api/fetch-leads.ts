@@ -398,13 +398,40 @@ function stripHtml(value: unknown): string {
 
 function cleanUrl(value: unknown): string {
   try {
-    const url = new URL(clean(value));
+    const raw = clean(value);
+    const url = new URL(raw);
 
     if (
       url.protocol !== "https:" &&
       url.protocol !== "http:"
     ) {
       return "";
+    }
+
+    // Unwrap Bing / DuckDuckGo redirect links so social profile URLs pass validation
+    if (
+      url.hostname.toLowerCase().includes("bing.com") &&
+      url.pathname.toLowerCase().startsWith("/ck/")
+    ) {
+      const uParam = url.searchParams.get("u") || "";
+      const encoded = uParam.startsWith("a1") ? uParam.slice(2) : uParam;
+      if (encoded) {
+        const normalizedB64 = encoded.replace(/-/g, "+").replace(/_/g, "/");
+        const decoded = Buffer.from(normalizedB64, "base64").toString("utf8");
+        if (/^https?:\/\//i.test(decoded)) {
+          return cleanUrl(decoded);
+        }
+      }
+    }
+
+    if (
+      url.hostname.toLowerCase().includes("duckduckgo.com") &&
+      url.searchParams.get("uddg")
+    ) {
+      const uddg = url.searchParams.get("uddg") || "";
+      if (/^https?:\/\//i.test(uddg)) {
+        return cleanUrl(uddg);
+      }
     }
 
     url.hash = "";
@@ -590,6 +617,7 @@ function readXmlTag(
     ? decodeRssValue(match[1])
     : "";
 }
+
 function makeSearchResult(
   title: string,
   link: string,
@@ -939,8 +967,7 @@ function hasRealContact(
   }
 
   return isSpecificContactPage(contact);
-}
-
+  }
 function getResultText(result: SearchResult): string {
   return normalizeText([
     result.title,
@@ -1113,6 +1140,7 @@ function findMatchingSkill(
     ? matches[0].skill
     : null;
 }
+
 function checkRejectionReason(
   result: SearchResult,
   type: LeadType,
@@ -1356,28 +1384,104 @@ async function collectRedditQueries(
   );
 }
 
-async function collectRedditDemandTeachers():
-Promise<SearchResult[]> {
+async function collectRedditDemandTeachers(): Promise<SearchResult[]> {
   return collectRedditQueries(
     DEMAND_TEACHER_QUERIES,
     "Reddit Demand Teachers"
   );
 }
 
-async function collectRedditDemandFreelancers():
-Promise<SearchResult[]> {
+async function collectRedditDemandFreelancers(): Promise<SearchResult[]> {
   return collectRedditQueries(
     DEMAND_FREELANCER_QUERIES,
     "Reddit Demand Freelancers"
   );
 }
 
-async function collectRedditDemandCoaches():
-Promise<SearchResult[]> {
+async function collectRedditDemandCoaches(): Promise<SearchResult[]> {
   return collectRedditQueries(
     DEMAND_COACH_QUERIES,
     "Reddit Demand Coaches"
   );
+}
+
+/*
+ * Free DuckDuckGo HTML discovery for public SaaS profiles
+ * (LinkedIn, Instagram, Facebook) when RSS/search feeds return empty or redirect.
+ */
+
+function parseDuckDuckGoHtmlProfiles(
+  html: string,
+  sourceName: string,
+  query: string
+): SearchResult[] {
+  const results: SearchResult[] = [];
+  const anchorRegex = /<a\b[^>]*class=["'][^"']*result__a[^"']*["'][^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+  const snippetRegex = /<a\b[^>]*class=["'][^"']*result__snippet[^"']*["'][^>]*>([\s\S]*?)<\/a>|<div\b[^>]*class=["'][^"']*result__snippet[^"']*["'][^>]*>([\s\S]*?)<\/div>/gi;
+
+  const snippets: string[] = [];
+  let snippetMatch: RegExpExecArray | null;
+  while ((snippetMatch = snippetRegex.exec(html)) !== null) {
+    snippets.push(stripHtml(snippetMatch[1] || snippetMatch[2] || ""));
+  }
+
+  let match: RegExpExecArray | null;
+  let index = 0;
+  while ((match = anchorRegex.exec(html)) !== null) {
+    const rawHref = match[1] || "";
+    const title = stripHtml(match[2] || "");
+    const snippet = clean(snippets[index] || "");
+    index++;
+
+    const resolvedLink = cleanUrl(rawHref);
+    if (!title || !resolvedLink || !isSocialProfileUrl(resolvedLink)) {
+      continue;
+    }
+
+    results.push({
+      title,
+      link: resolvedLink,
+      sourceUrl: resolvedLink,
+      contactUrl: resolvedLink,
+      description: snippet,
+      snippet,
+      source: sourceName,
+      sourceType: "social-profile",
+      searchQuery: query
+    });
+  }
+
+  return results;
+}
+
+async function collectFreeSaaSProfiles(
+  queries: string[],
+  sourceName: string
+): Promise<SearchResult[]> {
+  const collected: SearchResult[] = [];
+
+  for (const query of queries) {
+    try {
+      const ddgUrl =
+        "https://html.duckduckgo.com/html/?q=" +
+        encodeURIComponent(query);
+      const html = await fetchText(ddgUrl);
+      const parsed = parseDuckDuckGoHtmlProfiles(html, sourceName, query);
+      collected.push(...parsed);
+    } catch (error) {
+      console.error(`[${sourceName}] Free SaaS query failed:`, query, error);
+    }
+  }
+
+  const unique = new Map<string, SearchResult>();
+  for (const item of collected) {
+    const key = cleanUrl(item.link).toLowerCase();
+    if (key && !unique.has(key)) {
+      unique.set(key, item);
+    }
+  }
+
+  return Array.from(unique.values()).slice(0, MAX_RESULTS_PER_SOURCE);
 }
 
 /*
@@ -1446,31 +1550,71 @@ async function collectBingSaaSProfiles(
   );
 }
 
-async function collectBingSaaSTeachers():
-Promise<SearchResult[]> {
-  return collectBingSaaSProfiles(
-    SAAS_TEACHER_QUERIES,
-    "Bing SaaS Teachers"
-  );
-}
+async function collectBingSaaSTeachers(): Promise<SearchResult[]> {
+  const [bingResults, freeResults] = await Promise.all([
+    collectBingSaaSProfiles(
+      SAAS_TEACHER_QUERIES,
+      "Bing SaaS Teachers"
+    ),
+    collectFreeSaaSProfiles(
+      SAAS_TEACHER_QUERIES,
+      "Bing SaaS Teachers"
+    )
+  ]);
 
-async function collectBingSaaSFreelancers():
-Promise<SearchResult[]> {
-  return collectBingSaaSProfiles(
-    SAAS_FREELANCER_QUERIES,
-    "Bing SaaS Freelancers"
-  );
-}
-
-async function collectBingSaaSCoaches():
-Promise<SearchResult[]> {
-  return collectBingSaaSProfiles(
-    SAAS_COACH_QUERIES,
-    "Bing SaaS Coaches"
-  );
+  const merged = new Map<string, SearchResult>();
+  for (const item of [...bingResults, ...freeResults]) {
+    const key = cleanUrl(item.link).toLowerCase();
+    if (key && !merged.has(key)) {
+      merged.set(key, item);
+    }
   }
-async function collectJobicy():
-Promise<SearchResult[]> {
+  return Array.from(merged.values()).slice(0, MAX_RESULTS_PER_SOURCE);
+}
+
+async function collectBingSaaSFreelancers(): Promise<SearchResult[]> {
+  const [bingResults, freeResults] = await Promise.all([
+    collectBingSaaSProfiles(
+      SAAS_FREELANCER_QUERIES,
+      "Bing SaaS Freelancers"
+    ),
+    collectFreeSaaSProfiles(
+      SAAS_FREELANCER_QUERIES,
+      "Bing SaaS Freelancers"
+    )
+  ]);
+
+  const merged = new Map<string, SearchResult>();
+  for (const item of [...bingResults, ...freeResults]) {
+    const key = cleanUrl(item.link).toLowerCase();
+    if (key && !merged.has(key)) {
+      merged.set(key, item);
+    }
+  }
+  return Array.from(merged.values()).slice(0, MAX_RESULTS_PER_SOURCE);
+}
+
+async function collectBingSaaSCoaches(): Promise<SearchResult[]> {
+  const [bingResults, freeResults] = await Promise.all([
+    collectBingSaaSProfiles(
+      SAAS_COACH_QUERIES,
+      "Bing SaaS Coaches"
+    ),
+    collectFreeSaaSProfiles(
+      SAAS_COACH_QUERIES,
+      "Bing SaaS Coaches"
+    )
+  ]);
+
+  const merged = new Map<string, SearchResult>();
+  for (const item of [...bingResults, ...freeResults]) {
+    const key = cleanUrl(item.link).toLowerCase();
+    if (key && !merged.has(key)) {
+      merged.set(key, item);
+    }
+  }
+  return Array.from(merged.values()).slice(0, MAX_RESULTS_PER_SOURCE);}
+    async function collectJobicy(): Promise<SearchResult[]> {
   const results: SearchResult[] = [];
 
   try {
@@ -1568,8 +1712,7 @@ const WWR_FEEDS = [
   "https://weworkremotely.com/categories/remote-sales-jobs.rss"
 ];
 
-async function collectWeWorkRemotely():
-Promise<SearchResult[]> {
+async function collectWeWorkRemotely(): Promise<SearchResult[]> {
   const results: SearchResult[] = [];
 
   for (const feed of WWR_FEEDS) {
@@ -1604,8 +1747,7 @@ Promise<SearchResult[]> {
   );
 }
 
-async function collectRemoteOK():
-Promise<SearchResult[]> {
+async function collectRemoteOK(): Promise<SearchResult[]> {
   const results: SearchResult[] = [];
 
   try {
@@ -1781,6 +1923,7 @@ async function collectAllSources(): Promise<{
     sourceJobs
   };
 }
+
 function getSupabaseClient() {
   const supabaseUrl =
     process.env.SUPABASE_URL ||
@@ -1878,7 +2021,6 @@ async function leadAlreadyExists(
 
   return false;
 }
-
 async function insertProcessedLead(
   supabase: ReturnType<typeof createClient>,
   lead: ProcessedLead
@@ -1970,6 +2112,7 @@ async function insertProcessedLead(
 
   return true;
 }
+
 function createEmptyStats(): LeadStats {
   return {
     found: 0,
