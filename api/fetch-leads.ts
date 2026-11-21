@@ -2149,3 +2149,354 @@ async function leadAlreadyExists(
 
   return false;
   }
+async function insertProcessedLead(
+  supabase: ReturnType<typeof createClient>,
+  lead: ProcessedLead
+): Promise<boolean> {
+  const now = new Date().toISOString();
+
+  let table = "";
+  let record: Record<string, any> = {};
+
+  if (lead.type === "Demand") {
+    table = "demand_leads";
+
+    record = {
+      type: "Demand",
+      source: lead.source,
+      client_name: lead.contactName || lead.name,
+      name: lead.name,
+      title: lead.title,
+      skill_needed: lead.skill,
+      description: lead.description,
+      contact_email: lead.email || null,
+      contact_phone: lead.phone || null,
+      contact_url: lead.contactUrl || null,
+      source_url: lead.sourceUrl,
+      category: lead.category,
+      subcategory: lead.subcategory,
+      country: lead.country || null,
+      city: lead.city || null,
+      content: lead.description,
+      status: "active",
+      created_at: now
+    };
+  } else if (lead.type === "Supply") {
+    table = "supply_leads";
+
+    record = {
+      company_name: lead.company || lead.name,
+      name: lead.name,
+      description: lead.description,
+      position: lead.title,
+      job_title: lead.title,
+      required_skill: lead.skill,
+      category: lead.category,
+      subcategory: lead.subcategory,
+      country: lead.country || null,
+      city: lead.city || null,
+      salary_range: lead.salaryRange || null,
+      salary_min: lead.salaryMin ?? null,
+      salary_max: lead.salaryMax ?? null,
+      company_website: lead.companyWebsite || null,
+      apply_url: lead.contactUrl || lead.sourceUrl,
+      contact_url: lead.contactUrl || null,
+      contact_name: lead.contactName || null,
+      contact: lead.email || lead.phone || lead.contactUrl || null,
+      source: lead.source,
+      source_url: lead.sourceUrl,
+      status: "active"
+    };
+  } else {
+    table = "saas_leads";
+
+    record = {
+      name: lead.name || lead.contactName,
+      platform: lead.platform,
+      niche: lead.skill,
+      contact: lead.contactUrl,
+      description: lead.description,
+      source_url: lead.sourceUrl,
+      contact_url: lead.contactUrl,
+      country: lead.country || null,
+      city: lead.city || null,
+      status: "active",
+      created_at: now
+    };
+}
+  const { error } = await supabase
+    .from(table)
+    .insert(record);
+
+  if (error) {
+    console.error(
+      `[${table}] Insert failed:`,
+      error.message
+    );
+
+    return false;
+  }
+
+  return true;
+}
+
+function createEmptyStats(): LeadStats {
+  return {
+    found: 0,
+    accepted: 0,
+    inserted: 0,
+    demand: 0,
+    supply: 0,
+    saas: 0,
+    total: 0,
+    duplicates: 0,
+    rejected: 0,
+    wrongType: 0,
+    noSkill: 0,
+    noContact: 0,
+    stale: 0,
+    errors: 0,
+    sources: {}
+  };
+}
+
+function incrementTypeCount(
+  stats: LeadStats,
+  type: LeadType
+): void {
+  if (type === "Demand") {
+    stats.demand++;
+  } else if (type === "Supply") {
+    stats.supply++;
+  } else {
+    stats.saas++;
+  }
+
+  stats.total++;
+}
+
+async function processCollectedResults(
+  results: SearchResult[],
+  sourceJobs: SourceJob[],
+  supabase: ReturnType<typeof createClient>
+): Promise<LeadStats> {
+  const stats = createEmptyStats();
+  const skills = await loadSkills(supabase);
+
+  const seenSourceUrls = new Set<string>();
+  const seenContactUrls = new Set<string>();
+
+  const sourceDiagnostics: Record<string, any> = {};
+
+  for (const source of sourceJobs) {
+    sourceDiagnostics[source.name] = {
+      category: source.category,
+      found: 0,
+      accepted: 0,
+      inserted: 0,
+      rejected: 0,
+      duplicates: 0,
+      errors: 0,
+      wrongType: 0,
+      noSkill: 0,
+      noContact: 0,
+      stale: 0
+    };
+  }
+
+  stats.found = results.length;
+
+  for (const result of results) {
+    const sourceName = clean(result.source || "Unknown");
+
+    if (!sourceDiagnostics[sourceName]) {
+      sourceDiagnostics[sourceName] = {
+        category: "Demand",
+        found: 0,
+        accepted: 0,
+        inserted: 0,
+        rejected: 0,
+        duplicates: 0,
+        errors: 0,
+        wrongType: 0,
+        noSkill: 0,
+        noContact: 0,
+        stale: 0
+      };
+    }
+
+    const diagnostic = sourceDiagnostics[sourceName];
+    diagnostic.found++;
+
+    try {
+      const type = classifyLead(result);
+
+      if (!type) {
+        diagnostic.wrongType++;
+        diagnostic.rejected++;
+        stats.wrongType++;
+        stats.rejected++;
+        continue;
+      }
+
+      const expectedSource = sourceJobs.find(
+        source => source.name === sourceName
+      );
+
+      if (expectedSource && expectedSource.category !== type) {
+        diagnostic.wrongType++;
+        diagnostic.rejected++;
+        stats.wrongType++;
+        stats.rejected++;
+        continue;
+      }
+
+      const rejectionReason = checkRejectionReason(
+        result,
+        type,
+        skills
+      );
+
+      if (rejectionReason) {
+        if (rejectionReason === "no_matching_skill") {
+          diagnostic.noSkill++;
+          stats.noSkill++;
+        }
+
+        if (rejectionReason === "no_real_contact") {
+          diagnostic.noContact++;
+          stats.noContact++;
+        }
+
+        if (rejectionReason === "not_fresh") {
+          diagnostic.stale++;
+          stats.stale++;
+        }
+
+        diagnostic.rejected++;
+        stats.rejected++;
+        continue;
+      }
+
+      const lead = buildProcessedLead(
+        result,
+        type,
+        skills
+      );
+
+      if (!lead) {
+        diagnostic.rejected++;
+        stats.rejected++;
+        continue;
+      }
+
+      const sourceKey = lead.sourceUrl.toLowerCase();
+      const contactKey = lead.contactUrl.toLowerCase();
+
+      if (sourceKey && seenSourceUrls.has(sourceKey)) {
+        diagnostic.duplicates++;
+        stats.duplicates++;
+        continue;
+      }
+
+      if (contactKey && seenContactUrls.has(contactKey)) {
+        diagnostic.duplicates++;
+        stats.duplicates++;
+        continue;
+      }
+
+      if (await leadAlreadyExists(supabase, lead)) {
+        if (sourceKey) seenSourceUrls.add(sourceKey);
+        if (contactKey) seenContactUrls.add(contactKey);
+
+        diagnostic.duplicates++;
+        stats.duplicates++;
+        continue;
+      }
+
+      stats.accepted++;
+      diagnostic.accepted++;
+
+      const inserted = await insertProcessedLead(
+        supabase,
+        lead
+      );
+
+      if (!inserted) {
+        diagnostic.errors++;
+        stats.errors++;
+        continue;
+      }
+
+      if (sourceKey) seenSourceUrls.add(sourceKey);
+      if (contactKey) seenContactUrls.add(contactKey);
+
+      stats.inserted++;
+      diagnostic.inserted++;
+
+      incrementTypeCount(stats, lead.type);
+    } catch (error: any) {
+      diagnostic.errors++;
+      stats.errors++;
+
+      console.error(
+        `[${sourceName}] Processing failed:`,
+        error?.message || error
+      );
+    }
+      }
+  stats.sources = sourceDiagnostics;
+  return stats;
+}
+
+export default async function handler(
+  req: VercelRequest,
+  res: VercelResponse
+) {
+  res.setHeader(
+    "Content-Type",
+    "application/json; charset=utf-8"
+  );
+
+  if (req.method !== "POST") {
+    return res.status(405).json({
+      success: false,
+      message: "Method not allowed. Use POST."
+    });
+  }
+
+  try {
+    const supabase = getSupabaseClient();
+
+    const collection = await collectAllSources();
+
+    const stats = await processCollectedResults(
+      collection.results,
+      collection.sourceJobs,
+      supabase
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Lead collection completed.",
+      stats,
+      sources: sourceCollectionErrors
+    });
+  } catch (error: any) {
+    const message =
+      error?.message ||
+      "Unexpected error while collecting leads.";
+
+    console.error(
+      "[Fetch Leads] Handler failed:",
+      message
+    );
+
+    return res.status(500).json({
+      success: false,
+      message
+    });
+  }
+      }
+  
+  
