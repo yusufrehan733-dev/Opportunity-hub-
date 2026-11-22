@@ -683,7 +683,7 @@ function getCity(value: string): string {
   if (getCountry(possible)) return "";
 
   return possible;
-}
+      }
 const DIRECT_SOCIAL_HOSTS = [
   "instagram.com",
   "linkedin.com",
@@ -694,7 +694,8 @@ const DIRECT_SOCIAL_HOSTS = [
   "tiktok.com",
   "calendly.com",
   "linktr.ee",
-  "github.com"
+  "topmate.io",
+  "superpeer.com"
 ];
 
 function isArticleOrPostUrl(url: string): boolean {
@@ -711,15 +712,12 @@ function isArticleOrPostUrl(url: string): boolean {
       host.endsWith(".medium.com") ||
       host === "dev.to" ||
       host.endsWith(".wordpress.com") ||
-      host.endsWith(".substack.com")
+      host.endsWith(".substack.com") ||
+      host === "bsky.app" ||
+      host === "github.com" ||
+      host === "reddit.com" ||
+      host.endsWith(".reddit.com")
     ) {
-      const segments = path.split("/").filter(Boolean);
-      if (
-        segments.length === 1 &&
-        (host !== "medium.com" || segments[0].startsWith("@"))
-      ) {
-        return false;
-      }
       return true;
     }
 
@@ -751,7 +749,7 @@ function isDirectPersonContactUrl(url: string): boolean {
 
   try {
     const path = new URL(cleaned).pathname.replace(/\/+$/, "");
-    return path === "" || /^\/(contact|about|hire|book)$/i.test(path);
+    return path === "" || /^\/(contact|about|hire|book|booking|tutor|coach)$/i.test(path);
   } catch {
     return false;
   }
@@ -1052,7 +1050,7 @@ function buildProcessedLead(
     salaryMax: result.salaryMax ?? null,
     companyWebsite: cleanUrl(result.companyWebsite || "")
   };
-        }
+  }
 async function collectRedditQueries(
   queries: string[],
   sourceName: string
@@ -1115,10 +1113,9 @@ async function collectRedditDemandCoaches(): Promise<SearchResult[]> {
   );
 }
 
-function extractDirectContactsFromHtmlOrText(raw: string): {
+function extractDirectContactsFromText(raw: string): {
   email: string;
   contactUrl: string;
-  platform: string;
 } {
   const emailMatches =
     raw.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g) || [];
@@ -1140,7 +1137,7 @@ function extractDirectContactsFromHtmlOrText(raw: string): {
 
     const host = getHostname(cleaned);
     if (
-      /medium\.com|dev\.to|wordpress\.com|gravatar\.com|w3\.org|schema\.org|googleapis\.com|gstatic\.com|cloudflare\.com|wp\.com/i.test(
+      /medium\.com|dev\.to|wordpress\.com|gravatar\.com|w3\.org|schema\.org|googleapis\.com|gstatic\.com|cloudflare\.com|wp\.com|redd\.it|reddit\.com|bsky\.app|github\.com/i.test(
         host
       )
     ) {
@@ -1163,17 +1160,9 @@ function extractDirectContactsFromHtmlOrText(raw: string): {
     }
   }
 
-  const chosenUrl = bestSocial || bestSite;
-  const platform = chosenUrl
-    ? getHostname(chosenUrl)
-    : validEmail
-      ? "email"
-      : "";
-
   return {
     email: clean(validEmail),
-    contactUrl: chosenUrl,
-    platform
+    contactUrl: bestSocial || bestSite
   };
 }
 
@@ -1181,54 +1170,13 @@ function isRealPersonName(name: string): boolean {
   const n = clean(name);
   if (!n || n.length < 2 || n.length > 70) return false;
   if (
-    /^(admin|staff|team|support|editorial|bot|unknown|medium|wordpress|scouthub)$/i.test(
+    /^(admin|staff|team|support|editorial|bot|unknown|medium|wordpress|scouthub|deleted|automoderator)$/i.test(
       n
     )
   ) {
     return false;
   }
   return /[a-zA-Z]{2,}/.test(n);
-}
-
-async function fetchDevToUserContact(userId: number | string): Promise<{
-  name: string;
-  bio: string;
-  location: string;
-  email: string;
-  contactUrl: string;
-}> {
-  try {
-    const profile = await fetchJson(`https://dev.to/api/users/${userId}`);
-    const bio = clean(profile?.summary || "");
-    const location = clean(profile?.location || "");
-    const fromBio = extractDirectContactsFromHtmlOrText(bio);
-
-    const website = cleanUrl(profile?.website_url || "");
-    const twitter = clean(profile?.twitter_username || "");
-    const github = clean(profile?.github_username || "");
-
-    const contactUrl =
-      fromBio.contactUrl ||
-      (website && isDirectPersonContactUrl(website) ? website : "") ||
-      (twitter ? `https://x.com/${twitter}` : "") ||
-      (github ? `https://github.com/${github}` : "");
-
-    return {
-      name: clean(profile?.name || ""),
-      bio,
-      location,
-      email: fromBio.email,
-      contactUrl
-    };
-  } catch {
-    return {
-      name: "",
-      bio: "",
-      location: "",
-      email: "",
-      contactUrl: ""
-    };
-  }
 }
 
 async function collectDevToSaaSByRole(
@@ -1239,196 +1187,215 @@ async function collectDevToSaaSByRole(
   const seen = new Set<string>();
   const results: SearchResult[] = [];
 
-  for (const tag of tags) {
-    try {
-      const articles = await fetchJson(
-        `https://dev.to/api/articles?tag=${encodeURIComponent(tag)}&per_page=15`
-      );
-      if (!Array.isArray(articles)) continue;
-
-      for (const article of articles.slice(0, 10)) {
-        const userId = article?.user?.id;
-        if (!userId) continue;
-
-        const user = await fetchDevToUserContact(userId);
-        const personName = user.name || clean(article?.user?.name || "");
-        if (!isRealPersonName(personName)) continue;
-        if (!user.contactUrl && !user.email) continue;
-
-        const key = (user.contactUrl || user.email).toLowerCase();
-        if (seen.has(key)) continue;
-        seen.add(key);
-
-        const roleLabel =
-          role === "teacher"
-            ? "Teacher / Educator"
-            : role === "freelancer"
-              ? "Freelancer"
-              : "Coach";
-
-        const bio =
-          user.bio ||
-          `${personName} — ${roleLabel} (${clean(article?.title || "")})`;
-
-        results.push({
-          title: `${personName} (${roleLabel})`,
-          link: user.contactUrl || `mailto:${user.email}`,
-          sourceUrl: user.contactUrl || `mailto:${user.email}`,
-          contactUrl: user.contactUrl || `mailto:${user.email}`,
-          email: user.email,
-          author: personName,
-          location: user.location,
-          country:
-            getCountry(`${user.location} ${bio}`) ||
-            user.location ||
-            "Remote / Global",
-          description: bio,
-          snippet: bio,
-          source: sourceName,
-          sourceType: "social-profile",
-          saasRole: role
-        });
+  const batches = await Promise.all(
+    tags.map(async tag => {
+      try {
+        const articles = await fetchJson(
+          `https://dev.to/api/articles?tag=${encodeURIComponent(tag)}&per_page=25`
+        );
+        return Array.isArray(articles) ? articles : [];
+      } catch (error) {
+        console.error(`[${sourceName}] Dev.to tag failed:`, tag, error);
+        return [];
       }
-    } catch (error) {
-      console.error(`[${sourceName}] Dev.to tag failed:`, tag, error);
-    }
+    })
+  );
+
+  const roleLabel =
+    role === "teacher"
+      ? "Teacher / Educator"
+      : role === "freelancer"
+        ? "Freelancer"
+        : "Coach";
+
+  for (const article of batches.flat()) {
+    const user = article?.user || {};
+    const personName = clean(user.name || user.username || "");
+    if (!isRealPersonName(personName)) continue;
+
+    const desc = clean(article?.description || "");
+    const title = clean(article?.title || "");
+    const fromText = extractDirectContactsFromText(desc);
+
+    const website = cleanUrl(user.website_url || "");
+    const twitter = clean(user.twitter_username || "");
+
+    const contactUrl =
+      fromText.contactUrl ||
+      (website && isDirectPersonContactUrl(website) ? website : "") ||
+      (twitter ? `https://x.com/${twitter}` : "");
+    const email = fromText.email;
+
+    // Require a direct email or direct external contact/booking/social URL
+    if (!contactUrl && !email) continue;
+
+    const key = (contactUrl || email).toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    const bio = `${personName} — ${roleLabel} | ${title}`;
+
+    results.push({
+      title: `${personName} (${roleLabel})`,
+      link: contactUrl || `mailto:${email}`,
+      sourceUrl: contactUrl || `mailto:${email}`,
+      contactUrl,
+      email,
+      author: personName,
+      country: getCountry(`${title} ${desc}`) || "Remote / Global",
+      description: desc || bio,
+      snippet: desc || bio,
+      source: sourceName,
+      sourceType: "social-profile",
+      saasRole: role
+    });
   }
 
   return results;
 }
 
-async function collectGitHubSaaSByRole(
+async function collectBlueskyDirectContactsByRole(
   role: SaasRole,
   sourceName: string
 ): Promise<SearchResult[]> {
   const queriesByRole: Record<SaasRole, string[]> = {
     teacher: [
-      "teacher in:bio",
-      "tutor in:bio",
-      "instructor in:bio",
-      "educator in:bio"
+      "english teacher",
+      "math tutor",
+      "online tutor",
+      "language teacher",
+      "music teacher",
+      "science teacher"
     ],
-    freelancer: ["freelance in:bio", "freelancer in:bio"],
-    coach: ["coach in:bio", "mentor in:bio"]
+    freelancer: [
+      "freelance designer",
+      "freelance developer",
+      "freelance writer",
+      "video editor"
+    ],
+    coach: [
+      "life coach",
+      "business coach",
+      "career coach",
+      "fitness coach"
+    ]
   };
 
   const seen = new Set<string>();
   const results: SearchResult[] = [];
 
-  for (const q of queriesByRole[role] || []) {
-    try {
-      const searchData = await fetchJson(
-        `https://api.github.com/search/users?q=${encodeURIComponent(q)}&per_page=15`
-      );
-      const users = Array.isArray(searchData?.items) ? searchData.items : [];
-
-      for (const item of users.slice(0, 8)) {
-        const login = clean(item?.login || "");
-        if (!login || seen.has(login.toLowerCase())) continue;
-        seen.add(login.toLowerCase());
-
-        const profile = await fetchJson(
-          `https://api.github.com/users/${encodeURIComponent(login)}`
+  const batches = await Promise.all(
+    (queriesByRole[role] || []).map(async q => {
+      try {
+        const data = await fetchJson(
+          `https://public.api.bsky.app/xrpc/app.bsky.actor.searchActors?q=${encodeURIComponent(q)}&limit=25`
         );
-
-        const name = clean(profile?.name || login);
-        const bio = clean(profile?.bio || "");
-        const location = clean(profile?.location || "");
-        const blog = cleanUrl(profile?.blog || "");
-        const email = clean(profile?.email || "");
-        const twitter = clean(profile?.twitter_username || "");
-        const githubUrl = cleanUrl(profile?.html_url || "");
-        const fromBio = extractDirectContactsFromHtmlOrText(bio);
-
-        const contactUrl =
-          fromBio.contactUrl ||
-          (blog && isDirectPersonContactUrl(blog) ? blog : "") ||
-          (twitter ? `https://x.com/${twitter}` : "") ||
-          githubUrl;
-
-        const finalEmail = email || fromBio.email;
-        if (!isRealPersonName(name) || !bio) continue;
-        if (!contactUrl && !finalEmail) continue;
-
-        results.push({
-          title: `${name} — ${bio.slice(0, 70)}`,
-          link: contactUrl || `mailto:${finalEmail}`,
-          sourceUrl: contactUrl || `mailto:${finalEmail}`,
-          contactUrl: contactUrl || `mailto:${finalEmail}`,
-          email: finalEmail,
-          author: name,
-          location,
-          country:
-            getCountry(`${location} ${bio}`) || location || "Remote / Global",
-          description: `${bio}${location ? ` | Location: ${location}` : ""}`,
-          snippet: bio,
-          source: sourceName,
-          sourceType: "social-profile",
-          saasRole: role
-        });
+        return Array.isArray(data?.actors) ? data.actors : [];
+      } catch (error) {
+        console.error(`[${sourceName}] Bluesky query failed:`, q, error);
+        return [];
       }
-    } catch (error) {
-      console.error(`[${sourceName}] GitHub query failed:`, q, error);
-    }
+    })
+  );
+
+  for (const actor of batches.flat()) {
+    const displayName = clean(actor?.displayName || actor?.handle || "");
+    const bio = clean(actor?.description || "");
+    if (!bio || !isRealPersonName(displayName)) continue;
+
+    // Only keep actors who explicitly put an email or external website/booking/social link in their bio
+    const extracted = extractDirectContactsFromText(bio);
+    if (!extracted.contactUrl && !extracted.email) continue;
+
+    const key = (extracted.contactUrl || extracted.email).toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    results.push({
+      title: `${displayName} — ${bio.slice(0, 80)}`,
+      link: extracted.contactUrl || `mailto:${extracted.email}`,
+      sourceUrl: extracted.contactUrl || `mailto:${extracted.email}`,
+      contactUrl: extracted.contactUrl,
+      email: extracted.email,
+      author: displayName,
+      country: getCountry(bio) || "Remote / Global",
+      description: bio,
+      snippet: bio,
+      source: sourceName,
+      sourceType: "social-profile",
+      saasRole: role
+    });
   }
 
   return results;
 }
 
-async function collectRssAuthorContacts(
-  feedUrls: string[],
+async function collectForHireDirectContactsByRole(
   role: SaasRole,
   sourceName: string
 ): Promise<SearchResult[]> {
+  const queriesByRole: Record<SaasRole, string[]> = {
+    teacher: [
+      '"for hire" tutor OR teacher',
+      '"offering" tutoring OR lessons'
+    ],
+    freelancer: [
+      '"for hire" freelancer OR developer OR designer',
+      '"for hire" video editor OR writer'
+    ],
+    coach: [
+      '"for hire" coach OR mentor',
+      '"offering" coaching OR mentorship'
+    ]
+  };
+
   const seen = new Set<string>();
   const results: SearchResult[] = [];
 
-  for (const feedUrl of feedUrls) {
-    try {
-      const xml = await fetchText(feedUrl);
-      const items = parseRssFeed(xml, sourceName);
-
-      for (const item of items.slice(0, 8)) {
-        const personName = clean(item.author || "");
-        if (!isRealPersonName(personName)) continue;
-
-        let found = extractDirectContactsFromHtmlOrText(item.description);
-
-        if (!found.contactUrl && !found.email && item.link) {
-          try {
-            const pageHtml = await fetchText(item.link);
-            found = extractDirectContactsFromHtmlOrText(pageHtml);
-          } catch {
-            // Skip if page cannot be fetched
-          }
-        }
-
-        if (!found.contactUrl && !found.email) continue;
-
-        const key = (found.contactUrl || found.email).toLowerCase();
-        if (seen.has(key)) continue;
-        seen.add(key);
-
-        const detectedCountry = getCountry(`${item.title} ${item.description}`);
-
-        results.push({
-          title: `${personName} (${role})`,
-          link: found.contactUrl || `mailto:${found.email}`,
-          sourceUrl: found.contactUrl || `mailto:${found.email}`,
-          contactUrl: found.contactUrl || `mailto:${found.email}`,
-          email: found.email,
-          author: personName,
-          country: detectedCountry || "Remote / Global",
-          description: `${personName} — ${role} | ${clean(item.title)}`,
-          snippet: `${personName} — ${role} | ${clean(item.title)}`,
-          source: sourceName,
-          sourceType: "social-profile",
-          saasRole: role
-        });
+  const batches = await Promise.all(
+    (queriesByRole[role] || []).map(async q => {
+      try {
+        const xml = await fetchText(
+          `https://www.reddit.com/search.rss?q=${encodeURIComponent(q)}&sort=new&t=month&limit=25`
+        );
+        return parseRssFeed(xml, sourceName);
+      } catch (error) {
+        console.error(`[${sourceName}] For-hire query failed:`, q, error);
+        return [];
       }
-    } catch (error) {
-      console.error(`[${sourceName}] Feed failed:`, feedUrl, error);
-    }
+    })
+  );
+
+  for (const item of batches.flat()) {
+    const rawAuthor = clean(item.author || "").replace(/^\/?u\//i, "");
+    if (!isRealPersonName(rawAuthor)) continue;
+
+    const extracted = extractDirectContactsFromText(
+      `${item.title} ${item.description}`
+    );
+
+    // Require an explicit email or external website/booking/social link—no Reddit profile fallback
+    if (!extracted.contactUrl && !extracted.email) continue;
+
+    const key = (extracted.contactUrl || extracted.email).toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    results.push({
+      title: `${rawAuthor} — ${clean(item.title)}`,
+      link: extracted.contactUrl || `mailto:${extracted.email}`,
+      sourceUrl: extracted.contactUrl || `mailto:${extracted.email}`,
+      contactUrl: extracted.contactUrl,
+      email: extracted.email,
+      author: rawAuthor,
+      country:
+        getCountry(`${item.title} ${item.description}`) || "Remote / Global",
+      description: clean(item.description || item.title),
+      snippet: clean(item.description || item.title),
+      source: sourceName,
+      sourceType: "social-profile",
+      saasRole: role
+    });
   }
 
   return results;
@@ -1438,36 +1405,16 @@ async function collectSaaSByRole(
   role: SaasRole,
   sourceName: string
 ): Promise<SearchResult[]> {
-  const feedsByRole: Record<SaasRole, string[]> = {
-    teacher: [
-      "https://wordpress.com/tag/tutoring/feed",
-      "https://wordpress.com/tag/online-teaching/feed",
-      "https://wordpress.com/tag/english-teacher/feed",
-      "https://wordpress.com/tag/math-tutor/feed",
-      "https://wordpress.com/tag/language-learning/feed",
-      "https://medium.com/feed/tag/online-teaching",
-      "https://medium.com/feed/tag/tutoring"
-    ],
-    freelancer: [
-      "https://medium.com/feed/tag/freelancing",
-      "https://wordpress.com/tag/freelancing/feed"
-    ],
-    coach: [
-      "https://medium.com/feed/tag/coaching",
-      "https://medium.com/feed/tag/life-coach",
-      "https://wordpress.com/tag/coaching/feed"
-    ]
-  };
-
-  const [devtoRows, githubRows, rssContactRows] = await Promise.all([
+  const batches = await Promise.all([
+    collectBlueskyDirectContactsByRole(role, sourceName),
     collectDevToSaaSByRole(role, sourceName),
-    collectGitHubSaaSByRole(role, sourceName),
-    collectRssAuthorContacts(feedsByRole[role] || [], role, sourceName)
+    collectForHireDirectContactsByRole(role, sourceName)
   ]);
 
   const merged = new Map<string, SearchResult>();
-  for (const row of [...devtoRows, ...githubRows, ...rssContactRows]) {
-    const key = cleanUrl(row.contactUrl || row.link || "").toLowerCase();
+
+  for (const row of batches.flat()) {
+    const key = clean(row.email || row.contactUrl || row.link || "").toLowerCase();
     if (key && !merged.has(key)) {
       merged.set(key, row);
     }
@@ -1486,762 +1433,571 @@ async function collectBingSaaSFreelancers(): Promise<SearchResult[]> {
 
 async function collectBingSaaSCoaches(): Promise<SearchResult[]> {
   return collectSaaSByRole("coach", "SaaS Coaches");
-  }
-async function collectJobicy(): Promise<SearchResult[]> {
-  const results: SearchResult[] = [];
-
-  try {
-    const response = await fetchJson(
-      "https://jobicy.com/api/jobs?count=100"
-    );
-
-    const jobs = Array.isArray(response)
-      ? response
-      : response?.jobs || [];
-
-    for (const job of jobs) {
-      const title = clean(
-        job.jobTitle || job.title || ""
-      );
-
-      const description = stripHtml(
-        job.jobDescription ||
-        job.description ||
-        ""
-      );
-
-      const link = cleanUrl(
-        job.url ||
-        job.jobUrl ||
-        ""
-      );
-
-      if (!title || !link) continue;
-
-      results.push({
-        title,
-        description,
-        snippet: description,
-        link,
-        sourceUrl: link,
-        source: "Jobicy",
-        sourceType: "job",
-        publishedAt:
-          job.pubDate ||
-          job.date ||
-          job.createdAt ||
-          "",
-        published:
-          job.pubDate ||
-          job.date ||
-          job.createdAt ||
-          "",
-        company: clean(
-          job.companyName ||
-          job.company ||
-          ""
-        ),
-        location: clean(
-          job.jobGeo ||
-          job.location ||
-          ""
-        ),
-        salaryRange: clean(
-          job.salary ||
-          job.salaryRange ||
-          ""
-        ),
-        salaryMin:
-          Number(job.salaryMin) || undefined,
-        salaryMax:
-          Number(job.salaryMax) || undefined,
-        companyWebsite: cleanUrl(
-          job.companyUrl ||
-          job.companyWebsite ||
-          ""
-        ),
-        applicationUrl: link,
-        contactUrl: link
-      });
     }
-  } catch (error) {
-    console.error(
-      "[Jobicy] Collection failed:",
-      error
-    );
-  }
-
-  return results.slice(
-    0,
-    MAX_RESULTS_PER_SOURCE
-  );
-}
-
-const WWR_FEEDS = [
-  "https://weworkremotely.com/categories/remote-programming-jobs.rss",
-  "https://weworkremotely.com/categories/remote-design-jobs.rss",
-  "https://weworkremotely.com/categories/remote-marketing-jobs.rss",
-  "https://weworkremotely.com/categories/remote-customer-support-jobs.rss",
-  "https://weworkremotely.com/categories/remote-sales-jobs.rss"
-];
-
-async function collectWeWorkRemotely(): Promise<SearchResult[]> {
-  const results: SearchResult[] = [];
-
-  for (const feed of WWR_FEEDS) {
-    try {
-      const xml = await fetchText(feed);
-
-      const feedResults = parseRssFeed(
-        xml,
-        "We Work Remotely"
-      );
-
-      results.push(
-        ...feedResults.map(result => ({
-          ...result,
-          sourceType: "job",
-          applicationUrl: result.link,
-          contactUrl: result.link
-        }))
-      );
-    } catch (error) {
-      console.error(
-        "[We Work Remotely] Feed failed:",
-        feed,
-        error
-      );
-    }
-  }
-
-  return results.slice(
-    0,
-    MAX_RESULTS_PER_SOURCE
-  );
-}
-
-async function collectRemoteOK(): Promise<SearchResult[]> {
-  const results: SearchResult[] = [];
-
-  try {
-    const response = await fetchJson(
-      "https://remoteok.com/api"
-    );
-
-    const jobs = Array.isArray(response)
-      ? response.slice(1)
-      : [];
-
-    for (const job of jobs) {
-      const title = clean(
-        job.position || ""
-      );
-
-      const description = stripHtml(
-        job.description || ""
-      );
-
-      const link = cleanUrl(
-        job.url ||
-        (
-          job.id
-            ? `https://remoteok.com/remote-jobs/${job.id}`
-            : ""
-        )
-      );
-
-      if (!title || !link) continue;
-
-      results.push({
-        title,
-        description,
-        snippet: description,
-        link,
-        sourceUrl: link,
-        source: "Remote OK",
-        sourceType: "job",
-        publishedAt:
-          job.date ||
-          job.epoch ||
-          "",
-        published:
-          job.date ||
-          job.epoch ||
-          "",
-        company: clean(job.company || ""),
-        location: clean(
-          job.location || "Remote"
-        ),
-        salaryRange: clean(job.salary || ""),
-        companyWebsite: cleanUrl(
-          job.company_url || ""
-        ),
-        applicationUrl: link,
-        contactUrl: link
-      });
-    }
-  } catch (error) {
-    console.error(
-      "[Remote OK] Collection failed:",
-      error
-    );
-  }
-
-  return results.slice(
-    0,
-    MAX_RESULTS_PER_SOURCE
-  );
-}
 const sourceCollectionErrors: Record<
-  string,
-  string
+string,
+string
+
 > = {};
 
+
+
 async function runSource(
-  source: SourceJob
+source: SourceJob
 ): Promise<SearchResult[]> {
-  try {
-    const results = await source.collect();
+try {
+const results = await source.collect();
 
-    console.log(
-      `[${source.name}] Found ${results.length} results`
-    );
+console.log(  
+  `[${source.name}] Found ${results.length} results`  
+);  
 
-    return results.map(result => ({
-      ...result,
-      source: source.name
-    }));
-  } catch (error: any) {
-    const message =
-      error?.message ||
-      String(error);
+return results.map(result => ({  
+  ...result,  
+  source: source.name  
+}));
 
-    sourceCollectionErrors[source.name] =
-      message;
+} catch (error: any) {
+const message =
+error?.message ||
+String(error);
 
-    console.error(
-      `[${source.name}] Collection error:`,
-      message
-    );
+sourceCollectionErrors[source.name] =  
+  message;  
 
-    return [];
-  }
+console.error(  
+  `[${source.name}] Collection error:`,  
+  message  
+);  
+
+return [];
+
+}
 }
 
 async function collectAllSources(): Promise<{
-  results: SearchResult[];
-  sourceJobs: SourceJob[];
+results: SearchResult[];
+sourceJobs: SourceJob[];
 }> {
-  for (const key of Object.keys(sourceCollectionErrors)) {
-    delete sourceCollectionErrors[key];
-  }
+for (const key of Object.keys(sourceCollectionErrors)) {
+delete sourceCollectionErrors[key];
+}
 
-  const sourceJobs: SourceJob[] = [
-    {
-      name: "Reddit Demand Teachers",
-      category: "Demand",
-      collect: collectRedditDemandTeachers
-    },
-    {
-      name: "Reddit Demand Freelancers",
-      category: "Demand",
-      collect: collectRedditDemandFreelancers
-    },
-    {
-      name: "Reddit Demand Coaches",
-      category: "Demand",
-      collect: collectRedditDemandCoaches
-    },
-    {
-      name: "DevTo & Medium SaaS Teachers",
-      category: "SaaS",
-      collect: collectBingSaaSTeachers
-    },
-    {
-      name: "DevTo & Medium SaaS Freelancers",
-      category: "SaaS",
-      collect: collectBingSaaSFreelancers
-    },
-    {
-      name: "DevTo & Medium SaaS Coaches",
-      category: "SaaS",
-      collect: collectBingSaaSCoaches
-    },
-    {
-      name: "Jobicy",
-      category: "Supply",
-      collect: collectJobicy
-    },
-    {
-      name: "We Work Remotely",
-      category: "Supply",
-      collect: collectWeWorkRemotely
-    },
-    {
-      name: "Remote OK",
-      category: "Supply",
-      collect: collectRemoteOK
-    }
-  ];
+const sourceJobs: SourceJob[] = [
+{
+name: "Reddit Demand Teachers",
+category: "Demand",
+collect: collectRedditDemandTeachers
+},
+{
+name: "Reddit Demand Freelancers",
+category: "Demand",
+collect: collectRedditDemandFreelancers
+},
+{
+name: "Reddit Demand Coaches",
+category: "Demand",
+collect: collectRedditDemandCoaches
+},
+{
+name: "DevTo & Medium SaaS Teachers",
+category: "SaaS",
+collect: collectBingSaaSTeachers
+},
+{
+name: "DevTo & Medium SaaS Freelancers",
+category: "SaaS",
+collect: collectBingSaaSFreelancers
+},
+{
+name: "DevTo & Medium SaaS Coaches",
+category: "SaaS",
+collect: collectBingSaaSCoaches
+},
+{
+name: "Jobicy",
+category: "Supply",
+collect: collectJobicy
+},
+{
+name: "We Work Remotely",
+category: "Supply",
+collect: collectWeWorkRemotely
+},
+{
+name: "Remote OK",
+category: "Supply",
+collect: collectRemoteOK
+}
+];
 
-  const collected = await Promise.all(
-    sourceJobs.map(source =>
-      runSource(source)
-    )
-  );
+const collected = await Promise.all(
+sourceJobs.map(source =>
+runSource(source)
+)
+);
 
-  return {
-    results: collected.flat(),
-    sourceJobs
-  };
+return {
+results: collected.flat(),
+sourceJobs
+};
 }
 
 function getSupabaseClient() {
-  const supabaseUrl =
-    process.env.SUPABASE_URL ||
-    process.env.VITE_SUPABASE_URL;
+const supabaseUrl =
+process.env.SUPABASE_URL ||
+process.env.VITE_SUPABASE_URL;
 
-  const serviceRoleKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY;
+const serviceRoleKey =
+process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  if (!supabaseUrl || !serviceRoleKey) {
-    throw new Error(
-      "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY"
-    );
-  }
+if (!supabaseUrl || !serviceRoleKey) {
+throw new Error(
+"Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY"
+);
+}
 
-  return createClient(
-    supabaseUrl,
-    serviceRoleKey,
-    {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false
-      }
-    }
-  );
+return createClient(
+supabaseUrl,
+serviceRoleKey,
+{
+auth: {
+autoRefreshToken: false,
+persistSession: false
+}
+}
+);
 }
 
 async function loadSkills(
-  supabase: ReturnType<typeof createClient>
+supabase: ReturnType<typeof createClient>
 ): Promise<SkillRow[]> {
-  const { data, error } = await supabase
-    .from("skills")
-    .select("*");
+const { data, error } = await supabase
+.from("skills")
+.select("*");
 
-  if (error) {
-    throw new Error(
-      `Unable to load skills: ${error.message}`
-    );
-  }
+if (error) {
+throw new Error(
+Unable to load skills: ${error.message}
+);
+}
 
-  return (data || [])
-    .map((row: any) => ({
-      id: clean(row.id || ""),
-      name: clean(
-        row.name ||
-        row.skill ||
-        ""
-      ),
-      category: clean(row.category || ""),
-      subcategory: clean(row.subcategory || ""),
-      tags: Array.isArray(row.tags)
-        ? row.tags.map((tag: any) =>
-            clean(String(tag))
-          )
-        : []
-    }))
-    .filter((skill: SkillRow) =>
-      Boolean(skill.name)
-    );
+return (data || [])
+.map((row: any) => ({
+id: clean(row.id || ""),
+name: clean(
+row.name ||
+row.skill ||
+""
+),
+category: clean(row.category || ""),
+subcategory: clean(row.subcategory || ""),
+tags: Array.isArray(row.tags)
+? row.tags.map((tag: any) =>
+clean(String(tag))
+)
+: []
+}))
+.filter((skill: SkillRow) =>
+Boolean(skill.name)
+);
 }
 
 async function leadAlreadyExists(
-  supabase: ReturnType<typeof createClient>,
-  lead: ProcessedLead
+supabase: ReturnType<typeof createClient>,
+lead: ProcessedLead
 ): Promise<boolean> {
-  const table =
-    lead.type === "Demand"
-      ? "demand_leads"
-      : lead.type === "Supply"
-        ? "supply_leads"
-        : "saas_leads";
+const table =
+lead.type === "Demand"
+? "demand_leads"
+: lead.type === "Supply"
+? "supply_leads"
+: "saas_leads";
 
-  if (lead.sourceUrl) {
-    const { data, error } = await supabase
-      .from(table)
-      .select("id")
-      .eq("source_url", lead.sourceUrl)
-      .limit(1);
+if (lead.sourceUrl) {
+const { data, error } = await supabase
+.from(table)
+.select("id")
+.eq("source_url", lead.sourceUrl)
+.limit(1);
 
-    if (!error && data && data.length > 0) {
-      return true;
-    }
-  }
+if (!error && data && data.length > 0) {  
+  return true;  
+}
 
-  if (lead.contactUrl) {
-    const { data, error } = await supabase
-      .from(table)
-      .select("id")
-      .eq("contact_url", lead.contactUrl)
-      .limit(1);
+}
 
-    if (!error && data && data.length > 0) {
-      return true;
-    }
-  }
+if (lead.contactUrl) {
+const { data, error } = await supabase
+.from(table)
+.select("id")
+.eq("contact_url", lead.contactUrl)
+.limit(1);
 
-  return false;
+if (!error && data && data.length > 0) {  
+  return true;  
+}
+
+}
+
+return false;
 }
 
 async function insertProcessedLead(
-  supabase: ReturnType<typeof createClient>,
-  lead: ProcessedLead
+supabase: ReturnType<typeof createClient>,
+lead: ProcessedLead
 ): Promise<boolean> {
-  const now = new Date().toISOString();
+const now = new Date().toISOString();
 
-  let table = "";
-  let record: Record<string, any> = {};
+let table = "";
+let record: Record<string, any> = {};
 
-  if (lead.type === "Demand") {
-    table = "demand_leads";
+if (lead.type === "Demand") {
+table = "demand_leads";
 
-    record = {
-      type: "Demand",
-      source: lead.source,
-      client_name: lead.contactName || lead.name,
-      name: lead.name,
-      title: lead.title,
-      skill_needed: lead.skill,
-      description: lead.description,
-      contact_email: lead.email || null,
-      contact_phone: lead.phone || null,
-      contact_url: lead.contactUrl || null,
-      source_url: lead.sourceUrl,
-      category: lead.category,
-      subcategory: lead.subcategory,
-      country: lead.country || null,
-      city: lead.city || null,
-      content: lead.description,
-      status: "active",
-      created_at: now
-    };
-  } else if (lead.type === "Supply") {
-    table = "supply_leads";
+record = {  
+  type: "Demand",  
+  source: lead.source,  
+  client_name: lead.contactName || lead.name,  
+  name: lead.name,  
+  title: lead.title,  
+  skill_needed: lead.skill,  
+  description: lead.description,  
+  contact_email: lead.email || null,  
+  contact_phone: lead.phone || null,  
+  contact_url: lead.contactUrl || null,  
+  source_url: lead.sourceUrl,  
+  category: lead.category,  
+  subcategory: lead.subcategory,  
+  country: lead.country || null,  
+  city: lead.city || null,  
+  content: lead.description,  
+  status: "active",  
+  created_at: now  
+};
 
-    record = {
-      company_name: lead.company || lead.name,
-      name: lead.name,
-      description: lead.description,
-      position: lead.title,
-      job_title: lead.title,
-      required_skill: lead.skill,
-      category: lead.category,
-      subcategory: lead.subcategory,
-      country: lead.country || null,
-      city: lead.city || null,
-      salary_range: lead.salaryRange || null,
-      salary_min: lead.salaryMin ?? null,
-      salary_max: lead.salaryMax ?? null,
-      company_website: lead.companyWebsite || null,
-      apply_url: lead.contactUrl || lead.sourceUrl,
-      contact_url: lead.contactUrl || null,
-      contact_name: lead.contactName || null,
-      contact: lead.email || lead.phone || lead.contactUrl || null,
-      source: lead.source,
-      source_url: lead.sourceUrl,
-      status: "active"
-    };
-  } else {
-    table = "saas_leads";
+} else if (lead.type === "Supply") {
+table = "supply_leads";
 
-    record = {
-      name: lead.name || lead.contactName,
-      platform: lead.platform,
-      niche: lead.skill,
-      contact: lead.contactUrl,
-      description: lead.description,
-      source_url: lead.sourceUrl,
-      contact_url: lead.contactUrl,
-      country: lead.country || null,
-      city: lead.city || null,
-      status: "active",
-      created_at: now
-    };
-  }
+record = {  
+  company_name: lead.company || lead.name,  
+  name: lead.name,  
+  description: lead.description,  
+  position: lead.title,  
+  job_title: lead.title,  
+  required_skill: lead.skill,  
+  category: lead.category,  
+  subcategory: lead.subcategory,  
+  country: lead.country || null,  
+  city: lead.city || null,  
+  salary_range: lead.salaryRange || null,  
+  salary_min: lead.salaryMin ?? null,  
+  salary_max: lead.salaryMax ?? null,  
+  company_website: lead.companyWebsite || null,  
+  apply_url: lead.contactUrl || lead.sourceUrl,  
+  contact_url: lead.contactUrl || null,  
+  contact_name: lead.contactName || null,  
+  contact: lead.email || lead.phone || lead.contactUrl || null,  
+  source: lead.source,  
+  source_url: lead.sourceUrl,  
+  status: "active"  
+};
 
-  const { error } = await supabase
-    .from(table)
-    .insert(record);
+} else {
+table = "saas_leads";
 
-  if (error) {
-    console.error(
-      `[${table}] Insert failed:`,
-      error.message
-    );
+record = {  
+  name: lead.name || lead.contactName,  
+  platform: lead.platform,  
+  niche: lead.skill,  
+  contact: lead.contactUrl,  
+  description: lead.description,  
+  source_url: lead.sourceUrl,  
+  contact_url: lead.contactUrl,  
+  country: lead.country || null,  
+  city: lead.city || null,  
+  status: "active",  
+  created_at: now  
+};
 
-    return false;
-  }
+}
 
-  return true;
+const { error } = await supabase
+.from(table)
+.insert(record);
+
+if (error) {
+console.error(
+[${table}] Insert failed:,
+error.message
+);
+
+return false;
+
+}
+
+return true;
 }
 
 function createEmptyStats(): LeadStats {
-  return {
-    found: 0,
-    accepted: 0,
-    inserted: 0,
-    total: 0,
-    demand: 0,
-    supply: 0,
-    saas: 0,
-    rejected: 0,
-    wrongType: 0,
-    noSkill: 0,
-    noContact: 0,
-    stale: 0,
-    duplicates: 0,
-    errors: 0,
-    sources: {}
-  };
+return {
+found: 0,
+accepted: 0,
+inserted: 0,
+total: 0,
+demand: 0,
+supply: 0,
+saas: 0,
+rejected: 0,
+wrongType: 0,
+noSkill: 0,
+noContact: 0,
+stale: 0,
+duplicates: 0,
+errors: 0,
+sources: {}
+};
 }
 
 function incrementTypeCount(
-  stats: LeadStats,
-  type: LeadType
+stats: LeadStats,
+type: LeadType
 ): void {
-  if (type === "Demand") {
-    stats.demand++;
-  } else if (type === "Supply") {
-    stats.supply++;
-  } else {
-    stats.saas++;
-  }
+if (type === "Demand") {
+stats.demand++;
+} else if (type === "Supply") {
+stats.supply++;
+} else {
+stats.saas++;
+}
 
-  stats.total++;
+stats.total++;
 }
 
 async function processCollectedResults(
-  results: SearchResult[],
-  sourceJobs: SourceJob[],
-  supabase: ReturnType<typeof createClient>
+results: SearchResult[],
+sourceJobs: SourceJob[],
+supabase: ReturnType<typeof createClient>
 ): Promise<LeadStats> {
-  const stats = createEmptyStats();
-  const skills = await loadSkills(supabase);
+const stats = createEmptyStats();
+const skills = await loadSkills(supabase);
 
-  const seenSourceUrls = new Set<string>();
-  const seenContactUrls = new Set<string>();
+const seenSourceUrls = new Set<string>();
+const seenContactUrls = new Set<string>();
 
-  const sourceDiagnostics: Record<string, any> = {};
+const sourceDiagnostics: Record<string, any> = {};
 
-  for (const source of sourceJobs) {
-    sourceDiagnostics[source.name] = {
-      category: source.category,
-      found: 0,
-      accepted: 0,
-      inserted: 0,
-      rejected: 0,
-      duplicates: 0,
-      errors: 0,
-      wrongType: 0,
-      noSkill: 0,
-      noContact: 0,
-      stale: 0
-    };
-  }
+for (const source of sourceJobs) {
+sourceDiagnostics[source.name] = {
+category: source.category,
+found: 0,
+accepted: 0,
+inserted: 0,
+rejected: 0,
+duplicates: 0,
+errors: 0,
+wrongType: 0,
+noSkill: 0,
+noContact: 0,
+stale: 0
+};
+}
 
-  stats.found = results.length;
+stats.found = results.length;
 
-  for (const result of results) {
-    const sourceName = clean(result.source || "Unknown");
+for (const result of results) {
+const sourceName = clean(result.source || "Unknown");
 
-    if (!sourceDiagnostics[sourceName]) {
-      sourceDiagnostics[sourceName] = {
-        category: "Demand",
-        found: 0,
-        accepted: 0,
-        inserted: 0,
-        rejected: 0,
-        duplicates: 0,
-        errors: 0,
-        wrongType: 0,
-        noSkill: 0,
-        noContact: 0,
-        stale: 0
-      };
-    }
+if (!sourceDiagnostics[sourceName]) {  
+  sourceDiagnostics[sourceName] = {  
+    category: "Demand",  
+    found: 0,  
+    accepted: 0,  
+    inserted: 0,  
+    rejected: 0,  
+    duplicates: 0,  
+    errors: 0,  
+    wrongType: 0,  
+    noSkill: 0,  
+    noContact: 0,  
+    stale: 0  
+  };  
+}  
 
-    const diagnostic = sourceDiagnostics[sourceName];
-    diagnostic.found++;
+const diagnostic = sourceDiagnostics[sourceName];  
+diagnostic.found++;  
 
-    try {
-      const type = classifyLead(result);
+try {  
+  const type = classifyLead(result);  
 
-      if (!type) {
-        diagnostic.wrongType++;
-        diagnostic.rejected++;
-        stats.wrongType++;
-        stats.rejected++;
-        continue;
-      }
+  if (!type) {  
+    diagnostic.wrongType++;  
+    diagnostic.rejected++;  
+    stats.wrongType++;  
+    stats.rejected++;  
+    continue;  
+  }  
 
-      const expectedSource = sourceJobs.find(
-        source => source.name === sourceName
-      );
+  const expectedSource = sourceJobs.find(  
+    source => source.name === sourceName  
+  );  
 
-      if (expectedSource && expectedSource.category !== type) {
-        diagnostic.wrongType++;
-        diagnostic.rejected++;
-        stats.wrongType++;
-        stats.rejected++;
-        continue;
-      }
+  if (expectedSource && expectedSource.category !== type) {  
+    diagnostic.wrongType++;  
+    diagnostic.rejected++;  
+    stats.wrongType++;  
+    stats.rejected++;  
+    continue;  
+  }  
 
-      const rejectionReason = checkRejectionReason(
-        result,
-        type,
-        skills
-      );
+  const rejectionReason = checkRejectionReason(  
+    result,  
+    type,  
+    skills  
+  );  
 
-      if (rejectionReason) {
-        if (rejectionReason === "no_matching_skill") {
-          diagnostic.noSkill++;
-          stats.noSkill++;
-        }
+  if (rejectionReason) {  
+    if (rejectionReason === "no_matching_skill") {  
+      diagnostic.noSkill++;  
+      stats.noSkill++;  
+    }  
 
-        if (rejectionReason === "no_real_contact") {
-          diagnostic.noContact++;
-          stats.noContact++;
-        }
+    if (rejectionReason === "no_real_contact") {  
+      diagnostic.noContact++;  
+      stats.noContact++;  
+    }  
 
-        if (rejectionReason === "not_fresh") {
-          diagnostic.stale++;
-          stats.stale++;
-        }
+    if (rejectionReason === "not_fresh") {  
+      diagnostic.stale++;  
+      stats.stale++;  
+    }  
 
-        diagnostic.rejected++;
-        stats.rejected++;
-        continue;
-      }
+    diagnostic.rejected++;  
+    stats.rejected++;  
+    continue;  
+  }  
 
-      const lead = buildProcessedLead(
-        result,
-        type,
-        skills
-      );
+  const lead = buildProcessedLead(  
+    result,  
+    type,  
+    skills  
+  );  
 
-      if (!lead) {
-        diagnostic.rejected++;
-        stats.rejected++;
-        continue;
-      }
+  if (!lead) {  
+    diagnostic.rejected++;  
+    stats.rejected++;  
+    continue;  
+  }  
 
-      const sourceKey = lead.sourceUrl.toLowerCase();
-      const contactKey = lead.contactUrl.toLowerCase();
+  const sourceKey = lead.sourceUrl.toLowerCase();  
+  const contactKey = lead.contactUrl.toLowerCase();  
 
-      if (sourceKey && seenSourceUrls.has(sourceKey)) {
-        diagnostic.duplicates++;
-        stats.duplicates++;
-        continue;
-      }
+  if (sourceKey && seenSourceUrls.has(sourceKey)) {  
+    diagnostic.duplicates++;  
+    stats.duplicates++;  
+    continue;  
+  }  
 
-      if (contactKey && seenContactUrls.has(contactKey)) {
-        diagnostic.duplicates++;
-        stats.duplicates++;
-        continue;
-      }
+  if (contactKey && seenContactUrls.has(contactKey)) {  
+    diagnostic.duplicates++;  
+    stats.duplicates++;  
+    continue;  
+  }  
 
-      if (await leadAlreadyExists(supabase, lead)) {
-        if (sourceKey) seenSourceUrls.add(sourceKey);
-        if (contactKey) seenContactUrls.add(contactKey);
+  if (await leadAlreadyExists(supabase, lead)) {  
+    if (sourceKey) seenSourceUrls.add(sourceKey);  
+    if (contactKey) seenContactUrls.add(contactKey);  
 
-        diagnostic.duplicates++;
-        stats.duplicates++;
-        continue;
-      }
+    diagnostic.duplicates++;  
+    stats.duplicates++;  
+    continue;  
+  }  
 
-      stats.accepted++;
-      diagnostic.accepted++;
+  stats.accepted++;  
+  diagnostic.accepted++;  
 
-      const inserted = await insertProcessedLead(
-        supabase,
-        lead
-      );
+  const inserted = await insertProcessedLead(  
+    supabase,  
+    lead  
+  );  
 
-      if (!inserted) {
-        diagnostic.errors++;
-        stats.errors++;
-        continue;
-      }
+  if (!inserted) {  
+    diagnostic.errors++;  
+    stats.errors++;  
+    continue;  
+  }  
 
-      if (sourceKey) seenSourceUrls.add(sourceKey);
-      if (contactKey) seenContactUrls.add(contactKey);
+  if (sourceKey) seenSourceUrls.add(sourceKey);  
+  if (contactKey) seenContactUrls.add(contactKey);  
 
-      stats.inserted++;
-      diagnostic.inserted++;
+  stats.inserted++;  
+  diagnostic.inserted++;  
 
-      incrementTypeCount(stats, lead.type);
-    } catch (error: any) {
-      diagnostic.errors++;
-      stats.errors++;
+  incrementTypeCount(stats, lead.type);  
+} catch (error: any) {  
+  diagnostic.errors++;  
+  stats.errors++;  
 
-      console.error(
-        `[${sourceName}] Processing failed:`,
-        error?.message || error
-      );
-    }
-  }
+  console.error(  
+    `[${sourceName}] Processing failed:`,  
+    error?.message || error  
+  );  
+}
 
-  stats.sources = sourceDiagnostics;
-  return stats;
+}
+
+stats.sources = sourceDiagnostics;
+return stats;
 }
 
 export default async function handler(
-  req: VercelRequest,
-  res: VercelResponse
+req: VercelRequest,
+res: VercelResponse
 ) {
-  res.setHeader(
-    "Content-Type",
-    "application/json; charset=utf-8"
-  );
+res.setHeader(
+"Content-Type",
+"application/json; charset=utf-8"
+);
 
-  if (req.method !== "POST") {
-    return res.status(405).json({
-      success: false,
-      message: "Method not allowed. Use POST."
-    });
-  }
+if (req.method !== "POST") {
+return res.status(405).json({
+success: false,
+message: "Method not allowed. Use POST."
+});
+}
 
-  try {
-    const supabase = getSupabaseClient();
+try {
+const supabase = getSupabaseClient();
 
-    const collection = await collectAllSources();
+const collection = await collectAllSources();  
 
-    const stats = await processCollectedResults(
-      collection.results,
-      collection.sourceJobs,
-      supabase
-    );
+const stats = await processCollectedResults(  
+  collection.results,  
+  collection.sourceJobs,  
+  supabase  
+);  
 
-    return res.status(200).json({
-      success: true,
-      message: "Lead collection completed.",
-      stats,
-      sources: sourceCollectionErrors
-    });
-  } catch (error: any) {
-    const message =
-      error?.message ||
-      "Unexpected error while collecting leads.";
+return res.status(200).json({  
+  success: true,  
+  message: "Lead collection completed.",  
+  stats,  
+  sources: sourceCollectionErrors  
+});
 
-    console.error(
-      "[Fetch Leads] Handler failed:",
-      message
-    );
+} catch (error: any) {
+const message =
+error?.message ||
+"Unexpected error while collecting leads.";
 
-    return res.status(500).json({
-      success: false,
-      message
-    });
-  }
-      }
+console.error(  
+  "[Fetch Leads] Handler failed:",  
+  message  
+);  
+
+return res.status(500).json({  
+  success: false,  
+  message  
+});
+
+}
+}
