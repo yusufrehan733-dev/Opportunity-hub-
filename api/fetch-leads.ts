@@ -688,18 +688,42 @@ if (getCountry(possible)) return "";
 
 return possible;
   }
-const DIRECT_SOCIAL_HOSTS = [
-  "instagram.com",
-  "linkedin.com",
+const BOOKING_AND_LINK_HOSTS = [
+  "calendly.com",
+  "cal.com",
+  "topmate.io",
+  "superpeer.com",
+  "linktr.ee",
+  "bio.link",
+  "beacons.ai",
+  "carrd.co",
+  "about.me",
+  "stan.store",
+  "ko-fi.com",
+  "buymeacoffee.com",
+  "preply.com",
+  "italki.com",
+  "superprof.com",
+  "wyzant.com",
+  "fiverr.com",
+  "upwork.com"
+];
+
+const BLOCKED_SOCIAL_ONLY_HOSTS = [
+  "bsky.app",
+  "github.com",
+  "reddit.com",
+  "medium.com",
+  "dev.to",
+  "wordpress.com",
+  "substack.com",
   "x.com",
   "twitter.com",
+  "instagram.com",
   "facebook.com",
-  "youtube.com",
   "tiktok.com",
-  "calendly.com",
-  "linktr.ee",
-  "topmate.io",
-  "superpeer.com"
+  "youtube.com",
+  "linkedin.com"
 ];
 
 function isArticleOrPostUrl(url: string): boolean {
@@ -712,19 +736,23 @@ function isArticleOrPostUrl(url: string): boolean {
     const path = parsed.pathname.toLowerCase().replace(/\/+$/, "");
 
     if (
-      host === "medium.com" ||
-      host.endsWith(".medium.com") ||
-      host === "dev.to" ||
-      host.endsWith(".wordpress.com") ||
-      host.endsWith(".substack.com") ||
-      host === "bsky.app" ||
-      host === "github.com" ||
-      host === "reddit.com" ||
-      host.endsWith(".reddit.com")
+      BLOCKED_SOCIAL_ONLY_HOSTS.some(
+        d => host === d || host.endsWith("." + d)
+      )
     ) {
       return true;
     }
 
+    // Allow booking/marketplace/link-in-bio profile URLs
+    if (
+      BOOKING_AND_LINK_HOSTS.some(
+        d => host === d || host.endsWith("." + d)
+      )
+    ) {
+      return false;
+    }
+
+    // Reject deep blog/article paths on external sites
     const segments = path.split("/").filter(Boolean);
     if (segments.length >= 2) return true;
     if (segments.length === 1 && segments[0].length > 35) return true;
@@ -735,7 +763,7 @@ function isArticleOrPostUrl(url: string): boolean {
   }
 }
 
-function isDirectPersonContactUrl(url: string): boolean {
+function isDirectExternalWebsiteOrBookingUrl(url: string): boolean {
   const cleaned = cleanUrl(url);
   if (!cleaned) return false;
   if (isArticleOrPostUrl(cleaned)) return false;
@@ -744,16 +772,22 @@ function isDirectPersonContactUrl(url: string): boolean {
   if (!host) return false;
 
   if (
-    DIRECT_SOCIAL_HOSTS.some(
+    BOOKING_AND_LINK_HOSTS.some(
       d => host === d || host.endsWith("." + d)
     )
   ) {
     return true;
   }
 
+  // Personal website / portfolio root or contact/book/hire page
   try {
     const path = new URL(cleaned).pathname.replace(/\/+$/, "");
-    return path === "" || /^\/(contact|about|hire|book|booking|tutor|coach)$/i.test(path);
+    return (
+      path === "" ||
+      /^\/(contact|about|hire|book|booking|tutor|coach|services|lessons)$/i.test(
+        path
+      )
+    );
   } catch {
     return false;
   }
@@ -782,7 +816,7 @@ function getContactUrl(
   const direct = cleanUrl(result.contactUrl || "");
   if (direct) {
     if (type === "SaaS") {
-      return isDirectPersonContactUrl(direct) ? direct : "";
+      return isDirectExternalWebsiteOrBookingUrl(direct) ? direct : "";
     }
     return direct;
   }
@@ -794,7 +828,7 @@ function getContactUrl(
   if (!link) return "";
 
   if (type === "SaaS") {
-    return isDirectPersonContactUrl(link) ? link : "";
+    return isDirectExternalWebsiteOrBookingUrl(link) ? link : "";
   }
   if (type === "Demand" && result.sourceType === "reddit") return link;
   if (
@@ -828,7 +862,7 @@ function hasRealContact(
   if (!contact) return false;
 
   if (type === "SaaS") {
-    return isDirectPersonContactUrl(contact);
+    return isDirectExternalWebsiteOrBookingUrl(contact);
   }
   if (type === "Demand" && result.sourceType === "reddit") return true;
   if (
@@ -910,13 +944,13 @@ function getSaasRoleFallbackSkill(
 
   if (
     result.saasRole === "freelancer" ||
-    /\b(freelancer|freelance|designer|developer|consultant|writer|editor|marketer)\b/i.test(text)
+    /\b(freelancer|freelance|designer|developer|consultant|writer|editor|marketer|translator)\b/i.test(text)
   ) {
     return {
       name: "Freelancing",
       category: "SaaS Prospects",
       subcategory: "Independent Services",
-      tags: ["freelancer", "freelance", "designer", "developer"]
+      tags: ["freelancer", "freelance", "designer", "writer", "editor"]
     };
   }
 
@@ -1117,12 +1151,13 @@ async function collectRedditDemandCoaches(): Promise<SearchResult[]> {
   );
 }
 
-function extractDirectContactsFromText(raw: string): {
+function extractEmailOrExternalSiteFromBio(raw: string): {
   email: string;
   contactUrl: string;
 } {
+  const cleanHtml = raw.replace(/<[^>]+>/g, " ");
   const emailMatches =
-    raw.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g) || [];
+    cleanHtml.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g) || [];
   const validEmail =
     emailMatches.find(
       e =>
@@ -1132,41 +1167,21 @@ function extractDirectContactsFromText(raw: string): {
     ) || "";
 
   const urlMatches = raw.match(/https?:\/\/[^\s<>"')\\]+/gi) || [];
-  let bestSocial = "";
-  let bestSite = "";
+  let bestUrl = "";
 
   for (const rawUrl of urlMatches) {
     const cleaned = cleanUrl(rawUrl.replace(/[.,;!?]+$/, ""));
     if (!cleaned || isBlockedDomain(cleaned)) continue;
 
-    const host = getHostname(cleaned);
-    if (
-      /medium\.com|dev\.to|wordpress\.com|gravatar\.com|w3\.org|schema\.org|googleapis\.com|gstatic\.com|cloudflare\.com|wp\.com|redd\.it|reddit\.com|bsky\.app|github\.com/i.test(
-        host
-      )
-    ) {
-      continue;
-    }
-
-    if (
-      DIRECT_SOCIAL_HOSTS.some(
-        d => host === d || host.endsWith("." + d)
-      )
-    ) {
-      if (
-        !/\/(share|sharing|intent|sharer|hashtag|search)\b/i.test(cleaned) &&
-        !bestSocial
-      ) {
-        bestSocial = cleaned;
-      }
-    } else if (!bestSite && isDirectPersonContactUrl(cleaned)) {
-      bestSite = cleaned;
+    if (isDirectExternalWebsiteOrBookingUrl(cleaned)) {
+      bestUrl = cleaned;
+      break;
     }
   }
 
   return {
     email: clean(validEmail),
-    contactUrl: bestSocial || bestSite
+    contactUrl: bestUrl
   };
 }
 
@@ -1183,82 +1198,7 @@ function isRealPersonName(name: string): boolean {
   return /[a-zA-Z]{2,}/.test(n);
 }
 
-async function collectDevToSaaSByRole(
-  role: SaasRole,
-  sourceName: string
-): Promise<SearchResult[]> {
-  const tags = SAAS_DEVTO_TAGS[role] || [];
-  const seen = new Set<string>();
-  const results: SearchResult[] = [];
-
-  const batches = await Promise.all(
-    tags.map(async tag => {
-      try {
-        const articles = await fetchJson(
-          `https://dev.to/api/articles?tag=${encodeURIComponent(tag)}&per_page=25`
-        );
-        return Array.isArray(articles) ? articles : [];
-      } catch (error) {
-        console.error(`[${sourceName}] Dev.to tag failed:`, tag, error);
-        return [];
-      }
-    })
-  );
-
-  const roleLabel =
-    role === "teacher"
-      ? "Teacher / Educator"
-      : role === "freelancer"
-        ? "Freelancer"
-        : "Coach";
-
-  for (const article of batches.flat()) {
-    const user = article?.user || {};
-    const personName = clean(user.name || user.username || "");
-    if (!isRealPersonName(personName)) continue;
-
-    const desc = clean(article?.description || "");
-    const title = clean(article?.title || "");
-    const fromText = extractDirectContactsFromText(desc);
-
-    const website = cleanUrl(user.website_url || "");
-    const twitter = clean(user.twitter_username || "");
-
-    const contactUrl =
-      fromText.contactUrl ||
-      (website && isDirectPersonContactUrl(website) ? website : "") ||
-      (twitter ? `https://x.com/${twitter}` : "");
-    const email = fromText.email;
-
-    // Require a direct email or direct external contact/booking/social URL
-    if (!contactUrl && !email) continue;
-
-    const key = (contactUrl || email).toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-
-    const bio = `${personName} — ${roleLabel} | ${title}`;
-
-    results.push({
-      title: `${personName} (${roleLabel})`,
-      link: contactUrl || `mailto:${email}`,
-      sourceUrl: contactUrl || `mailto:${email}`,
-      contactUrl,
-      email,
-      author: personName,
-      country: getCountry(`${title} ${desc}`) || "Remote / Global",
-      description: desc || bio,
-      snippet: desc || bio,
-      source: sourceName,
-      sourceType: "social-profile",
-      saasRole: role
-    });
-  }
-
-  return results;
-}
-
-async function collectBlueskyDirectContactsByRole(
+async function collectBlueskyDirectBioLeads(
   role: SaasRole,
   sourceName: string
 ): Promise<SearchResult[]> {
@@ -1269,19 +1209,23 @@ async function collectBlueskyDirectContactsByRole(
       "online tutor",
       "language teacher",
       "music teacher",
-      "science teacher"
+      "science teacher",
+      "esl teacher"
     ],
     freelancer: [
-      "freelance designer",
-      "freelance developer",
       "freelance writer",
+      "freelance designer",
+      "freelance editor",
+      "copywriter",
+      "freelance translator",
       "video editor"
     ],
     coach: [
       "life coach",
-      "business coach",
       "career coach",
-      "fitness coach"
+      "business coach",
+      "executive coach",
+      "wellness coach"
     ]
   };
 
@@ -1307,11 +1251,11 @@ async function collectBlueskyDirectContactsByRole(
     const bio = clean(actor?.description || "");
     if (!bio || !isRealPersonName(displayName)) continue;
 
-    // Only keep actors who explicitly put an email or external website/booking/social link in their bio
-    const extracted = extractDirectContactsFromText(bio);
-    if (!extracted.contactUrl && !extracted.email) continue;
+    // Keep ONLY if bio contains a valid email or external website / booking link
+    const extracted = extractEmailOrExternalSiteFromBio(bio);
+    if (!extracted.email && !extracted.contactUrl) continue;
 
-    const key = (extracted.contactUrl || extracted.email).toLowerCase();
+    const key = (extracted.email || extracted.contactUrl).toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
 
@@ -1334,22 +1278,30 @@ async function collectBlueskyDirectContactsByRole(
   return results;
 }
 
-async function collectForHireDirectContactsByRole(
+async function collectMastodonDirectBioLeads(
   role: SaasRole,
   sourceName: string
 ): Promise<SearchResult[]> {
   const queriesByRole: Record<SaasRole, string[]> = {
     teacher: [
-      '"for hire" tutor OR teacher',
-      '"offering" tutoring OR lessons'
+      "english teacher",
+      "math tutor",
+      "language teacher",
+      "music teacher",
+      "tutor"
     ],
     freelancer: [
-      '"for hire" freelancer OR developer OR designer',
-      '"for hire" video editor OR writer'
+      "freelance writer",
+      "freelance designer",
+      "copywriter",
+      "translator",
+      "freelancer"
     ],
     coach: [
-      '"for hire" coach OR mentor',
-      '"offering" coaching OR mentorship'
+      "life coach",
+      "career coach",
+      "business coach",
+      "coach"
     ]
   };
 
@@ -1359,43 +1311,46 @@ async function collectForHireDirectContactsByRole(
   const batches = await Promise.all(
     (queriesByRole[role] || []).map(async q => {
       try {
-        const xml = await fetchText(
-          `https://www.reddit.com/search.rss?q=${encodeURIComponent(q)}&sort=new&t=month&limit=25`
+        const data = await fetchJson(
+          `https://mastodon.social/api/v2/search?q=${encodeURIComponent(q)}&type=accounts&limit=20`
         );
-        return parseRssFeed(xml, sourceName);
+        return Array.isArray(data?.accounts) ? data.accounts : [];
       } catch (error) {
-        console.error(`[${sourceName}] For-hire query failed:`, q, error);
+        console.error(`[${sourceName}] Mastodon query failed:`, q, error);
         return [];
       }
     })
   );
 
-  for (const item of batches.flat()) {
-    const rawAuthor = clean(item.author || "").replace(/^\/?u\//i, "");
-    if (!isRealPersonName(rawAuthor)) continue;
+  for (const account of batches.flat()) {
+    const displayName = clean(account?.display_name || account?.username || "");
+    const noteHtml = String(account?.note || "");
+    const fieldsText = Array.isArray(account?.fields)
+      ? account.fields.map((f: any) => `${f?.name || ""} ${f?.value || ""}`).join(" ")
+      : "";
+    const combinedBio = `${noteHtml} ${fieldsText}`;
+    const cleanBio = clean(combinedBio.replace(/<[^>]+>/g, " "));
 
-    const extracted = extractDirectContactsFromText(
-      `${item.title} ${item.description}`
-    );
+    if (!cleanBio || !isRealPersonName(displayName)) continue;
 
-    // Require an explicit email or external website/booking/social link—no Reddit profile fallback
-    if (!extracted.contactUrl && !extracted.email) continue;
+    // Extract email or external website/booking link from bio note or profile metadata fields
+    const extracted = extractEmailOrExternalSiteFromBio(combinedBio);
+    if (!extracted.email && !extracted.contactUrl) continue;
 
-    const key = (extracted.contactUrl || extracted.email).toLowerCase();
+    const key = (extracted.email || extracted.contactUrl).toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
 
     results.push({
-      title: `${rawAuthor} — ${clean(item.title)}`,
+      title: `${displayName} — ${cleanBio.slice(0, 80)}`,
       link: extracted.contactUrl || `mailto:${extracted.email}`,
       sourceUrl: extracted.contactUrl || `mailto:${extracted.email}`,
       contactUrl: extracted.contactUrl,
       email: extracted.email,
-      author: rawAuthor,
-      country:
-        getCountry(`${item.title} ${item.description}`) || "Remote / Global",
-      description: clean(item.description || item.title),
-      snippet: clean(item.description || item.title),
+      author: displayName,
+      country: getCountry(cleanBio) || "Remote / Global",
+      description: cleanBio,
+      snippet: cleanBio,
       source: sourceName,
       sourceType: "social-profile",
       saasRole: role
@@ -1410,9 +1365,8 @@ async function collectSaaSByRole(
   sourceName: string
 ): Promise<SearchResult[]> {
   const batches = await Promise.all([
-    collectBlueskyDirectContactsByRole(role, sourceName),
-    collectDevToSaaSByRole(role, sourceName),
-    collectForHireDirectContactsByRole(role, sourceName)
+    collectBlueskyDirectBioLeads(role, sourceName),
+    collectMastodonDirectBioLeads(role, sourceName)
   ]);
 
   const merged = new Map<string, SearchResult>();
@@ -1437,7 +1391,7 @@ async function collectBingSaaSFreelancers(): Promise<SearchResult[]> {
 
 async function collectBingSaaSCoaches(): Promise<SearchResult[]> {
   return collectSaaSByRole("coach", "SaaS Coaches");
-}
+  }
 async function collectJobicy(): Promise<SearchResult[]> {
 const results: SearchResult[] = [];
 
@@ -1645,7 +1599,7 @@ return results.slice(
 0,
 MAX_RESULTS_PER_SOURCE
 );
-  }
+}
 const sourceCollectionErrors: Record<
 string,
 string
