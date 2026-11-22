@@ -339,6 +339,7 @@ const COUNTRY_ALIASES: Record<string, string> = {
   "nigeria": "Nigeria",
   "egypt": "Egypt"
 };
+
 const CITY_COUNTRY_MAP: Record<string, string> = {
   toronto: "Canada",
   vancouver: "Canada",
@@ -682,7 +683,80 @@ function getCity(value: string): string {
   if (getCountry(possible)) return "";
 
   return possible;
+}
+const DIRECT_SOCIAL_HOSTS = [
+  "instagram.com",
+  "linkedin.com",
+  "x.com",
+  "twitter.com",
+  "facebook.com",
+  "youtube.com",
+  "tiktok.com",
+  "calendly.com",
+  "linktr.ee",
+  "github.com"
+];
+
+function isArticleOrPostUrl(url: string): boolean {
+  const cleaned = cleanUrl(url);
+  if (!cleaned) return true;
+
+  try {
+    const parsed = new URL(cleaned);
+    const host = parsed.hostname.toLowerCase().replace(/^www\./, "");
+    const path = parsed.pathname.toLowerCase().replace(/\/+$/, "");
+
+    if (
+      host === "medium.com" ||
+      host.endsWith(".medium.com") ||
+      host === "dev.to" ||
+      host.endsWith(".wordpress.com") ||
+      host.endsWith(".substack.com")
+    ) {
+      const segments = path.split("/").filter(Boolean);
+      if (
+        segments.length === 1 &&
+        (host !== "medium.com" || segments[0].startsWith("@"))
+      ) {
+        return false;
+      }
+      return true;
     }
+
+    const segments = path.split("/").filter(Boolean);
+    if (segments.length >= 2) return true;
+    if (segments.length === 1 && segments[0].length > 35) return true;
+
+    return false;
+  } catch {
+    return true;
+  }
+}
+
+function isDirectPersonContactUrl(url: string): boolean {
+  const cleaned = cleanUrl(url);
+  if (!cleaned) return false;
+  if (isArticleOrPostUrl(cleaned)) return false;
+
+  const host = getHostname(cleaned);
+  if (!host) return false;
+
+  if (
+    DIRECT_SOCIAL_HOSTS.some(
+      d => host === d || host.endsWith("." + d)
+    )
+  ) {
+    return true;
+  }
+
+  try {
+    const path = new URL(cleaned).pathname.replace(/\/+$/, "");
+    return path === "" || /^\/(contact|about|hire|book)$/i.test(path);
+  } catch {
+    return false;
+  }
+}
+
 function isSpecificContactPage(
   value: string
 ): boolean {
@@ -704,7 +778,12 @@ function getContactUrl(
   type: LeadType
 ): string {
   const direct = cleanUrl(result.contactUrl || "");
-  if (direct) return direct;
+  if (direct) {
+    if (type === "SaaS") {
+      return isDirectPersonContactUrl(direct) ? direct : "";
+    }
+    return direct;
+  }
 
   const application = cleanUrl(result.applicationUrl || "");
   if (application && type !== "SaaS") return application;
@@ -712,7 +791,9 @@ function getContactUrl(
   const link = cleanUrl(result.link || result.sourceUrl || "");
   if (!link) return "";
 
-  if (type === "SaaS") return link;
+  if (type === "SaaS") {
+    return isDirectPersonContactUrl(link) ? link : "";
+  }
   if (type === "Demand" && result.sourceType === "reddit") return link;
   if (
     type === "Supply" &&
@@ -744,7 +825,9 @@ function hasRealContact(
   const contact = getContactUrl(result, type);
   if (!contact) return false;
 
-  if (type === "SaaS") return true;
+  if (type === "SaaS") {
+    return isDirectPersonContactUrl(contact);
+  }
   if (type === "Demand" && result.sourceType === "reddit") return true;
   if (
     type === "Supply" &&
@@ -969,7 +1052,7 @@ function buildProcessedLead(
     salaryMax: result.salaryMax ?? null,
     companyWebsite: cleanUrl(result.companyWebsite || "")
   };
-    }
+        }
 async function collectRedditQueries(
   queries: string[],
   sourceName: string
@@ -1032,28 +1115,120 @@ async function collectRedditDemandCoaches(): Promise<SearchResult[]> {
   );
 }
 
-function extractContactFromText(text: string): {
+function extractDirectContactsFromHtmlOrText(raw: string): {
   email: string;
   contactUrl: string;
+  platform: string;
 } {
-  const emailMatch = text.match(
-    /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/
-  );
-  const urlMatch = text.match(/https?:\/\/[^\s<>"')]+/i);
+  const emailMatches =
+    raw.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g) || [];
+  const validEmail =
+    emailMatches.find(
+      e =>
+        !/noreply|no-reply|example\.com|sentry|wixpress|wordpress|medium\.com|w3\.org/i.test(
+          e
+        )
+    ) || "";
+
+  const urlMatches = raw.match(/https?:\/\/[^\s<>"')\\]+/gi) || [];
+  let bestSocial = "";
+  let bestSite = "";
+
+  for (const rawUrl of urlMatches) {
+    const cleaned = cleanUrl(rawUrl.replace(/[.,;!?]+$/, ""));
+    if (!cleaned || isBlockedDomain(cleaned)) continue;
+
+    const host = getHostname(cleaned);
+    if (
+      /medium\.com|dev\.to|wordpress\.com|gravatar\.com|w3\.org|schema\.org|googleapis\.com|gstatic\.com|cloudflare\.com|wp\.com/i.test(
+        host
+      )
+    ) {
+      continue;
+    }
+
+    if (
+      DIRECT_SOCIAL_HOSTS.some(
+        d => host === d || host.endsWith("." + d)
+      )
+    ) {
+      if (
+        !/\/(share|sharing|intent|sharer|hashtag|search)\b/i.test(cleaned) &&
+        !bestSocial
+      ) {
+        bestSocial = cleaned;
+      }
+    } else if (!bestSite && isDirectPersonContactUrl(cleaned)) {
+      bestSite = cleaned;
+    }
+  }
+
+  const chosenUrl = bestSocial || bestSite;
+  const platform = chosenUrl
+    ? getHostname(chosenUrl)
+    : validEmail
+      ? "email"
+      : "";
 
   return {
-    email: emailMatch ? clean(emailMatch[0]) : "",
-    contactUrl: urlMatch ? cleanUrl(urlMatch[0]) : ""
+    email: clean(validEmail),
+    contactUrl: chosenUrl,
+    platform
   };
 }
 
 function isRealPersonName(name: string): boolean {
   const n = clean(name);
-  if (!n || n.length < 2 || n.length > 80) return false;
-  if (/^(admin|staff|team|support|editorial|bot|unknown|medium|wordpress)$/i.test(n)) {
+  if (!n || n.length < 2 || n.length > 70) return false;
+  if (
+    /^(admin|staff|team|support|editorial|bot|unknown|medium|wordpress|scouthub)$/i.test(
+      n
+    )
+  ) {
     return false;
   }
   return /[a-zA-Z]{2,}/.test(n);
+}
+
+async function fetchDevToUserContact(userId: number | string): Promise<{
+  name: string;
+  bio: string;
+  location: string;
+  email: string;
+  contactUrl: string;
+}> {
+  try {
+    const profile = await fetchJson(`https://dev.to/api/users/${userId}`);
+    const bio = clean(profile?.summary || "");
+    const location = clean(profile?.location || "");
+    const fromBio = extractDirectContactsFromHtmlOrText(bio);
+
+    const website = cleanUrl(profile?.website_url || "");
+    const twitter = clean(profile?.twitter_username || "");
+    const github = clean(profile?.github_username || "");
+
+    const contactUrl =
+      fromBio.contactUrl ||
+      (website && isDirectPersonContactUrl(website) ? website : "") ||
+      (twitter ? `https://x.com/${twitter}` : "") ||
+      (github ? `https://github.com/${github}` : "");
+
+    return {
+      name: clean(profile?.name || ""),
+      bio,
+      location,
+      email: fromBio.email,
+      contactUrl
+    };
+  } catch {
+    return {
+      name: "",
+      bio: "",
+      location: "",
+      email: "",
+      contactUrl: ""
+    };
+  }
 }
 
 async function collectDevToSaaSByRole(
@@ -1061,263 +1236,61 @@ async function collectDevToSaaSByRole(
   sourceName: string
 ): Promise<SearchResult[]> {
   const tags = SAAS_DEVTO_TAGS[role] || [];
-  const seenKeys = new Set<string>();
+  const seen = new Set<string>();
   const results: SearchResult[] = [];
 
   for (const tag of tags) {
     try {
       const articles = await fetchJson(
-        `https://dev.to/api/articles?tag=${encodeURIComponent(tag)}&per_page=20`
+        `https://dev.to/api/articles?tag=${encodeURIComponent(tag)}&per_page=15`
       );
-
       if (!Array.isArray(articles)) continue;
 
-      for (const article of articles.slice(0, 15)) {
-        const articleUrl = cleanUrl(article?.url || "");
-        const personName = clean(
-          article?.user?.name || article?.user?.username || ""
-        );
-        const title = clean(article?.title || "");
-        const desc = clean(article?.description || "");
-        const bio = `${personName} — ${role} — ${title} ${desc}`.trim();
+      for (const article of articles.slice(0, 10)) {
+        const userId = article?.user?.id;
+        if (!userId) continue;
 
-        const bodyContact = extractContactFromText(
-          `${desc} ${article?.canonical_url || ""}`
-        );
-        const contactUrl =
-          bodyContact.contactUrl ||
-          cleanUrl(article?.canonical_url || "") ||
-          articleUrl;
-        const email = bodyContact.email;
-
+        const user = await fetchDevToUserContact(userId);
+        const personName = user.name || clean(article?.user?.name || "");
         if (!isRealPersonName(personName)) continue;
-        if (!contactUrl && !email) continue;
+        if (!user.contactUrl && !user.email) continue;
 
-        const dedupKey = (contactUrl || email || articleUrl).toLowerCase();
-        if (!dedupKey || seenKeys.has(dedupKey)) continue;
-        seenKeys.add(dedupKey);
-
-        const detectedCountry = getCountry(bio);
-
-        results.push({
-          title: `${personName} — ${title}`,
-          link: articleUrl || contactUrl,
-          sourceUrl: articleUrl || contactUrl,
-          contactUrl: contactUrl || articleUrl,
-          email,
-          author: personName,
-          country: detectedCountry || "Remote / Global",
-          description: bio,
-          snippet: bio,
-          source: sourceName,
-          sourceType: "social-profile",
-          saasRole: role,
-          publishedAt: clean(article?.published_at || ""),
-          published: clean(article?.published_at || "")
-        });
-
-        if (results.length >= MAX_RESULTS_PER_SOURCE) {
-          return results;
-        }
-      }
-    } catch (error) {
-      console.error(`[${sourceName}] Dev.to tag failed:`, tag, error);
-    }
-  }
-
-  return results;
-}
-
-async function collectMediumSaaSByRole(
-  role: SaasRole,
-  sourceName: string
-): Promise<SearchResult[]> {
-  const tags =
-    role === "teacher"
-      ? [
-          "online-teaching",
-          "tutoring",
-          "language-learning",
-          "english-learning",
-          "mathematics",
-          "education"
-        ]
-      : SAAS_MEDIUM_TAGS[role] || [];
-
-  const seenKeys = new Set<string>();
-  const results: SearchResult[] = [];
-
-  for (const tag of tags) {
-    try {
-      const xml = await fetchText(
-        `https://medium.com/feed/tag/${encodeURIComponent(tag)}`
-      );
-      const items = parseRssFeed(xml, sourceName);
-
-      for (const item of items.slice(0, 15)) {
-        const personName = clean(item.author || "");
-        const textBlob = `${personName} (${role}) — ${item.title} ${item.description}`;
-        const { email, contactUrl } = extractContactFromText(textBlob);
-        const resolvedContact = contactUrl || cleanUrl(item.link || "");
-
-        if (!isRealPersonName(personName)) continue;
-        if (!resolvedContact && !email) continue;
-
-        const dedupKey = (resolvedContact || email).toLowerCase();
-        if (!dedupKey || seenKeys.has(dedupKey)) continue;
-        seenKeys.add(dedupKey);
-
-        const detectedCountry = getCountry(textBlob);
-
-        results.push({
-          ...item,
-          author: personName,
-          country: detectedCountry || "Remote / Global",
-          email,
-          contactUrl: resolvedContact,
-          source: sourceName,
-          sourceType: "social-profile",
-          saasRole: role,
-          description: textBlob,
-          snippet: textBlob
-        });
-
-        if (results.length >= MAX_RESULTS_PER_SOURCE) {
-          return results;
-        }
-      }
-    } catch (error) {
-      console.error(`[${sourceName}] Medium tag failed:`, tag, error);
-    }
-  }
-
-  return results;
-}
-
-async function collectWordPressTeachers(
-  sourceName: string
-): Promise<SearchResult[]> {
-  const tags = [
-    "tutoring",
-    "online-teaching",
-    "english-teacher",
-    "math-tutor",
-    "language-learning",
-    "music-teacher",
-    "homeschooling"
-  ];
-
-  const seen = new Set<string>();
-  const results: SearchResult[] = [];
-
-  for (const tag of tags) {
-    try {
-      const xml = await fetchText(
-        `https://wordpress.com/tag/${encodeURIComponent(tag)}/feed`
-      );
-      const items = parseRssFeed(xml, sourceName);
-
-      for (const item of items.slice(0, 12)) {
-        const personName = clean(item.author || "");
-        const textBlob = `${personName} (teacher / ${tag.replace(/-/g, " ")}) — ${item.title} ${item.description}`;
-        const { email, contactUrl } = extractContactFromText(textBlob);
-
-        let siteRoot = "";
-        try {
-          const u = new URL(item.link);
-          siteRoot = `${u.protocol}//${u.hostname}`;
-        } catch {
-          siteRoot = cleanUrl(item.link);
-        }
-
-        const resolvedContact = contactUrl || siteRoot || cleanUrl(item.link);
-
-        if (!isRealPersonName(personName)) continue;
-        if (!resolvedContact && !email) continue;
-
-        const key = (resolvedContact || email).toLowerCase();
-        if (!key || seen.has(key)) continue;
-        seen.add(key);
-
-        const detectedCountry = getCountry(textBlob);
-
-        results.push({
-          ...item,
-          author: personName,
-          country: detectedCountry || "Remote / Global",
-          email,
-          contactUrl: resolvedContact,
-          source: sourceName,
-          sourceType: "social-profile",
-          saasRole: "teacher",
-          description: textBlob,
-          snippet: textBlob
-        });
-      }
-    } catch (error) {
-      console.error(`[${sourceName}] WordPress tag failed:`, tag, error);
-    }
-  }
-
-  return results;
-}
-
-async function collectOpenAlexEducators(
-  sourceName: string
-): Promise<SearchResult[]> {
-  const queries = [
-    "english teacher",
-    "mathematics teacher",
-    "science teacher",
-    "language instructor",
-    "music teacher"
-  ];
-
-  const seen = new Set<string>();
-  const results: SearchResult[] = [];
-
-  for (const q of queries) {
-    try {
-      const data = await fetchJson(
-        `https://api.openalex.org/authors?search=${encodeURIComponent(q)}&per-page=15`
-      );
-      const authors = Array.isArray(data?.results) ? data.results : [];
-
-      for (const author of authors) {
-        const name = clean(author?.display_name || "");
-        const institution = clean(
-          author?.last_known_institutions?.[0]?.display_name || ""
-        );
-        const countryCode = clean(
-          author?.last_known_institutions?.[0]?.country_code || ""
-        );
-        const topic = clean(author?.topics?.[0]?.display_name || q);
-        const profileUrl = cleanUrl(author?.orcid || author?.id || "");
-
-        if (!isRealPersonName(name) || !profileUrl) continue;
-
-        const key = profileUrl.toLowerCase();
+        const key = (user.contactUrl || user.email).toLowerCase();
         if (seen.has(key)) continue;
         seen.add(key);
 
-        const bio = `${name} — ${topic} Educator${institution ? ` at ${institution}` : ""}`;
+        const roleLabel =
+          role === "teacher"
+            ? "Teacher / Educator"
+            : role === "freelancer"
+              ? "Freelancer"
+              : "Coach";
+
+        const bio =
+          user.bio ||
+          `${personName} — ${roleLabel} (${clean(article?.title || "")})`;
 
         results.push({
-          title: bio,
-          link: profileUrl,
-          sourceUrl: profileUrl,
-          contactUrl: profileUrl,
-          author: name,
-          country: countryCode || "Global",
+          title: `${personName} (${roleLabel})`,
+          link: user.contactUrl || `mailto:${user.email}`,
+          sourceUrl: user.contactUrl || `mailto:${user.email}`,
+          contactUrl: user.contactUrl || `mailto:${user.email}`,
+          email: user.email,
+          author: personName,
+          location: user.location,
+          country:
+            getCountry(`${user.location} ${bio}`) ||
+            user.location ||
+            "Remote / Global",
           description: bio,
           snippet: bio,
           source: sourceName,
           sourceType: "social-profile",
-          saasRole: "teacher"
+          saasRole: role
         });
       }
     } catch (error) {
-      console.error(`[${sourceName}] OpenAlex query failed:`, q, error);
+      console.error(`[${sourceName}] Dev.to tag failed:`, tag, error);
     }
   }
 
@@ -1329,7 +1302,12 @@ async function collectGitHubSaaSByRole(
   sourceName: string
 ): Promise<SearchResult[]> {
   const queriesByRole: Record<SaasRole, string[]> = {
-    teacher: ["teacher in:bio", "tutor in:bio", "instructor in:bio"],
+    teacher: [
+      "teacher in:bio",
+      "tutor in:bio",
+      "instructor in:bio",
+      "educator in:bio"
+    ],
     freelancer: ["freelance in:bio", "freelancer in:bio"],
     coach: ["coach in:bio", "mentor in:bio"]
   };
@@ -1360,26 +1338,28 @@ async function collectGitHubSaaSByRole(
         const email = clean(profile?.email || "");
         const twitter = clean(profile?.twitter_username || "");
         const githubUrl = cleanUrl(profile?.html_url || "");
+        const fromBio = extractDirectContactsFromHtmlOrText(bio);
 
         const contactUrl =
-          blog ||
+          fromBio.contactUrl ||
+          (blog && isDirectPersonContactUrl(blog) ? blog : "") ||
           (twitter ? `https://x.com/${twitter}` : "") ||
           githubUrl;
 
-        if (!isRealPersonName(name)) continue;
-        if (!bio || (!contactUrl && !email)) continue;
-
-        const detectedCountry = getCountry(`${location} ${bio}`);
+        const finalEmail = email || fromBio.email;
+        if (!isRealPersonName(name) || !bio) continue;
+        if (!contactUrl && !finalEmail) continue;
 
         results.push({
-          title: `${name} — ${bio.slice(0, 80)}`,
-          link: githubUrl || contactUrl,
-          sourceUrl: githubUrl || contactUrl,
-          contactUrl,
-          email,
+          title: `${name} — ${bio.slice(0, 70)}`,
+          link: contactUrl || `mailto:${finalEmail}`,
+          sourceUrl: contactUrl || `mailto:${finalEmail}`,
+          contactUrl: contactUrl || `mailto:${finalEmail}`,
+          email: finalEmail,
           author: name,
           location,
-          country: detectedCountry || location || "Remote / Global",
+          country:
+            getCountry(`${location} ${bio}`) || location || "Remote / Global",
           description: `${bio}${location ? ` | Location: ${location}` : ""}`,
           snippet: bio,
           source: sourceName,
@@ -1395,27 +1375,98 @@ async function collectGitHubSaaSByRole(
   return results;
 }
 
+async function collectRssAuthorContacts(
+  feedUrls: string[],
+  role: SaasRole,
+  sourceName: string
+): Promise<SearchResult[]> {
+  const seen = new Set<string>();
+  const results: SearchResult[] = [];
+
+  for (const feedUrl of feedUrls) {
+    try {
+      const xml = await fetchText(feedUrl);
+      const items = parseRssFeed(xml, sourceName);
+
+      for (const item of items.slice(0, 8)) {
+        const personName = clean(item.author || "");
+        if (!isRealPersonName(personName)) continue;
+
+        let found = extractDirectContactsFromHtmlOrText(item.description);
+
+        if (!found.contactUrl && !found.email && item.link) {
+          try {
+            const pageHtml = await fetchText(item.link);
+            found = extractDirectContactsFromHtmlOrText(pageHtml);
+          } catch {
+            // Skip if page cannot be fetched
+          }
+        }
+
+        if (!found.contactUrl && !found.email) continue;
+
+        const key = (found.contactUrl || found.email).toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+
+        const detectedCountry = getCountry(`${item.title} ${item.description}`);
+
+        results.push({
+          title: `${personName} (${role})`,
+          link: found.contactUrl || `mailto:${found.email}`,
+          sourceUrl: found.contactUrl || `mailto:${found.email}`,
+          contactUrl: found.contactUrl || `mailto:${found.email}`,
+          email: found.email,
+          author: personName,
+          country: detectedCountry || "Remote / Global",
+          description: `${personName} — ${role} | ${clean(item.title)}`,
+          snippet: `${personName} — ${role} | ${clean(item.title)}`,
+          source: sourceName,
+          sourceType: "social-profile",
+          saasRole: role
+        });
+      }
+    } catch (error) {
+      console.error(`[${sourceName}] Feed failed:`, feedUrl, error);
+    }
+  }
+
+  return results;
+}
+
 async function collectSaaSByRole(
   role: SaasRole,
   sourceName: string
 ): Promise<SearchResult[]> {
-  const tasks: Promise<SearchResult[]>[] = [
+  const feedsByRole: Record<SaasRole, string[]> = {
+    teacher: [
+      "https://wordpress.com/tag/tutoring/feed",
+      "https://wordpress.com/tag/online-teaching/feed",
+      "https://wordpress.com/tag/english-teacher/feed",
+      "https://wordpress.com/tag/math-tutor/feed",
+      "https://wordpress.com/tag/language-learning/feed",
+      "https://medium.com/feed/tag/online-teaching",
+      "https://medium.com/feed/tag/tutoring"
+    ],
+    freelancer: [
+      "https://medium.com/feed/tag/freelancing",
+      "https://wordpress.com/tag/freelancing/feed"
+    ],
+    coach: [
+      "https://medium.com/feed/tag/coaching",
+      "https://medium.com/feed/tag/life-coach",
+      "https://wordpress.com/tag/coaching/feed"
+    ]
+  };
+
+  const [devtoRows, githubRows, rssContactRows] = await Promise.all([
     collectDevToSaaSByRole(role, sourceName),
-    collectMediumSaaSByRole(role, sourceName),
-    collectGitHubSaaSByRole(role, sourceName)
-  ];
+    collectGitHubSaaSByRole(role, sourceName),
+    collectRssAuthorContacts(feedsByRole[role] || [], role, sourceName)
+  ]);
 
-  if (role === "teacher") {
-    tasks.push(
-      collectWordPressTeachers(sourceName),
-      collectOpenAlexEducators(sourceName)
-    );
-  }
-
-  const batches = await Promise.all(tasks);
   const merged = new Map<string, SearchResult>();
-
-  for (const row of batches.flat()) {
+  for (const row of [...devtoRows, ...githubRows, ...rssContactRows]) {
     const key = cleanUrl(row.contactUrl || row.link || "").toLowerCase();
     if (key && !merged.has(key)) {
       merged.set(key, row);
@@ -1435,7 +1486,7 @@ async function collectBingSaaSFreelancers(): Promise<SearchResult[]> {
 
 async function collectBingSaaSCoaches(): Promise<SearchResult[]> {
   return collectSaaSByRole("coach", "SaaS Coaches");
-}
+  }
 async function collectJobicy(): Promise<SearchResult[]> {
   const results: SearchResult[] = [];
 
@@ -1640,7 +1691,7 @@ async function collectRemoteOK(): Promise<SearchResult[]> {
     0,
     MAX_RESULTS_PER_SOURCE
   );
-  }
+}
 const sourceCollectionErrors: Record<
   string,
   string
@@ -1702,17 +1753,17 @@ async function collectAllSources(): Promise<{
       collect: collectRedditDemandCoaches
     },
     {
-      name: "All-Subjects SaaS Teachers",
+      name: "DevTo & Medium SaaS Teachers",
       category: "SaaS",
       collect: collectBingSaaSTeachers
     },
     {
-      name: "SaaS Freelancers",
+      name: "DevTo & Medium SaaS Freelancers",
       category: "SaaS",
       collect: collectBingSaaSFreelancers
     },
     {
-      name: "SaaS Coaches",
+      name: "DevTo & Medium SaaS Coaches",
       category: "SaaS",
       collect: collectBingSaaSCoaches
     },
@@ -1908,7 +1959,7 @@ async function insertProcessedLead(
       name: lead.name || lead.contactName,
       platform: lead.platform,
       niche: lead.skill,
-      contact: lead.email || lead.contactUrl,
+      contact: lead.contactUrl,
       description: lead.description,
       source_url: lead.sourceUrl,
       contact_url: lead.contactUrl,
