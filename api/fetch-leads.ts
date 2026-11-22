@@ -339,7 +339,6 @@ const COUNTRY_ALIASES: Record<string, string> = {
   "nigeria": "Nigeria",
   "egypt": "Egypt"
 };
-
 const CITY_COUNTRY_MAP: Record<string, string> = {
   toronto: "Canada",
   vancouver: "Canada",
@@ -683,7 +682,7 @@ function getCity(value: string): string {
   if (getCountry(possible)) return "";
 
   return possible;
- }
+    }
 function isSpecificContactPage(
   value: string
 ): boolean {
@@ -970,7 +969,69 @@ function buildProcessedLead(
     salaryMax: result.salaryMax ?? null,
     companyWebsite: cleanUrl(result.companyWebsite || "")
   };
+    }
+async function collectRedditQueries(
+  queries: string[],
+  sourceName: string
+): Promise<SearchResult[]> {
+  const collected: SearchResult[] = [];
+
+  const batches = await Promise.all(
+    queries.map(async query => {
+      try {
+        const url =
+          "https://www.reddit.com/search.rss?q=" +
+          encodeURIComponent(query) +
+          "&sort=new&t=month&limit=25";
+
+        const xml = await fetchText(url);
+        const results = parseRssFeed(xml, sourceName);
+
+        return results.map(result => ({
+          ...result,
+          source: sourceName,
+          sourceType: "reddit",
+          searchQuery: query,
+          link: cleanUrl(result.link),
+          sourceUrl: cleanUrl(result.link),
+          contactUrl: cleanUrl(result.link),
+          snippet: clean(result.description || result.snippet || "")
+        }));
+      } catch (error) {
+        console.error(`[${sourceName}] Query failed:`, query, error);
+        return [];
+      }
+    })
+  );
+
+  for (const batch of batches) {
+    collected.push(...batch);
   }
+
+  return collected.slice(0, MAX_RESULTS_PER_SOURCE);
+}
+
+async function collectRedditDemandTeachers(): Promise<SearchResult[]> {
+  return collectRedditQueries(
+    DEMAND_TEACHER_QUERIES,
+    "Reddit Demand Teachers"
+  );
+}
+
+async function collectRedditDemandFreelancers(): Promise<SearchResult[]> {
+  return collectRedditQueries(
+    DEMAND_FREELANCER_QUERIES,
+    "Reddit Demand Freelancers"
+  );
+}
+
+async function collectRedditDemandCoaches(): Promise<SearchResult[]> {
+  return collectRedditQueries(
+    DEMAND_COACH_QUERIES,
+    "Reddit Demand Coaches"
+  );
+}
+
 function extractContactFromText(text: string): {
   email: string;
   contactUrl: string;
@@ -989,7 +1050,7 @@ function extractContactFromText(text: string): {
 function isRealPersonName(name: string): boolean {
   const n = clean(name);
   if (!n || n.length < 2 || n.length > 80) return false;
-  if (/^(admin|staff|team|support|editorial|bot|unknown|medium)$/i.test(n)) {
+  if (/^(admin|staff|team|support|editorial|bot|unknown|medium|wordpress)$/i.test(n)) {
     return false;
   }
   return /[a-zA-Z]{2,}/.test(n);
@@ -1013,7 +1074,9 @@ async function collectDevToSaaSByRole(
 
       for (const article of articles.slice(0, 15)) {
         const articleUrl = cleanUrl(article?.url || "");
-        const personName = clean(article?.user?.name || article?.user?.username || "");
+        const personName = clean(
+          article?.user?.name || article?.user?.username || ""
+        );
         const title = clean(article?.title || "");
         const desc = clean(article?.description || "");
         const bio = `${personName} — ${role} — ${title} ${desc}`.trim();
@@ -1069,7 +1132,18 @@ async function collectMediumSaaSByRole(
   role: SaasRole,
   sourceName: string
 ): Promise<SearchResult[]> {
-  const tags = SAAS_MEDIUM_TAGS[role] || [];
+  const tags =
+    role === "teacher"
+      ? [
+          "online-teaching",
+          "tutoring",
+          "language-learning",
+          "english-learning",
+          "mathematics",
+          "education"
+        ]
+      : SAAS_MEDIUM_TAGS[role] || [];
+
   const seenKeys = new Set<string>();
   const results: SearchResult[] = [];
 
@@ -1120,17 +1194,228 @@ async function collectMediumSaaSByRole(
   return results;
 }
 
+async function collectWordPressTeachers(
+  sourceName: string
+): Promise<SearchResult[]> {
+  const tags = [
+    "tutoring",
+    "online-teaching",
+    "english-teacher",
+    "math-tutor",
+    "language-learning",
+    "music-teacher",
+    "homeschooling"
+  ];
+
+  const seen = new Set<string>();
+  const results: SearchResult[] = [];
+
+  for (const tag of tags) {
+    try {
+      const xml = await fetchText(
+        `https://wordpress.com/tag/${encodeURIComponent(tag)}/feed`
+      );
+      const items = parseRssFeed(xml, sourceName);
+
+      for (const item of items.slice(0, 12)) {
+        const personName = clean(item.author || "");
+        const textBlob = `${personName} (teacher / ${tag.replace(/-/g, " ")}) — ${item.title} ${item.description}`;
+        const { email, contactUrl } = extractContactFromText(textBlob);
+
+        let siteRoot = "";
+        try {
+          const u = new URL(item.link);
+          siteRoot = `${u.protocol}//${u.hostname}`;
+        } catch {
+          siteRoot = cleanUrl(item.link);
+        }
+
+        const resolvedContact = contactUrl || siteRoot || cleanUrl(item.link);
+
+        if (!isRealPersonName(personName)) continue;
+        if (!resolvedContact && !email) continue;
+
+        const key = (resolvedContact || email).toLowerCase();
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+
+        const detectedCountry = getCountry(textBlob);
+
+        results.push({
+          ...item,
+          author: personName,
+          country: detectedCountry || "Remote / Global",
+          email,
+          contactUrl: resolvedContact,
+          source: sourceName,
+          sourceType: "social-profile",
+          saasRole: "teacher",
+          description: textBlob,
+          snippet: textBlob
+        });
+      }
+    } catch (error) {
+      console.error(`[${sourceName}] WordPress tag failed:`, tag, error);
+    }
+  }
+
+  return results;
+}
+
+async function collectOpenAlexEducators(
+  sourceName: string
+): Promise<SearchResult[]> {
+  const queries = [
+    "english teacher",
+    "mathematics teacher",
+    "science teacher",
+    "language instructor",
+    "music teacher"
+  ];
+
+  const seen = new Set<string>();
+  const results: SearchResult[] = [];
+
+  for (const q of queries) {
+    try {
+      const data = await fetchJson(
+        `https://api.openalex.org/authors?search=${encodeURIComponent(q)}&per-page=15`
+      );
+      const authors = Array.isArray(data?.results) ? data.results : [];
+
+      for (const author of authors) {
+        const name = clean(author?.display_name || "");
+        const institution = clean(
+          author?.last_known_institutions?.[0]?.display_name || ""
+        );
+        const countryCode = clean(
+          author?.last_known_institutions?.[0]?.country_code || ""
+        );
+        const topic = clean(author?.topics?.[0]?.display_name || q);
+        const profileUrl = cleanUrl(author?.orcid || author?.id || "");
+
+        if (!isRealPersonName(name) || !profileUrl) continue;
+
+        const key = profileUrl.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+
+        const bio = `${name} — ${topic} Educator${institution ? ` at ${institution}` : ""}`;
+
+        results.push({
+          title: bio,
+          link: profileUrl,
+          sourceUrl: profileUrl,
+          contactUrl: profileUrl,
+          author: name,
+          country: countryCode || "Global",
+          description: bio,
+          snippet: bio,
+          source: sourceName,
+          sourceType: "social-profile",
+          saasRole: "teacher"
+        });
+      }
+    } catch (error) {
+      console.error(`[${sourceName}] OpenAlex query failed:`, q, error);
+    }
+  }
+
+  return results;
+}
+
+async function collectGitHubSaaSByRole(
+  role: SaasRole,
+  sourceName: string
+): Promise<SearchResult[]> {
+  const queriesByRole: Record<SaasRole, string[]> = {
+    teacher: ["teacher in:bio", "tutor in:bio", "instructor in:bio"],
+    freelancer: ["freelance in:bio", "freelancer in:bio"],
+    coach: ["coach in:bio", "mentor in:bio"]
+  };
+
+  const seen = new Set<string>();
+  const results: SearchResult[] = [];
+
+  for (const q of queriesByRole[role] || []) {
+    try {
+      const searchData = await fetchJson(
+        `https://api.github.com/search/users?q=${encodeURIComponent(q)}&per_page=15`
+      );
+      const users = Array.isArray(searchData?.items) ? searchData.items : [];
+
+      for (const item of users.slice(0, 8)) {
+        const login = clean(item?.login || "");
+        if (!login || seen.has(login.toLowerCase())) continue;
+        seen.add(login.toLowerCase());
+
+        const profile = await fetchJson(
+          `https://api.github.com/users/${encodeURIComponent(login)}`
+        );
+
+        const name = clean(profile?.name || login);
+        const bio = clean(profile?.bio || "");
+        const location = clean(profile?.location || "");
+        const blog = cleanUrl(profile?.blog || "");
+        const email = clean(profile?.email || "");
+        const twitter = clean(profile?.twitter_username || "");
+        const githubUrl = cleanUrl(profile?.html_url || "");
+
+        const contactUrl =
+          blog ||
+          (twitter ? `https://x.com/${twitter}` : "") ||
+          githubUrl;
+
+        if (!isRealPersonName(name)) continue;
+        if (!bio || (!contactUrl && !email)) continue;
+
+        const detectedCountry = getCountry(`${location} ${bio}`);
+
+        results.push({
+          title: `${name} — ${bio.slice(0, 80)}`,
+          link: githubUrl || contactUrl,
+          sourceUrl: githubUrl || contactUrl,
+          contactUrl,
+          email,
+          author: name,
+          location,
+          country: detectedCountry || location || "Remote / Global",
+          description: `${bio}${location ? ` | Location: ${location}` : ""}`,
+          snippet: bio,
+          source: sourceName,
+          sourceType: "social-profile",
+          saasRole: role
+        });
+      }
+    } catch (error) {
+      console.error(`[${sourceName}] GitHub query failed:`, q, error);
+    }
+  }
+
+  return results;
+}
+
 async function collectSaaSByRole(
   role: SaasRole,
   sourceName: string
 ): Promise<SearchResult[]> {
-  const [devtoRows, mediumRows] = await Promise.all([
+  const tasks: Promise<SearchResult[]>[] = [
     collectDevToSaaSByRole(role, sourceName),
-    collectMediumSaaSByRole(role, sourceName)
-  ]);
+    collectMediumSaaSByRole(role, sourceName),
+    collectGitHubSaaSByRole(role, sourceName)
+  ];
 
+  if (role === "teacher") {
+    tasks.push(
+      collectWordPressTeachers(sourceName),
+      collectOpenAlexEducators(sourceName)
+    );
+  }
+
+  const batches = await Promise.all(tasks);
   const merged = new Map<string, SearchResult>();
-  for (const row of [...devtoRows, ...mediumRows]) {
+
+  for (const row of batches.flat()) {
     const key = cleanUrl(row.contactUrl || row.link || "").toLowerCase();
     if (key && !merged.has(key)) {
       merged.set(key, row);
@@ -1141,16 +1426,16 @@ async function collectSaaSByRole(
 }
 
 async function collectBingSaaSTeachers(): Promise<SearchResult[]> {
-  return collectSaaSByRole("teacher", "DevTo & Medium SaaS Teachers");
+  return collectSaaSByRole("teacher", "All-Subjects SaaS Teachers");
 }
 
 async function collectBingSaaSFreelancers(): Promise<SearchResult[]> {
-  return collectSaaSByRole("freelancer", "DevTo & Medium SaaS Freelancers");
+  return collectSaaSByRole("freelancer", "SaaS Freelancers");
 }
 
 async function collectBingSaaSCoaches(): Promise<SearchResult[]> {
-  return collectSaaSByRole("coach", "DevTo & Medium SaaS Coaches");
-    }
+  return collectSaaSByRole("coach", "SaaS Coaches");
+}
 async function collectJobicy(): Promise<SearchResult[]> {
   const results: SearchResult[] = [];
 
@@ -1417,17 +1702,17 @@ async function collectAllSources(): Promise<{
       collect: collectRedditDemandCoaches
     },
     {
-      name: "DevTo & Medium SaaS Teachers",
+      name: "All-Subjects SaaS Teachers",
       category: "SaaS",
       collect: collectBingSaaSTeachers
     },
     {
-      name: "DevTo & Medium SaaS Freelancers",
+      name: "SaaS Freelancers",
       category: "SaaS",
       collect: collectBingSaaSFreelancers
     },
     {
-      name: "DevTo & Medium SaaS Coaches",
+      name: "SaaS Coaches",
       category: "SaaS",
       collect: collectBingSaaSCoaches
     },
@@ -1623,7 +1908,7 @@ async function insertProcessedLead(
       name: lead.name || lead.contactName,
       platform: lead.platform,
       niche: lead.skill,
-      contact: lead.contactUrl,
+      contact: lead.email || lead.contactUrl,
       description: lead.description,
       source_url: lead.sourceUrl,
       contact_url: lead.contactUrl,
@@ -1908,4 +2193,4 @@ export default async function handler(
       message
     });
   }
- }
+      }
