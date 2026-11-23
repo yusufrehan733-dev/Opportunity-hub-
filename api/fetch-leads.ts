@@ -618,7 +618,7 @@ function getCity(value: string): string {
   if (getCountry(possible)) return "";
 
   return possible;
-}
+  }
 const BLOCKED_ECOMMERCE_COURSE_ARTICLE_HOSTS = [
   "amazon.com",
   "amazon.co.uk",
@@ -1009,7 +1009,7 @@ function buildProcessedLead(
     salaryMax: result.salaryMax ?? null,
     companyWebsite: cleanUrl(result.companyWebsite || "")
   };
-}
+  }
 async function collectRedditQueries(
   queries: string[],
   sourceName: string
@@ -1161,27 +1161,48 @@ async function collectBlueskySubjectAndFreelanceLeads(
 ): Promise<SearchResult[]> {
   const queriesByRole: Record<SaasRole, string[]> = {
     teacher: [
+      "quran teacher",
+      "tajweed",
+      "tafseer",
+      "fiqh",
+      "arabic teacher",
+      "urdu teacher",
+      "french teacher",
+      "english teacher",
       "math teacher",
-      "science teacher",
-      "english tutor",
-      "spanish teacher",
-      "french tutor",
-      "music teacher"
+      "physics teacher",
+      "chemistry teacher",
+      "biology teacher",
+      "sociology teacher",
+      "history teacher",
+      "geography teacher",
+      "psychology teacher",
+      "law teacher",
+      "kids teacher",
+      "painting teacher"
     ],
     freelancer: [
       "freelance writer",
+      "content writer",
+      "copywriter",
+      "ghostwriter",
+      "technical writer",
       "freelance editor",
-      "freelance translator",
+      "proofreader",
+      "translator",
+      "wordpress developer",
+      "web designer",
       "graphic designer",
-      "virtual assistant",
-      "copywriter"
+      "illustrator",
+      "virtual assistant"
     ],
     coach: [
       "career coach",
+      "business coach",
       "life coach",
       "executive coach",
-      "writing coach",
-      "wellness coach"
+      "academic coach",
+      "writing coach"
     ]
   };
 
@@ -1192,7 +1213,7 @@ async function collectBlueskySubjectAndFreelanceLeads(
     (queriesByRole[role] || []).map(async q => {
       try {
         const data = await fetchJson(
-          `https://public.api.bsky.app/xrpc/app.bsky.actor.searchActors?q=${encodeURIComponent(q)}&limit=60`
+          `https://public.api.bsky.app/xrpc/app.bsky.actor.searchActors?q=${encodeURIComponent(q)}&limit=50`
         );
         return Array.isArray(data?.actors) ? data.actors : [];
       } catch (error) {
@@ -1232,7 +1253,8 @@ async function collectBlueskySubjectAndFreelanceLeads(
   }
 
   const verified: SearchResult[] = [];
-  const toCheck = rawCandidates.slice(0, 4);
+  const checkCap = role === "coach" ? 5 : 6;
+  const toCheck = rawCandidates.slice(0, checkCap);
 
   await Promise.all(
     toCheck.map(async item => {
@@ -1403,7 +1425,7 @@ async function collectRemoteOK(): Promise<SearchResult[]> {
   }
 
   return results.slice(0, MAX_RESULTS_PER_SOURCE);
-        }
+}
 const sourceCollectionErrors: Record<string, string> = {};
 
 async function runSource(source: SourceJob): Promise<SearchResult[]> {
@@ -1894,4 +1916,4 @@ export default async function handler(
       });
     }
   }
-      }
+  }
