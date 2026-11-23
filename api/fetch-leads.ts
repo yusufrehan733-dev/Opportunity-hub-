@@ -627,102 +627,126 @@ function getCity(value: string): string {
   if (getCountry(possible)) return "";
 
   return possible;
-}
-const BOOKING_AND_LINK_HOSTS = [
-  "calendly.com",
-  "cal.com",
-  "topmate.io",
-  "superpeer.com",
-  "linktr.ee",
-  "bio.link",
-  "beacons.ai",
-  "carrd.co",
-  "about.me",
-  "stan.store",
-  "ko-fi.com",
-  "buymeacoffee.com",
-  "preply.com",
-  "italki.com",
-  "superprof.com",
-  "wyzant.com",
-  "fiverr.com",
-  "upwork.com"
+      }
+  const BLOCKED_ECOMMERCE_COURSE_ARTICLE_HOSTS = [
+  "amazon.com",
+  "amazon.co.uk",
+  "amazon.ca",
+  "amazon.de",
+  "amazon.fr",
+  "amazon.in",
+  "amzn.to",
+  "amzn.eu",
+  "udemy.com",
+  "coursera.org",
+  "skillshare.com",
+  "teachable.com",
+  "thinkific.com",
+  "kajabi.com",
+  "podia.com",
+  "gumroad.com",
+  "etsy.com",
+  "medium.com",
+  "substack.com",
+  "dev.to",
+  "hashnode.dev",
+  "blogspot.com",
+  "wordpress.com",
+  "wixsite.com"
 ];
 
 const BLOCKED_SOCIAL_ONLY_HOSTS = [
   "bsky.app",
   "github.com",
   "reddit.com",
-  "medium.com",
-  "dev.to",
-  "wordpress.com",
-  "substack.com",
   "x.com",
   "twitter.com",
   "instagram.com",
   "facebook.com",
   "tiktok.com",
   "youtube.com",
-  "linkedin.com"
+  "youtu.be",
+  "linkedin.com",
+  "pinterest.com"
 ];
 
-function isArticleOrPostUrl(url: string): boolean {
+const NON_DIRECT_PATH_REGEX =
+  /\/(blog|blogs|post|posts|article|articles|news|book|books|course|courses|buy|shop|store|cart|checkout|pricing|subscribe|newsletter|podcast|episode|202\d)\b/i;
+
+function isBlockedHost(url: string, blockedList: string[]): boolean {
+  const host = getHostname(url);
+  if (!host) return false;
+  return blockedList.some(d => host === d || host.endsWith("." + d));
+}
+
+function isParkedOrJunkUrl(url: string): boolean {
   const cleaned = cleanUrl(url);
   if (!cleaned) return true;
 
+  const host = getHostname(cleaned);
+  if (!host || !host.includes(".")) return true;
+
+  if (isBlockedHost(cleaned, BLOCKED_ECOMMERCE_COURSE_ARTICLE_HOSTS)) {
+    return true;
+  }
+
+  if (isBlockedHost(cleaned, BLOCKED_SOCIAL_ONLY_HOSTS)) {
+    return true;
+  }
+
+  if (
+    /^(?:online-[a-z0-9-]+-tutoring|buy-[a-z0-9-]+|domain-[a-z0-9-]+|parked[a-z0-9-]*|coming-?soon|under-?construction)\./i.test(
+      host
+    )
+  ) {
+    return true;
+  }
+
   try {
-    const parsed = new URL(cleaned);
-    const host = parsed.hostname.toLowerCase().replace(/^www\./, "");
-    const path = parsed.pathname.toLowerCase().replace(/\/+$/, "");
-
-    if (
-      BLOCKED_SOCIAL_ONLY_HOSTS.some(
-        d => host === d || host.endsWith("." + d)
-      )
-    ) {
+    const pathname = new URL(cleaned).pathname.toLowerCase();
+    if (NON_DIRECT_PATH_REGEX.test(pathname)) {
       return true;
     }
-
-    if (/\/(blog|post|posts|article|articles|news|202\d)\//i.test(path)) {
-      return true;
-    }
-
-    return false;
   } catch {
     return true;
   }
+
+  return false;
 }
 
-function isDirectExternalWebsiteOrBookingUrl(url: string): boolean {
+function isDirectContactUrl(url: string): boolean {
   const cleaned = cleanUrl(url);
   if (!cleaned) return false;
-  if (isArticleOrPostUrl(cleaned)) return false;
-
-  const host = getHostname(cleaned);
-  if (!host || !host.includes(".")) return false;
-
+  if (isBlockedDomain(cleaned)) return false;
+  if (isParkedOrJunkUrl(cleaned)) return false;
   return true;
 }
 
-function isSpecificContactPage(value: string): boolean {
-  const url = cleanUrl(value);
-  if (!url) return false;
-
-  let path = "";
-  try {
-    path = new URL(url).pathname.toLowerCase();
-  } catch {
+function isValidDirectEmail(email: string): boolean {
+  const e = clean(email).toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) return false;
+  if (
+    /^(hi|hello|info|support|admin|team|contact|sales|help|noreply|no-reply|press|media|jobs|careers|billing|accounts)@/i.test(
+      e
+    )
+  ) {
     return false;
   }
-
-  return containsAny(path, CONTACT_PATH_TERMS);
+  if (
+    /@(example\.com|sentry|wixpress|wordpress|medium\.com|substack\.com|amazon\.com|github\.com|bsky\.app|w3\.org)/i.test(
+      e
+    )
+  ) {
+    return false;
+  }
+  return true;
 }
 
 function getContactUrl(result: SearchResult, type: LeadType): string {
   const direct = cleanUrl(result.contactUrl || "");
   if (direct) {
     if (type === "SaaS") {
-      return isDirectExternalWebsiteOrBookingUrl(direct) ? direct : "";
+      return isDirectContactUrl(direct) ? direct : "";
     }
     return direct;
   }
@@ -734,7 +758,7 @@ function getContactUrl(result: SearchResult, type: LeadType): string {
   if (!link) return "";
 
   if (type === "SaaS") {
-    return isDirectExternalWebsiteOrBookingUrl(link) ? link : "";
+    return isDirectContactUrl(link) ? link : "";
   }
   if (type === "Demand" && result.sourceType === "reddit") return link;
   if (
@@ -744,16 +768,11 @@ function getContactUrl(result: SearchResult, type: LeadType): string {
     return link;
   }
 
-  if (isSpecificContactPage(link)) return link;
-
   return "";
 }
 
 function hasRealContact(result: SearchResult, type: LeadType): boolean {
-  if (
-    clean(result.email) &&
-    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean(result.email))
-  ) {
+  if (isValidDirectEmail(result.email || "")) {
     return true;
   }
 
@@ -765,7 +784,7 @@ function hasRealContact(result: SearchResult, type: LeadType): boolean {
   if (!contact) return false;
 
   if (type === "SaaS") {
-    return isDirectExternalWebsiteOrBookingUrl(contact);
+    return isDirectContactUrl(contact);
   }
   if (type === "Demand" && result.sourceType === "reddit") return true;
   if (
@@ -775,7 +794,7 @@ function hasRealContact(result: SearchResult, type: LeadType): boolean {
     return true;
   }
 
-  return isSpecificContactPage(contact);
+  return false;
 }
 
 function getResultText(result: SearchResult): string {
@@ -810,6 +829,12 @@ function hasProfessionalIntent(text: string): boolean {
   return containsAny(text, PROFESSIONAL_TERMS);
 }
 
+function isCourseBookOrArticleSpam(text: string): boolean {
+  return /\b(buy my course|enroll now|get the book|available on amazon|kindle edition|paperback|read the full article|in this article|subscribe to my newsletter)\b/i.test(
+    text
+  );
+}
+
 function classifyLead(result: SearchResult): LeadType | null {
   const text = getResultText(result);
   const sourceUrl = cleanUrl(result.link || result.sourceUrl || "");
@@ -821,6 +846,7 @@ function classifyLead(result: SearchResult): LeadType | null {
     result.sourceType === "social-profile" &&
     (result.saasRole || hasProfessionalIntent(text))
   ) {
+    if (isCourseBookOrArticleSpam(text)) return null;
     return "SaaS";
   }
 
@@ -837,12 +863,12 @@ function getSaasRoleFallbackSkill(
 ): SkillRow | null {
   if (
     result.saasRole === "teacher" ||
-    /\b(teacher|tutor|educator|instructor|lessons|tutoring|teaching|esl)\b/i.test(
+    /\b(teacher|tutor|educator|instructor|lessons|tutoring|teaching|math|science|english|spanish|french|music|piano|history)\b/i.test(
       text
     )
   ) {
     return {
-      name: "Online Teaching",
+      name: "Subject Teaching & Tutoring",
       category: "SaaS Prospects",
       subcategory: "Education",
       tags: ["teacher", "tutor", "educator", "teaching"]
@@ -851,15 +877,15 @@ function getSaasRoleFallbackSkill(
 
   if (
     result.saasRole === "freelancer" ||
-    /\b(freelancer|freelance|designer|developer|consultant|writer|editor|marketer|translator)\b/i.test(
+    /\b(freelancer|freelance|writer|editor|copywriter|translator|designer|illustrator|photographer|consultant|virtual assistant)\b/i.test(
       text
     )
   ) {
     return {
-      name: "Freelancing",
+      name: "Freelance Services",
       category: "SaaS Prospects",
       subcategory: "Independent Services",
-      tags: ["freelancer", "freelance", "designer", "writer", "editor"]
+      tags: ["freelancer", "freelance", "writer", "editor", "designer"]
     };
   }
 
@@ -868,7 +894,7 @@ function getSaasRoleFallbackSkill(
     /\b(coach|coaching|mentor|mentorship)\b/i.test(text)
   ) {
     return {
-      name: "Coaching",
+      name: "Coaching & Mentoring",
       category: "SaaS Prospects",
       subcategory: "Coaching",
       tags: ["coach", "coaching", "mentor"]
@@ -918,6 +944,10 @@ function checkRejectionReason(
   if (containsBlockedContent(text, sourceUrl)) return "blocked_content";
   if (!sourceUrl) return "missing_source_url";
 
+  if (type === "SaaS" && isCourseBookOrArticleSpam(text)) {
+    return "course_or_article_promo";
+  }
+
   if (type !== "SaaS" && !isFresh(result.publishedAt || result.published)) {
     return "not_fresh";
   }
@@ -943,7 +973,9 @@ function buildProcessedLead(
 
   const sourceUrl = cleanUrl(result.link || result.sourceUrl || "");
   const contactUrl = getContactUrl(result, type);
-  const email = clean(result.email || "");
+  const email = isValidDirectEmail(result.email || "")
+    ? clean(result.email || "")
+    : "";
 
   if (!sourceUrl || (!contactUrl && !email)) return null;
 
@@ -986,8 +1018,8 @@ function buildProcessedLead(
     salaryMax: result.salaryMax ?? null,
     companyWebsite: cleanUrl(result.companyWebsite || "")
   };
-   }
-async function collectRedditQueries(
+}
+  async function collectRedditQueries(
   queries: string[],
   sourceName: string
 ): Promise<SearchResult[]> {
@@ -1049,7 +1081,7 @@ async function collectRedditDemandCoaches(): Promise<SearchResult[]> {
   );
 }
 
-function extractEmailOrExternalSiteFromBio(raw: string): {
+function extractDirectContactFromBio(raw: string): {
   email: string;
   contactUrl: string;
 } {
@@ -1057,13 +1089,7 @@ function extractEmailOrExternalSiteFromBio(raw: string): {
 
   const emailMatches =
     cleanHtml.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g) || [];
-  const validEmail =
-    emailMatches.find(
-      e =>
-        !/noreply|no-reply|example\.com|sentry|wixpress|wordpress|medium\.com|w3\.org/i.test(
-          e
-        )
-    ) || "";
+  const validEmail = emailMatches.find(e => isValidDirectEmail(e)) || "";
 
   const explicitUrls = raw.match(/https?:\/\/[^\s<>"')\\]+/gi) || [];
   const bareDomains =
@@ -1079,12 +1105,9 @@ function extractEmailOrExternalSiteFromBio(raw: string): {
   let bestUrl = "";
   for (const candidate of candidates) {
     const cleaned = cleanUrl(candidate.replace(/[.,;!?]+$/, ""));
-    if (!cleaned || isBlockedDomain(cleaned)) continue;
-
-    if (isDirectExternalWebsiteOrBookingUrl(cleaned)) {
-      bestUrl = cleaned;
-      break;
-    }
+    if (!cleaned || !isDirectContactUrl(cleaned)) continue;
+    bestUrl = cleaned;
+    break;
   }
 
   return {
@@ -1095,9 +1118,9 @@ function extractEmailOrExternalSiteFromBio(raw: string): {
 
 function isRealPersonName(name: string): boolean {
   const n = clean(name);
-  if (!n || n.length < 2 || n.length > 70) return false;
+  if (!n || n.length < 2 || n.length > 55) return false;
   if (
-    /^(admin|staff|team|support|editorial|bot|unknown|medium|wordpress|scouthub|deleted|automoderator)$/i.test(
+    /^(admin|staff|team|support|editorial|bot|unknown|medium|wordpress|scouthub|deleted|automoderator|official|news|daily|weekly|radar|hub|studio|agency|books|courses|shop|store)$/i.test(
       n
     )
   ) {
@@ -1106,24 +1129,94 @@ function isRealPersonName(name: string): boolean {
   return /[a-zA-Z]{2,}/.test(n);
 }
 
-async function collectBlueskyDirectBioLeads(
+async function isUrlReachableAndActive(url: string): Promise<boolean> {
+  const cleaned = cleanUrl(url);
+  if (!cleaned) return false;
+  if (!isDirectContactUrl(cleaned)) return false;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 1800);
+
+  try {
+    let response = await fetch(cleaned, {
+      method: "HEAD",
+      redirect: "follow",
+      headers: { "User-Agent": USER_AGENT },
+      signal: controller.signal
+    });
+
+    if (response.status === 405 || response.status === 403) {
+      response = await fetch(cleaned, {
+        method: "GET",
+        redirect: "follow",
+        headers: {
+          "User-Agent": USER_AGENT,
+          Range: "bytes=0-2048"
+        },
+        signal: controller.signal
+      });
+    }
+
+    if (!response.ok || response.status >= 400) {
+      return false;
+    }
+
+    const finalUrl = cleanUrl(response.url || cleaned);
+    if (finalUrl && isParkedOrJunkUrl(finalUrl)) {
+      return false;
+    }
+
+    return true;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function collectBlueskySubjectAndFreelanceLeads(
   role: SaasRole,
   sourceName: string
 ): Promise<SearchResult[]> {
   const queriesByRole: Record<SaasRole, string[]> = {
-    teacher: ["english teacher", "math tutor", "online tutor"],
-    freelancer: ["freelance writer", "freelance designer", "copywriter"],
-    coach: ["life coach", "career coach", "business coach"]
+    teacher: [
+      "math teacher",
+      "science teacher",
+      "english tutor",
+      "spanish teacher",
+      "french tutor",
+      "music teacher",
+      "history teacher",
+      "biology teacher"
+    ],
+    freelancer: [
+      "freelance writer",
+      "freelance editor",
+      "freelance translator",
+      "graphic designer",
+      "illustrator",
+      "virtual assistant",
+      "copywriter",
+      "freelance developer"
+    ],
+    coach: [
+      "career coach",
+      "life coach",
+      "executive coach",
+      "writing coach",
+      "tutoring coach",
+      "wellness coach"
+    ]
   };
 
   const seen = new Set<string>();
-  const results: SearchResult[] = [];
+  const rawCandidates: SearchResult[] = [];
 
   const batches = await Promise.all(
     (queriesByRole[role] || []).map(async q => {
       try {
         const data = await fetchJson(
-          `https://public.api.bsky.app/xrpc/app.bsky.actor.searchActors?q=${encodeURIComponent(q)}&limit=30`
+          `https://public.api.bsky.app/xrpc/app.bsky.actor.searchActors?q=${encodeURIComponent(q)}&limit=100`
         );
         return Array.isArray(data?.actors) ? data.actors : [];
       } catch (error) {
@@ -1137,15 +1230,16 @@ async function collectBlueskyDirectBioLeads(
     const displayName = clean(actor?.displayName || actor?.handle || "");
     const bio = clean(actor?.description || "");
     if (!bio || !isRealPersonName(displayName)) continue;
+    if (isCourseBookOrArticleSpam(bio)) continue;
 
-    const extracted = extractEmailOrExternalSiteFromBio(bio);
+    const extracted = extractDirectContactFromBio(bio);
     if (!extracted.email && !extracted.contactUrl) continue;
 
     const key = (extracted.email || extracted.contactUrl).toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
 
-    results.push({
+    rawCandidates.push({
       title: `${displayName} — ${bio.slice(0, 80)}`,
       link: extracted.contactUrl || `mailto:${extracted.email}`,
       sourceUrl: extracted.contactUrl || `mailto:${extracted.email}`,
@@ -1161,74 +1255,117 @@ async function collectBlueskyDirectBioLeads(
     });
   }
 
-  return results;
+  // Verify up to 15 URLs concurrently with a fast timeout so 404/dead links don't get inserted
+  const verified: SearchResult[] = [];
+  const toCheck = rawCandidates.slice(0, 15);
+
+  await Promise.all(
+    toCheck.map(async item => {
+      if (item.email && !item.contactUrl) {
+        verified.push(item);
+        return;
+      }
+      const ok = await isUrlReachableAndActive(item.contactUrl || item.link);
+      if (ok) {
+        verified.push(item);
+      }
+    })
+  );
+
+  return verified;
 }
 
-async function collectDevToWebsiteLeads(
+async function collectGitHubLightFreelanceAndCoachLeads(
   role: SaasRole,
   sourceName: string
 ): Promise<SearchResult[]> {
-  const tagsByRole: Record<SaasRole, string[]> = {
-    teacher: ["teaching", "education"],
-    freelancer: ["freelance", "design"],
-    coach: ["career", "mentorship"]
+  // Light secondary pool (kept small so engineers don't crowd out subject teachers & general freelancers)
+  const queriesByRole: Record<SaasRole, string[]> = {
+    teacher: ["biology teacher in:bio", "math tutor in:bio"],
+    freelancer: ["technical writer in:bio", "freelance designer in:bio"],
+    coach: ["career coach in:bio"]
   };
 
   const seen = new Set<string>();
   const results: SearchResult[] = [];
 
   const batches = await Promise.all(
-    (tagsByRole[role] || []).map(async tag => {
+    (queriesByRole[role] || []).map(async q => {
       try {
-        const articles = await fetchJson(
-          `https://dev.to/api/articles?tag=${encodeURIComponent(tag)}&per_page=30`
+        const data = await fetchJson(
+          `https://api.github.com/search/users?q=${encodeURIComponent(q)}&per_page=15`
         );
-        return Array.isArray(articles) ? articles : [];
+        return Array.isArray(data?.items) ? data.items : [];
       } catch (error) {
-        console.error(`[${sourceName}] Dev.to tag failed:`, tag, error);
+        console.error(`[${sourceName}] GitHub search failed:`, q, error);
         return [];
       }
     })
   );
 
-  const roleLabel =
-    role === "teacher"
-      ? "Educator / Instructor"
-      : role === "freelancer"
-        ? "Freelancer"
-        : "Career / Business Coach";
+  const candidates = batches.flat().slice(0, 6);
 
-  for (const article of batches.flat()) {
-    const user = article?.user || {};
-    const displayName = clean(user.name || user.username || "");
-    if (!isRealPersonName(displayName)) continue;
+  await Promise.all(
+    candidates.map(async item => {
+      try {
+        const login = clean(item?.login || "");
+        if (!login) return;
 
-    const websiteUrl = cleanUrl(user.website_url || "");
-    if (!websiteUrl || !isDirectExternalWebsiteOrBookingUrl(websiteUrl)) {
-      continue;
-    }
+        const profile = await fetchJson(
+          `https://api.github.com/users/${encodeURIComponent(login)}`
+        );
 
-    const key = websiteUrl.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
+        const displayName = clean(profile?.name || login);
+        const bio = clean(profile?.bio || "");
+        if (!isRealPersonName(displayName) || isCourseBookOrArticleSpam(bio)) {
+          return;
+        }
 
-    const bio = `${displayName} — ${roleLabel} | ${clean(article?.title || "")}`;
+        const rawBlog = clean(profile?.blog || "");
+        const blogUrl = cleanUrl(
+          rawBlog && !/^https?:\/\//i.test(rawBlog)
+            ? `https://${rawBlog}`
+            : rawBlog
+        );
+        const email = isValidDirectEmail(profile?.email || "")
+          ? clean(profile?.email || "")
+          : "";
 
-    results.push({
-      title: `${displayName} (${roleLabel})`,
-      link: websiteUrl,
-      sourceUrl: websiteUrl,
-      contactUrl: websiteUrl,
-      email: "",
-      author: displayName,
-      country: getCountry(bio) || "Remote / Global",
-      description: bio,
-      snippet: bio,
-      source: sourceName,
-      sourceType: "social-profile",
-      saasRole: role
-    });
-  }
+        const hasValidSite = blogUrl && isDirectContactUrl(blogUrl);
+        if (!hasValidSite && !email) return;
+
+        if (hasValidSite) {
+          const ok = await isUrlReachableAndActive(blogUrl);
+          if (!ok) return;
+        }
+
+        const key = (email || blogUrl).toLowerCase();
+        if (seen.has(key)) return;
+        seen.add(key);
+
+        const location = clean(profile?.location || "");
+        const fullDesc = bio || `${displayName} — ${role}`;
+
+        results.push({
+          title: `${displayName} — ${fullDesc.slice(0, 80)}`,
+          link: hasValidSite ? blogUrl : `mailto:${email}`,
+          sourceUrl: hasValidSite ? blogUrl : `mailto:${email}`,
+          contactUrl: hasValidSite ? blogUrl : "",
+          email,
+          author: displayName,
+          location,
+          country: getCountry(`${location} ${bio}`) || "Remote / Global",
+          description: fullDesc,
+          snippet: fullDesc,
+          source: sourceName,
+          sourceType: "social-profile",
+          saasRole: role
+        });
+      } catch {
+        // Ignore individual GitHub profile errors
+      }
+    })
+  );
 
   return results;
 }
@@ -1237,9 +1374,10 @@ async function collectSaaSByRole(
   role: SaasRole,
   sourceName: string
 ): Promise<SearchResult[]> {
+  // Dev.to removed from SaaS because it mainly yields software/AI blog authors & article links
   const batches = await Promise.all([
-    collectBlueskyDirectBioLeads(role, sourceName),
-    collectDevToWebsiteLeads(role, sourceName)
+    collectBlueskySubjectAndFreelanceLeads(role, sourceName),
+    collectGitHubLightFreelanceAndCoachLeads(role, sourceName)
   ]);
 
   const merged = new Map<string, SearchResult>();
@@ -1265,6 +1403,258 @@ async function collectBingSaaSFreelancers(): Promise<SearchResult[]> {
 async function collectBingSaaSCoaches(): Promise<SearchResult[]> {
   return collectSaaSByRole("coach", "SaaS Coaches");
     }
+    async function collectJobicy(): Promise<SearchResult[]> {
+  const results: SearchResult[] = [];
+
+  try {
+    const response = await fetchJson(
+      "https://jobicy.com/api/jobs?count=100"
+    );
+
+    const jobs = Array.isArray(response)
+      ? response
+      : response?.jobs || [];
+
+    for (const job of jobs) {
+      const title = clean(job.jobTitle || job.title || "");
+      const description = stripHtml(
+        job.jobDescription || job.description || ""
+      );
+      const link = cleanUrl(job.url || job.jobUrl || "");
+
+      if (!title || !link) continue;
+
+      results.push({
+        title,
+        description,
+        snippet: description,
+        link,
+        sourceUrl: link,
+        source: "Jobicy",
+        sourceType: "job",
+        publishedAt: job.pubDate || job.date || job.createdAt || "",
+        published: job.pubDate || job.date || job.createdAt || "",
+        company: clean(job.companyName || job.company || ""),
+        location: clean(job.jobGeo || job.location || ""),
+        salaryRange: clean(job.salary || job.salaryRange || ""),
+        salaryMin: Number(job.salaryMin) || undefined,
+        salaryMax: Number(job.salaryMax) || undefined,
+        companyWebsite: cleanUrl(job.companyUrl || job.companyWebsite || ""),
+        applicationUrl: link,
+        contactUrl: link
+      });
+    }
+  } catch (error) {
+    console.error("[Jobicy] Collection failed:", error);
+  }
+
+  return results.slice(0, MAX_RESULTS_PER_SOURCE);
+}
+
+const WWR_FEEDS = [
+  "https://weworkremotely.com/categories/remote-programming-jobs.rss",
+  "https://weworkremotely.com/categories/remote-design-jobs.rss",
+  "https://weworkremotely.com/categories/remote-marketing-jobs.rss",
+  "https://weworkremotely.com/categories/remote-customer-support-jobs.rss",
+  "https://weworkremotely.com/categories/remote-sales-jobs.rss"
+];
+
+async function collectWeWorkRemotely(): Promise<SearchResult[]> {
+  const results: SearchResult[] = [];
+
+  const batches = await Promise.all(
+    WWR_FEEDS.map(async feed => {
+      try {
+        const xml = await fetchText(feed);
+        const feedResults = parseRssFeed(xml, "We Work Remotely");
+
+        return feedResults.map(result => ({
+          ...result,
+          sourceType: "job",
+          applicationUrl: result.link,
+          contactUrl: result.link
+        }));
+      } catch (error) {
+        console.error("[We Work Remotely] Feed failed:", feed, error);
+        return [];
+      }
+    })
+  );
+
+  for (const batch of batches) {
+    results.push(...batch);
+  }
+
+  return results.slice(0, MAX_RESULTS_PER_SOURCE);
+}
+
+async function collectRemoteOK(): Promise<SearchResult[]> {
+  const results: SearchResult[] = [];
+
+  try {
+    const response = await fetchJson("https://remoteok.com/api");
+
+    const jobs = Array.isArray(response) ? response.slice(1) : [];
+
+    for (const job of jobs) {
+      const title = clean(job.position || "");
+      const description = stripHtml(job.description || "");
+      const link = cleanUrl(
+        job.url || (job.id ? `https://remoteok.com/remote-jobs/${job.id}` : "")
+      );
+
+      if (!title || !link) continue;
+
+      results.push({
+        title,
+        description,
+        snippet: description,
+        link,
+        sourceUrl: link,
+        source: "Remote OK",
+        sourceType: "job",
+        publishedAt: job.date || job.epoch || "",
+        published: job.date || job.epoch || "",
+        company: clean(job.company || ""),
+        location: clean(job.location || "Remote"),
+        salaryRange: clean(job.salary || ""),
+        companyWebsite: cleanUrl(job.company_url || ""),
+        applicationUrl: link,
+        contactUrl: link
+      });
+    }
+  } catch (error) {
+    console.error("[Remote OK] Collection failed:", error);
+  }
+
+  return results.slice(0, MAX_RESULTS_PER_SOURCE);
+}
+async function collectJobicy(): Promise<SearchResult[]> {
+  const results: SearchResult[] = [];
+
+  try {
+    const response = await fetchJson(
+      "https://jobicy.com/api/jobs?count=100"
+    );
+
+    const jobs = Array.isArray(response)
+      ? response
+      : response?.jobs || [];
+
+    for (const job of jobs) {
+      const title = clean(job.jobTitle || job.title || "");
+      const description = stripHtml(
+        job.jobDescription || job.description || ""
+      );
+      const link = cleanUrl(job.url || job.jobUrl || "");
+
+      if (!title || !link) continue;
+
+      results.push({
+        title,
+        description,
+        snippet: description,
+        link,
+        sourceUrl: link,
+        source: "Jobicy",
+        sourceType: "job",
+        publishedAt: job.pubDate || job.date || job.createdAt || "",
+        published: job.pubDate || job.date || job.createdAt || "",
+        company: clean(job.companyName || job.company || ""),
+        location: clean(job.jobGeo || job.location || ""),
+        salaryRange: clean(job.salary || job.salaryRange || ""),
+        salaryMin: Number(job.salaryMin) || undefined,
+        salaryMax: Number(job.salaryMax) || undefined,
+        companyWebsite: cleanUrl(job.companyUrl || job.companyWebsite || ""),
+        applicationUrl: link,
+        contactUrl: link
+      });
+    }
+  } catch (error) {
+    console.error("[Jobicy] Collection failed:", error);
+  }
+
+  return results.slice(0, MAX_RESULTS_PER_SOURCE);
+}
+
+const WWR_FEEDS = [
+  "https://weworkremotely.com/categories/remote-programming-jobs.rss",
+  "https://weworkremotely.com/categories/remote-design-jobs.rss",
+  "https://weworkremotely.com/categories/remote-marketing-jobs.rss",
+  "https://weworkremotely.com/categories/remote-customer-support-jobs.rss",
+  "https://weworkremotely.com/categories/remote-sales-jobs.rss"
+];
+
+async function collectWeWorkRemotely(): Promise<SearchResult[]> {
+  const results: SearchResult[] = [];
+
+  const batches = await Promise.all(
+    WWR_FEEDS.map(async feed => {
+      try {
+        const xml = await fetchText(feed);
+        const feedResults = parseRssFeed(xml, "We Work Remotely");
+
+        return feedResults.map(result => ({
+          ...result,
+          sourceType: "job",
+          applicationUrl: result.link,
+          contactUrl: result.link
+        }));
+      } catch (error) {
+        console.error("[We Work Remotely] Feed failed:", feed, error);
+        return [];
+      }
+    })
+  );
+
+  for (const batch of batches) {
+    results.push(...batch);
+  }
+
+  return results.slice(0, MAX_RESULTS_PER_SOURCE);
+}
+
+async function collectRemoteOK(): Promise<SearchResult[]> {
+  const results: SearchResult[] = [];
+
+  try {
+    const response = await fetchJson("https://remoteok.com/api");
+
+    const jobs = Array.isArray(response) ? response.slice(1) : [];
+
+    for (const job of jobs) {
+      const title = clean(job.position || "");
+      const description = stripHtml(job.description || "");
+      const link = cleanUrl(
+        job.url || (job.id ? `https://remoteok.com/remote-jobs/${job.id}` : "")
+      );
+
+      if (!title || !link) continue;
+
+      results.push({
+        title,
+        description,
+        snippet: description,
+        link,
+        sourceUrl: link,
+        source: "Remote OK",
+        sourceType: "job",
+        publishedAt: job.date || job.epoch || "",
+        published: job.date || job.epoch || "",
+        company: clean(job.company || ""),
+        location: clean(job.location || "Remote"),
+        salaryRange: clean(job.salary || ""),
+        companyWebsite: cleanUrl(job.company_url || ""),
+        applicationUrl: link,
+        contactUrl: link
+      });
+    }
+  } catch (error) {
+    console.error("[Remote OK] Collection failed:", error);
+  }
+
+  return results.slice(0,MAX_RESULTS_PER_SOURCE);
+}
 async function collectJobicy(): Promise<SearchResult[]> {
   const results: SearchResult[] = [];
 
@@ -1390,7 +1780,133 @@ async function collectRemoteOK(): Promise<SearchResult[]> {
   }
 
   return results.slice(0, MAX_RESULTS_PER_SOURCE);
-          }
+}
+async function collectJobicy(): Promise<SearchResult[]> {
+  const results: SearchResult[] = [];
+
+  try {
+    const response = await fetchJson(
+      "https://jobicy.com/api/jobs?count=100"
+    );
+
+    const jobs = Array.isArray(response)
+      ? response
+      : response?.jobs || [];
+
+    for (const job of jobs) {
+      const title = clean(job.jobTitle || job.title || "");
+      const description = stripHtml(
+        job.jobDescription || job.description || ""
+      );
+      const link = cleanUrl(job.url || job.jobUrl || "");
+
+      if (!title || !link) continue;
+
+      results.push({
+        title,
+        description,
+        snippet: description,
+        link,
+        sourceUrl: link,
+        source: "Jobicy",
+        sourceType: "job",
+        publishedAt: job.pubDate || job.date || job.createdAt || "",
+        published: job.pubDate || job.date || job.createdAt || "",
+        company: clean(job.companyName || job.company || ""),
+        location: clean(job.jobGeo || job.location || ""),
+        salaryRange: clean(job.salary || job.salaryRange || ""),
+        salaryMin: Number(job.salaryMin) || undefined,
+        salaryMax: Number(job.salaryMax) || undefined,
+        companyWebsite: cleanUrl(job.companyUrl || job.companyWebsite || ""),
+        applicationUrl: link,
+        contactUrl: link
+      });
+    }
+  } catch (error) {
+    console.error("[Jobicy] Collection failed:", error);
+  }
+
+  return results.slice(0, MAX_RESULTS_PER_SOURCE);
+}
+
+const WWR_FEEDS = [
+  "https://weworkremotely.com/categories/remote-programming-jobs.rss",
+  "https://weworkremotely.com/categories/remote-design-jobs.rss",
+  "https://weworkremotely.com/categories/remote-marketing-jobs.rss",
+  "https://weworkremotely.com/categories/remote-customer-support-jobs.rss",
+  "https://weworkremotely.com/categories/remote-sales-jobs.rss"
+];
+
+async function collectWeWorkRemotely(): Promise<SearchResult[]> {
+  const results: SearchResult[] = [];
+
+  const batches = await Promise.all(
+    WWR_FEEDS.map(async feed => {
+      try {
+        const xml = await fetchText(feed);
+        const feedResults = parseRssFeed(xml, "We Work Remotely");
+
+        return feedResults.map(result => ({
+          ...result,
+          sourceType: "job",
+          applicationUrl: result.link,
+          contactUrl: result.link
+        }));
+      } catch (error) {
+        console.error("[We Work Remotely] Feed failed:", feed, error);
+        return [];
+      }
+    })
+  );
+
+  for (const batch of batches) {
+    results.push(...batch);
+  }
+
+  return results.slice(0, MAX_RESULTS_PER_SOURCE);
+}
+
+async function collectRemoteOK(): Promise<SearchResult[]> {
+  const results: SearchResult[] = [];
+
+  try {
+    const response = await fetchJson("https://remoteok.com/api");
+
+    const jobs = Array.isArray(response) ? response.slice(1) : [];
+
+    for (const job of jobs) {
+      const title = clean(job.position || "");
+      const description = stripHtml(job.description || "");
+      const link = cleanUrl(
+        job.url || (job.id ? `https://remoteok.com/remote-jobs/${job.id}` : "")
+      );
+
+      if (!title || !link) continue;
+
+      results.push({
+        title,
+        description,
+        snippet: description,
+        link,
+        sourceUrl: link,
+        source: "Remote OK",
+        sourceType: "job",
+        publishedAt: job.date || job.epoch || "",
+        published: job.date || job.epoch || "",
+        company: clean(job.company || ""),
+        location: clean(job.location || "Remote"),
+        salaryRange: clean(job.salary || ""),
+        companyWebsite: cleanUrl(job.company_url || ""),
+        applicationUrl: link,
+        contactUrl: link
+      });
+    }
+  } catch (error) {
+    console.error("[Remote OK] Collection failed:", error);
+  }
+
+  return results.slice(0, MAX_RESULTS_PER_SOURCE);
+}
 const sourceCollectionErrors: Record<string, string> = {};
 
 async function runSource(source: SourceJob): Promise<SearchResult[]> {
@@ -1879,4 +2395,4 @@ export default async function handler(
       message
     });
   }
-      }
+                                                               }
