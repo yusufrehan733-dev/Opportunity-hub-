@@ -687,7 +687,45 @@ const possible = clean(match[1]);
 if (getCountry(possible)) return "";
 
 return possible;
-  }
+}
+const BOOKING_AND_LINK_HOSTS = [
+  "calendly.com",
+  "cal.com",
+  "topmate.io",
+  "superpeer.com",
+  "linktr.ee",
+  "bio.link",
+  "beacons.ai",
+  "carrd.co",
+  "about.me",
+  "stan.store",
+  "ko-fi.com",
+  "buymeacoffee.com",
+  "preply.com",
+  "italki.com",
+  "superprof.com",
+  "wyzant.com",
+  "fiverr.com",
+  "upwork.com"
+];
+
+const BLOCKED_SOCIAL_ONLY_HOSTS = [
+  "bsky.app",
+  "github.com",
+  "reddit.com",
+  "medium.com",
+  "dev.to",
+  "wordpress.com",
+  "substack.com",
+  "x.com",
+  "twitter.com",
+  "instagram.com",
+  "facebook.com",
+  "tiktok.com",
+  "youtube.com",
+  "linkedin.com"
+];
+
 function isArticleOrPostUrl(url: string): boolean {
   const cleaned = cleanUrl(url);
   if (!cleaned) return true;
@@ -705,10 +743,19 @@ function isArticleOrPostUrl(url: string): boolean {
       return true;
     }
 
-    // Reject obvious blog/news post URLs
-    if (/\/(blog|post|posts|article|articles|news|202\d)\//i.test(path)) {
-      return true;
+    // Allow booking/marketplace/link-in-bio profile URLs
+    if (
+      BOOKING_AND_LINK_HOSTS.some(
+        d => host === d || host.endsWith("." + d)
+      )
+    ) {
+      return false;
     }
+
+    // Reject deep blog/article paths on external sites
+    const segments = path.split("/").filter(Boolean);
+    if (segments.length >= 2) return true;
+    if (segments.length === 1 && segments[0].length > 35) return true;
 
     return false;
   } catch {
@@ -722,16 +769,393 @@ function isDirectExternalWebsiteOrBookingUrl(url: string): boolean {
   if (isArticleOrPostUrl(cleaned)) return false;
 
   const host = getHostname(cleaned);
-  if (!host || !host.includes(".")) return false;
+  if (!host) return false;
 
-  return true;
+  if (
+    BOOKING_AND_LINK_HOSTS.some(
+      d => host === d || host.endsWith("." + d)
+    )
+  ) {
+    return true;
+  }
+
+  // Personal website / portfolio root or contact/book/hire page
+  try {
+    const path = new URL(cleaned).pathname.replace(/\/+$/, "");
+    return (
+      path === "" ||
+      /^\/(contact|about|hire|book|booking|tutor|coach|services|lessons)$/i.test(
+        path
+      )
+    );
+  } catch {
+    return false;
+  }
 }
+
+function isSpecificContactPage(
+  value: string
+): boolean {
+  const url = cleanUrl(value);
+  if (!url) return false;
+
+  let path = "";
+  try {
+    path = new URL(url).pathname.toLowerCase();
+  } catch {
+    return false;
+  }
+
+  return containsAny(path, CONTACT_PATH_TERMS);
+}
+
+function getContactUrl(
+  result: SearchResult,
+  type: LeadType
+): string {
+  const direct = cleanUrl(result.contactUrl || "");
+  if (direct) {
+    if (type === "SaaS") {
+      return isDirectExternalWebsiteOrBookingUrl(direct) ? direct : "";
+    }
+    return direct;
+  }
+
+  const application = cleanUrl(result.applicationUrl || "");
+  if (application && type !== "SaaS") return application;
+
+  const link = cleanUrl(result.link || result.sourceUrl || "");
+  if (!link) return "";
+
+  if (type === "SaaS") {
+    return isDirectExternalWebsiteOrBookingUrl(link) ? link : "";
+  }
+  if (type === "Demand" && result.sourceType === "reddit") return link;
+  if (
+    type === "Supply" &&
+    (result.sourceType === "job" || result.sourceType === "rss")
+  ) {
+    return link;
+  }
+
+  if (isSpecificContactPage(link)) return link;
+
+  return "";
+}
+
+function hasRealContact(
+  result: SearchResult,
+  type: LeadType
+): boolean {
+  if (
+    clean(result.email) &&
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean(result.email))
+  ) {
+    return true;
+  }
+
+  if (clean(result.phone).replace(/\D/g, "").length >= 7) {
+    return true;
+  }
+
+  const contact = getContactUrl(result, type);
+  if (!contact) return false;
+
+  if (type === "SaaS") {
+    return isDirectExternalWebsiteOrBookingUrl(contact);
+  }
+  if (type === "Demand" && result.sourceType === "reddit") return true;
+  if (
+    type === "Supply" &&
+    (result.sourceType === "job" || result.sourceType === "rss")
+  ) {
+    return true;
+  }
+
+  return isSpecificContactPage(contact);
+}
+
+function getResultText(result: SearchResult): string {
+  return normalizeText([
+    result.title,
+    result.description,
+    result.snippet,
+    result.author,
+    result.company,
+    result.location,
+    result.country
+  ].filter(Boolean).join(" "));
+}
+
+function hasSupplyIntent(text: string): boolean {
+  return containsAny(text, SUPPLY_INTENT_TERMS);
+}
+
+function hasDemandIntent(text: string): boolean {
+  return containsAny(text, DEMAND_INTENT_TERMS);
+}
+
+function hasDemandReject(text: string): boolean {
+  return containsAny(text, DEMAND_REJECT_TERMS);
+}
+
+function hasProfessionalIntent(text: string): boolean {
+  return containsAny(text, PROFESSIONAL_TERMS);
+}
+
+function classifyLead(
+  result: SearchResult
+): LeadType | null {
+  const text = getResultText(result);
+  const sourceUrl = cleanUrl(result.link || result.sourceUrl || "");
+
+  if (!sourceUrl) return null;
+  if (containsBlockedContent(text, sourceUrl)) return null;
+
+  if (
+    result.sourceType === "social-profile" &&
+    (result.saasRole || hasProfessionalIntent(text))
+  ) {
+    return "SaaS";
+  }
+
+  if (hasSupplyIntent(text)) return "Supply";
+  if (hasDemandReject(text)) return null;
+  if (hasDemandIntent(text)) return "Demand";
+
+  return null;
+}
+
+function getSaasRoleFallbackSkill(
+  result: SearchResult,
+  text: string
+): SkillRow | null {
+  if (
+    result.saasRole === "teacher" ||
+    /\b(teacher|tutor|educator|instructor|lessons|tutoring|teaching)\b/i.test(text)
+  ) {
+    return {
+      name: "Online Teaching",
+      category: "SaaS Prospects",
+      subcategory: "Education",
+      tags: ["teacher", "tutor", "educator", "teaching"]
+    };
+  }
+
+  if (
+    result.saasRole === "freelancer" ||
+    /\b(freelancer|freelance|designer|developer|consultant|writer|editor|marketer|translator)\b/i.test(text)
+  ) {
+    return {
+      name: "Freelancing",
+      category: "SaaS Prospects",
+      subcategory: "Independent Services",
+      tags: ["freelancer", "freelance", "designer", "writer", "editor"]
+    };
+  }
+
+  if (
+    result.saasRole === "coach" ||
+    /\b(coach|coaching|mentor|mentorship)\b/i.test(text)
+  ) {
+    return {
+      name: "Coaching",
+      category: "SaaS Prospects",
+      subcategory: "Coaching",
+      tags: ["coach", "coaching", "mentor"]
+    };
+  }
+
+  return null;
+}
+
+function findMatchingSkill(
+  result: SearchResult,
+  skills: SkillRow[],
+  type?: LeadType
+): SkillRow | null {
+  const text = getResultText(result);
+  if (!text) return null;
+
+  const matches = skills
+    .map(skill => {
+      const terms = [skill.name, ...(skill.tags || [])]
+        .map(normalizeText)
+        .filter(term => term.length >= 3);
+
+      const matched = terms.some(term => text.includes(term));
+      return { skill, matched };
+    })
+    .filter(item => item.matched);
+
+  if (matches.length) return matches[0].skill;
+
+  if (type === "SaaS") {
+    return getSaasRoleFallbackSkill(result, text);
+  }
+
+  return null;
+}
+
+function checkRejectionReason(
+  result: SearchResult,
+  type: LeadType,
+  skills: SkillRow[]
+): string {
+  const text = getResultText(result);
+  if (!text) return "empty_content";
+
+  const sourceUrl = cleanUrl(result.link || result.sourceUrl || "");
+  if (containsBlockedContent(text, sourceUrl)) return "blocked_content";
+  if (!sourceUrl) return "missing_source_url";
+
+  if (
+    type !== "SaaS" &&
+    !isFresh(result.publishedAt || result.published)
+  ) {
+    return "not_fresh";
+  }
+
+  if (!findMatchingSkill(result, skills, type)) {
+    return "no_matching_skill";
+  }
+
+  if (!hasRealContact(result, type)) {
+    return "no_real_contact";
+  }
+
+  return "";
+}
+
+function buildProcessedLead(
+  result: SearchResult,
+  type: LeadType,
+  skills: SkillRow[]
+): ProcessedLead | null {
+  const skill = findMatchingSkill(result, skills, type);
+  if (!skill) return null;
+
+  const sourceUrl = cleanUrl(result.link || result.sourceUrl || "");
+  const contactUrl = getContactUrl(result, type);
+  const email = clean(result.email || "");
+
+  if (!sourceUrl || (!contactUrl && !email)) return null;
+
+  const title = clean(result.title);
+  const description = clean(
+    result.description || result.snippet || ""
+  );
+
+  const country = clean(
+    result.country ||
+    getCountry([result.location, title, description].join(" "))
+  );
+
+  const city = clean(
+    getCity(result.location || description)
+  );
+
+  const name = clean(
+    result.author || result.company || title
+  );
+
+  return {
+    type,
+    source: clean(result.source || "Unknown"),
+    sourceUrl,
+    contactUrl: contactUrl || `mailto:${email}`,
+    title,
+    description,
+    skill: skill.name,
+    category: clean(skill.category || ""),
+    subcategory: clean(skill.subcategory || ""),
+    country,
+    city,
+    email,
+    phone: clean(result.phone || ""),
+    contactName: name,
+    applicationUrl: cleanUrl(result.applicationUrl || ""),
+    platform: contactUrl ? getHostname(contactUrl) : "email",
+    niche: skill.name,
+    name,
+    clientName: name,
+    company: clean(result.company || ""),
+    position: title,
+    publishedAt: clean(result.publishedAt || result.published || ""),
+    createdAt: new Date().toISOString(),
+    salaryRange: clean(result.salaryRange || ""),
+    salaryMin: result.salaryMin ?? null,
+    salaryMax: result.salaryMax ?? null,
+    companyWebsite: cleanUrl(result.companyWebsite || "")
+  };
+}
+async function collectRedditQueries(
+  queries: string[],
+  sourceName: string
+): Promise<SearchResult[]> {
+  const collected: SearchResult[] = [];
+
+  const batches = await Promise.all(
+    queries.map(async query => {
+      try {
+        const url =
+          "https://www.reddit.com/search.rss?q=" +
+          encodeURIComponent(query) +
+          "&sort=new&t=month&limit=25";
+
+        const xml = await fetchText(url);
+        const results = parseRssFeed(xml, sourceName);
+
+        return results.map(result => ({
+          ...result,
+          source: sourceName,
+          sourceType: "reddit",
+          searchQuery: query,
+          link: cleanUrl(result.link),
+          sourceUrl: cleanUrl(result.link),
+          contactUrl: cleanUrl(result.link),
+          snippet: clean(result.description || result.snippet || "")
+        }));
+      } catch (error) {
+        console.error(`[${sourceName}] Query failed:`, query, error);
+        return [];
+      }
+    })
+  );
+
+  for (const batch of batches) {
+    collected.push(...batch);
+  }
+
+  return collected.slice(0, MAX_RESULTS_PER_SOURCE);
+}
+
+async function collectRedditDemandTeachers(): Promise<SearchResult[]> {
+  return collectRedditQueries(
+    DEMAND_TEACHER_QUERIES,
+    "Reddit Demand Teachers"
+  );
+}
+
+async function collectRedditDemandFreelancers(): Promise<SearchResult[]> {
+  return collectRedditQueries(
+    DEMAND_FREELANCER_QUERIES,
+    "Reddit Demand Freelancers"
+  );
+}
+
+async function collectRedditDemandCoaches(): Promise<SearchResult[]> {
+  return collectRedditQueries(
+    DEMAND_COACH_QUERIES,
+    "Reddit Demand Coaches"
+  );
+}
+
 function extractEmailOrExternalSiteFromBio(raw: string): {
   email: string;
   contactUrl: string;
 } {
   const cleanHtml = raw.replace(/<[^>]+>/g, " ");
-
   const emailMatches =
     cleanHtml.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g) || [];
   const validEmail =
@@ -742,21 +1166,11 @@ function extractEmailOrExternalSiteFromBio(raw: string): {
         )
     ) || "";
 
-  // Match full URLs AND bare domains in Bluesky bios (e.g. "janedoe.com" or "calendly.com/jane")
-  const explicitUrls = raw.match(/https?:\/\/[^\s<>"')\\]+/gi) || [];
-  const bareDomains =
-    cleanHtml.match(
-      /(?:^|\s)((?:[a-z0-9-]+\.)+(?:com|org|net|io|co|me|edu|uk|ca|au|de|fr|in|pk|us|info|biz|ai|app|site|online|coach|academy|tutor|studio)(?:\/[^\s<>"')]*)?)/gi
-    ) || [];
-
-  const candidates = [
-    ...explicitUrls,
-    ...bareDomains.map(d => `https://${d.trim().replace(/^\/+/, "")}`)
-  ];
-
+  const urlMatches = raw.match(/https?:\/\/[^\s<>"')\\]+/gi) || [];
   let bestUrl = "";
-  for (const candidate of candidates) {
-    const cleaned = cleanUrl(candidate.replace(/[.,;!?]+$/, ""));
+
+  for (const rawUrl of urlMatches) {
+    const cleaned = cleanUrl(rawUrl.replace(/[.,;!?]+$/, ""));
     if (!cleaned || isBlockedDomain(cleaned)) continue;
 
     if (isDirectExternalWebsiteOrBookingUrl(cleaned)) {
@@ -771,34 +1185,138 @@ function extractEmailOrExternalSiteFromBio(raw: string): {
   };
 }
 
-async function collectMastodonDirectBioLeads(
+function isRealPersonName(name: string): boolean {
+  const n = clean(name);
+  if (!n || n.length < 2 || n.length > 70) return false;
+  if (
+    /^(admin|staff|team|support|editorial|bot|unknown|medium|wordpress|scouthub|deleted|automoderator)$/i.test(
+      n
+    )
+  ) {
+    return false;
+  }
+  return /[a-zA-Z]{2,}/.test(n);
+}
+
+async function collectBlueskyDirectBioLeads(
   role: SaasRole,
   sourceName: string
 ): Promise<SearchResult[]> {
-  const roleRegex: Record<SaasRole, RegExp> = {
-    teacher: /\b(teacher|tutor|educator|instructor|teaching|tutoring|lessons|esl)\b/i,
-    freelancer: /\b(freelance|freelancer|writer|designer|editor|copywriter|translator|consultant)\b/i,
-    coach: /\b(coach|coaching|mentor|mentorship)\b/i
+  const queriesByRole: Record<SaasRole, string[]> = {
+    teacher: [
+      "english teacher",
+      "math tutor",
+      "online tutor",
+      "language teacher",
+      "music teacher",
+      "science teacher",
+      "esl teacher"
+    ],
+    freelancer: [
+      "freelance writer",
+      "freelance designer",
+      "freelance editor",
+      "copywriter",
+      "freelance translator",
+      "video editor"
+    ],
+    coach: [
+      "life coach",
+      "career coach",
+      "business coach",
+      "executive coach",
+      "wellness coach"
+    ]
   };
-
-  const instances = [
-    "https://mastodon.social",
-    "https://mas.to",
-    "https://mstdn.social"
-  ];
 
   const seen = new Set<string>();
   const results: SearchResult[] = [];
 
   const batches = await Promise.all(
-    instances.map(async instance => {
+    (queriesByRole[role] || []).map(async q => {
       try {
-        const accounts = await fetchJson(
-          `${instance}/api/v1/directory?local=false&order=active&limit=40`
+        const data = await fetchJson(
+          `https://public.api.bsky.app/xrpc/app.bsky.actor.searchActors?q=${encodeURIComponent(q)}&limit=25`
         );
-        return Array.isArray(accounts) ? accounts : [];
+        return Array.isArray(data?.actors) ? data.actors : [];
       } catch (error) {
-        console.error(`[${sourceName}] Mastodon directory failed:`, instance, error);
+        console.error(`[${sourceName}] Bluesky query failed:`, q, error);
+        return [];
+      }
+    })
+  );
+
+  for (const actor of batches.flat()) {
+    const displayName = clean(actor?.displayName || actor?.handle || "");
+    const bio = clean(actor?.description || "");
+    if (!bio || !isRealPersonName(displayName)) continue;
+
+    // Keep ONLY if bio contains a valid email or external website / booking link
+    const extracted = extractEmailOrExternalSiteFromBio(bio);
+    if (!extracted.email && !extracted.contactUrl) continue;
+
+    const key = (extracted.email || extracted.contactUrl).toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    results.push({
+      title: `${displayName} — ${bio.slice(0, 80)}`,
+      link: extracted.contactUrl || `mailto:${extracted.email}`,
+      sourceUrl: extracted.contactUrl || `mailto:${extracted.email}`,
+      contactUrl: extracted.contactUrl,
+      email: extracted.email,
+      author: displayName,
+      country: getCountry(bio) || "Remote / Global",
+      description: bio,
+      snippet: bio,
+      source: sourceName,
+      sourceType: "social-profile",
+      saasRole: role
+    });
+  }
+
+  return results;
+}
+
+async function collectMastodonDirectBioLeads(
+  role: SaasRole,
+  sourceName: string
+): Promise<SearchResult[]> {
+  const queriesByRole: Record<SaasRole, string[]> = {
+    teacher: [
+      "english teacher",
+      "math tutor",
+      "language teacher",
+      "music teacher",
+      "tutor"
+    ],
+    freelancer: [
+      "freelance writer",
+      "freelance designer",
+      "copywriter",
+      "translator",
+      "freelancer"
+    ],
+    coach: [
+      "life coach",
+      "career coach",
+      "business coach",
+      "coach"
+    ]
+  };
+
+  const seen = new Set<string>();
+  const results: SearchResult[] = [];
+
+  const batches = await Promise.all(
+    (queriesByRole[role] || []).map(async q => {
+      try {
+        const data = await fetchJson(
+          `https://mastodon.social/api/v2/search?q=${encodeURIComponent(q)}&type=accounts&limit=20`
+        );
+        return Array.isArray(data?.accounts) ? data.accounts : [];
+      } catch (error) {
+        console.error(`[${sourceName}] Mastodon query failed:`, q, error);
         return [];
       }
     })
@@ -808,16 +1326,14 @@ async function collectMastodonDirectBioLeads(
     const displayName = clean(account?.display_name || account?.username || "");
     const noteHtml = String(account?.note || "");
     const fieldsText = Array.isArray(account?.fields)
-      ? account.fields
-          .map((f: any) => `${f?.name || ""} ${f?.value || ""}`)
-          .join(" ")
+      ? account.fields.map((f: any) => `${f?.name || ""} ${f?.value || ""}`).join(" ")
       : "";
     const combinedBio = `${noteHtml} ${fieldsText}`;
     const cleanBio = clean(combinedBio.replace(/<[^>]+>/g, " "));
 
     if (!cleanBio || !isRealPersonName(displayName)) continue;
-    if (!roleRegex[role].test(cleanBio)) continue;
 
+    // Extract email or external website/booking link from bio note or profile metadata fields
     const extracted = extractEmailOrExternalSiteFromBio(combinedBio);
     if (!extracted.email && !extracted.contactUrl) continue;
 
@@ -843,6 +1359,39 @@ async function collectMastodonDirectBioLeads(
 
   return results;
 }
+
+async function collectSaaSByRole(
+  role: SaasRole,
+  sourceName: string
+): Promise<SearchResult[]> {
+  const batches = await Promise.all([
+    collectBlueskyDirectBioLeads(role, sourceName),
+    collectMastodonDirectBioLeads(role, sourceName)
+  ]);
+
+  const merged = new Map<string, SearchResult>();
+
+  for (const row of batches.flat()) {
+    const key = clean(row.email || row.contactUrl || row.link || "").toLowerCase();
+    if (key && !merged.has(key)) {
+      merged.set(key, row);
+    }
+  }
+
+  return Array.from(merged.values()).slice(0, MAX_RESULTS_PER_SOURCE);
+}
+
+async function collectBingSaaSTeachers(): Promise<SearchResult[]> {
+  return collectSaaSByRole("teacher", "All-Subjects SaaS Teachers");
+}
+
+async function collectBingSaaSFreelancers(): Promise<SearchResult[]> {
+  return collectSaaSByRole("freelancer", "SaaS Freelancers");
+}
+
+async function collectBingSaaSCoaches(): Promise<SearchResult[]> {
+  return collectSaaSByRole("coach", "SaaS Coaches");
+    }
 async function collectJobicy(): Promise<SearchResult[]> {
 const results: SearchResult[] = [];
 
@@ -1050,7 +1599,7 @@ return results.slice(
 0,
 MAX_RESULTS_PER_SOURCE
 );
-    }
+}
 const sourceCollectionErrors: Record<
 string,
 string
