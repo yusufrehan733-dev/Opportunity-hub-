@@ -1,6 +1,6 @@
 import type {
-  VercelRequest,
-  VercelResponse
+VercelRequest,
+VercelResponse
 } from "@vercel/node";
 
 import { createClient } from "@supabase/supabase-js";
@@ -9,91 +9,91 @@ type LeadType = "Demand" | "Supply" | "SaaS";
 type SaasRole = "teacher" | "freelancer" | "coach";
 
 type LeadStats = {
-  found: number;
-  accepted: number;
-  inserted: number;
-  total: number;
-  demand: number;
-  supply: number;
-  saas: number;
-  rejected: number;
-  wrongType: number;
-  noSkill: number;
-  noContact: number;
-  stale: number;
-  duplicates: number;
-  errors: number;
-  sources: Record<string, any>;
+found: number;
+accepted: number;
+inserted: number;
+total: number;
+demand: number;
+supply: number;
+saas: number;
+rejected: number;
+wrongType: number;
+noSkill: number;
+noContact: number;
+stale: number;
+duplicates: number;
+errors: number;
+sources: Record<string, any>;
 };
 
 type SkillRow = {
-  id?: string;
-  name: string;
-  category: string | null;
-  subcategory: string | null;
-  tags: string[];
+id?: string;
+name: string;
+category: string | null;
+subcategory: string | null;
+tags: string[];
 };
 
 type SearchResult = {
-  title: string;
-  link: string;
-  description: string;
-  snippet?: string;
-  searchQuery?: string;
-  author?: string;
-  company?: string;
-  location?: string;
-  country?: string;
-  publishedAt?: string;
-  published?: string;
-  sourceType: string;
-  source?: string;
-  sourceUrl?: string;
-  contactUrl?: string;
-  applicationUrl?: string;
-  email?: string;
-  phone?: string;
-  salaryRange?: string;
-  salaryMin?: number | null;
-  salaryMax?: number | null;
-  companyWebsite?: string;
-  saasRole?: SaasRole;
+title: string;
+link: string;
+description: string;
+snippet?: string;
+searchQuery?: string;
+author?: string;
+company?: string;
+location?: string;
+country?: string;
+publishedAt?: string;
+published?: string;
+sourceType: string;
+source?: string;
+sourceUrl?: string;
+contactUrl?: string;
+applicationUrl?: string;
+email?: string;
+phone?: string;
+salaryRange?: string;
+salaryMin?: number | null;
+salaryMax?: number | null;
+companyWebsite?: string;
+saasRole?: SaasRole;
 };
 
 type ProcessedLead = {
-  type: LeadType;
-  source: string;
-  sourceUrl: string;
-  contactUrl: string;
-  title: string;
-  description: string;
-  skill: string;
-  category: string;
-  subcategory: string;
-  country: string;
-  city: string;
-  email: string;
-  phone: string;
-  contactName: string;
-  applicationUrl: string;
-  platform: string;
-  niche: string;
-  name: string;
-  clientName: string;
-  company: string;
-  position: string;
-  publishedAt: string;
-  createdAt: string;
-  salaryRange?: string;
-  salaryMin?: number | null;
-  salaryMax?: number | null;
-  companyWebsite?: string;
+type: LeadType;
+source: string;
+sourceUrl: string;
+contactUrl: string;
+title: string;
+description: string;
+skill: string;
+category: string;
+subcategory: string;
+country: string;
+city: string;
+email: string;
+phone: string;
+contactName: string;
+applicationUrl: string;
+platform: string;
+niche: string;
+name: string;
+clientName: string;
+company: string;
+position: string;
+publishedAt: string;
+createdAt: string;
+salaryRange?: string;
+salaryMin?: number | null;
+salaryMax?: number | null;
+companyWebsite?: string;
 };
 
 type SourceJob = {
-  name: string;
-  category: LeadType;
-  collect: () => Promise<SearchResult[]>;
+name: string;
+category: LeadType;
+collect: () => Promise<SearchResult[]>;
 };
 
 const REQUEST_TIMEOUT_MS = 2200;
@@ -101,524 +101,528 @@ const MAX_RESULTS_PER_SOURCE = 100;
 const MAX_AGE_HOURS = 72;
 
 const USER_AGENT =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
+"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 
 const DEMAND_TEACHER_QUERIES = [
-  '"looking for a tutor"',
-  '"need a tutor"',
-  '"looking for an online teacher"',
-  '"need an online teacher"',
-  '"looking for a math tutor"',
-  '"need a math tutor"',
-  '"looking for an English teacher"',
-  '"need a language teacher"',
-  '"need help with lessons"',
-  '"looking for a private teacher"'
+'"looking for a tutor"',
+'"need a tutor"',
+'"looking for an online teacher"',
+'"need an online teacher"',
+'"looking for a math tutor"',
+'"need a math tutor"',
+'"looking for an English teacher"',
+'"need a language teacher"',
+'"need help with lessons"',
+'"looking for a private teacher"'
 ];
 
 const DEMAND_FREELANCER_QUERIES = [
-  '"looking for a freelancer"',
-  '"need a freelancer"',
-  '"looking for a web developer"',
-  '"need a web developer"',
-  '"looking for a graphic designer"',
-  '"need a graphic designer"',
-  '"looking for a freelance writer"',
-  '"need a content writer"',
-  '"looking for a video editor"',
-  '"need a virtual assistant"'
+'"looking for a freelancer"',
+'"need a freelancer"',
+'"looking for a web developer"',
+'"need a web developer"',
+'"looking for a graphic designer"',
+'"need a graphic designer"',
+'"looking for a freelance writer"',
+'"need a content writer"',
+'"looking for a video editor"',
+'"need a virtual assistant"'
 ];
 
 const DEMAND_COACH_QUERIES = [
-  '"looking for a business coach"',
-  '"need a business coach"',
-  '"looking for a career coach"',
-  '"need a career coach"',
-  '"looking for a life coach"',
-  '"need a life coach"',
-  '"looking for a consultant"',
-  '"need a consultant"'
+'"looking for a business coach"',
+'"need a business coach"',
+'"looking for a career coach"',
+'"need a career coach"',
+'"looking for a life coach"',
+'"need a life coach"',
+'"looking for a consultant"',
+'"need a consultant"'
 ];
 
 const DEMAND_INTENT_TERMS = [
-  "looking for a tutor",
-  "need a tutor",
-  "need tutoring",
-  "looking for a teacher",
-  "need a teacher",
-  "looking for an online teacher",
-  "need an online teacher",
-  "looking for a freelancer",
-  "need a freelancer",
-  "looking for a designer",
-  "need a designer",
-  "looking for a coach",
-  "need a coach",
-  "need help with",
-  "looking for help with",
-  "can anyone recommend",
-  "looking for a math tutor",
-  "need a math tutor",
-  "looking for a developer",
-  "need a developer",
-  "looking for a consultant",
-  "need a consultant",
-  "looking for a writer",
-  "need a writer",
-  "looking for a video editor",
-  "need a video editor",
-  "looking for a virtual assistant",
-  "need a virtual assistant"
+"looking for a tutor",
+"need a tutor",
+"need tutoring",
+"looking for a teacher",
+"need a teacher",
+"looking for an online teacher",
+"need an online teacher",
+"looking for a freelancer",
+"need a freelancer",
+"looking for a designer",
+"need a designer",
+"looking for a coach",
+"need a coach",
+"need help with",
+"looking for help with",
+"can anyone recommend",
+"looking for a math tutor",
+"need a math tutor",
+"looking for a developer",
+"need a developer",
+"looking for a consultant",
+"need a consultant",
+"looking for a writer",
+"need a writer",
+"looking for a video editor",
+"need a video editor",
+"looking for a virtual assistant",
+"need a virtual assistant"
 ];
 
 const DEMAND_REJECT_TERMS = [
-  "we are hiring",
-  "now hiring",
-  "job vacancy",
-  "job opening",
-  "apply now",
-  "submit your application",
-  "looking for clients",
-  "looking for students",
-  "hire me",
-  "my services",
-  "available for hire",
-  "join our team",
-  "career opportunity",
-  "we are recruiting",
-  "i offer my services",
-  "i am available for work",
-  "book my services",
-  "check out my portfolio"
+"we are hiring",
+"now hiring",
+"job vacancy",
+"job opening",
+"apply now",
+"submit your application",
+"looking for clients",
+"looking for students",
+"hire me",
+"my services",
+"available for hire",
+"join our team",
+"career opportunity",
+"we are recruiting",
+"i offer my services",
+"i am available for work",
+"book my services",
+"check out my portfolio"
 ];
 
 const SUPPLY_INTENT_TERMS = [
-  "we are hiring",
-  "hiring for",
-  "job opening",
-  "job vacancy",
-  "job vacancies",
-  "vacancies available",
-  "recruiting",
-  "recruitment",
-  "join our team",
-  "apply now",
-  "apply here",
-  "position available",
-  "employment opportunity",
-  "freelance opportunity",
-  "contract opportunity",
-  "remote position",
-  "full-time position",
-  "part-time position",
-  "remote job",
-  "we are looking for a candidate",
-  "salary",
-  "compensation",
-  "job description"
+"we are hiring",
+"hiring for",
+"job opening",
+"job vacancy",
+"job vacancies",
+"vacancies available",
+"recruiting",
+"recruitment",
+"join our team",
+"apply now",
+"apply here",
+"position available",
+"employment opportunity",
+"freelance opportunity",
+"contract opportunity",
+"remote position",
+"full-time position",
+"part-time position",
+"remote job",
+"we are looking for a candidate",
+"salary",
+"compensation",
+"job description"
 ];
 
 const PROFESSIONAL_TERMS = [
-  "teacher",
-  "tutor",
-  "coach",
-  "freelancer",
-  "consultant",
-  "designer",
-  "developer",
-  "instructor",
-  "educator",
-  "mentor",
-  "portfolio",
-  "professional profile",
-  "freelance",
-  "professional services",
-  "online tutor",
-  "business coach",
-  "career coach",
-  "life coach",
-  "fitness coach",
-  "leadership coach",
-  "language teacher",
-  "graphic designer",
-  "web developer",
-  "digital marketer",
-  "virtual assistant",
-  "content writer",
-  "video editor",
-  "online lessons",
-  "online classes",
-  "coaching services",
-  "tutoring services",
-  "my students",
-  "my clients",
-  "book a session",
-  "work with me",
-  "available for projects",
-  "open for freelance work"
+"teacher",
+"tutor",
+"coach",
+"freelancer",
+"consultant",
+"designer",
+"developer",
+"instructor",
+"educator",
+"mentor",
+"portfolio",
+"professional profile",
+"freelance",
+"professional services",
+"online tutor",
+"business coach",
+"career coach",
+"life coach",
+"fitness coach",
+"leadership coach",
+"language teacher",
+"graphic designer",
+"web developer",
+"digital marketer",
+"virtual assistant",
+"content writer",
+"video editor",
+"online lessons",
+"online classes",
+"coaching services",
+"tutoring services",
+"my students",
+"my clients",
+"book a session",
+"work with me",
+"available for projects",
+"open for freelance work"
 ];
 
 const BLOCKED_TERMS = [
-  "casino",
-  "gambling",
-  "crypto giveaway",
-  "get rich quick",
-  "ebook",
-  "affiliate spam",
-  "investment scheme",
-  "guaranteed income"
+"casino",
+"gambling",
+"crypto giveaway",
+"get rich quick",
+"ebook",
+"affiliate spam",
+"investment scheme",
+"guaranteed income"
 ];
 
 const BLOCKED_DOMAINS = [
-  "indeed.com",
-  "glassdoor.com",
-  "ziprecruiter.com",
-  "monster.com",
-  "simplyhired.com",
-  "careerbuilder.com",
-  "jooble.org"
+"indeed.com",
+"glassdoor.com",
+"ziprecruiter.com",
+"monster.com",
+"simplyhired.com",
+"careerbuilder.com",
+"jooble.org"
 ];
 
 const CONTACT_PATH_TERMS = [
-  "contact",
-  "contact-us",
-  "hire",
-  "book",
-  "message",
-  "apply",
-  "request",
-  "get-in-touch"
+"contact",
+"contact-us",
+"hire",
+"book",
+"message",
+"apply",
+"request",
+"get-in-touch"
 ];
 
 const COUNTRY_ALIASES: Record<string, string> = {
-  "united states": "United States",
-  usa: "United States",
-  "united kingdom": "United Kingdom",
-  uk: "United Kingdom",
-  canada: "Canada",
-  australia: "Australia",
-  pakistan: "Pakistan",
-  india: "India",
-  uae: "United Arab Emirates",
-  "united arab emirates": "United Arab Emirates",
-  "saudi arabia": "Saudi Arabia",
-  germany: "Germany",
-  france: "France",
-  netherlands: "Netherlands",
-  ireland: "Ireland",
-  "new zealand": "New Zealand",
-  singapore: "Singapore",
-  "south africa": "South Africa",
-  nigeria: "Nigeria",
-  egypt: "Egypt"
+"united states": "United States",
+usa: "United States",
+"united kingdom": "United Kingdom",
+uk: "United Kingdom",
+canada: "Canada",
+australia: "Australia",
+pakistan: "Pakistan",
+india: "India",
+uae: "United Arab Emirates",
+"united arab emirates": "United Arab Emirates",
+"saudi arabia": "Saudi Arabia",
+germany: "Germany",
+france: "France",
+netherlands: "Netherlands",
+ireland: "Ireland",
+"new zealand": "New Zealand",
+singapore: "Singapore",
+"south africa": "South Africa",
+nigeria: "Nigeria",
+egypt: "Egypt"
 };
 
 const CITY_COUNTRY_MAP: Record<string, string> = {
-  toronto: "Canada",
-  vancouver: "Canada",
-  montreal: "Canada",
-  calgary: "Canada",
-  london: "United Kingdom",
-  manchester: "United Kingdom",
-  birmingham: "United Kingdom",
-  "new york": "United States",
-  "los angeles": "United States",
-  chicago: "United States",
-  austin: "United States",
-  sydney: "Australia",
-  melbourne: "Australia",
-  dubai: "United Arab Emirates",
-  "abu dhabi": "United Arab Emirates",
-  lahore: "Pakistan",
-  karachi: "Pakistan",
-  islamabad: "Pakistan",
-  rawalpindi: "Pakistan"
+toronto: "Canada",
+vancouver: "Canada",
+montreal: "Canada",
+calgary: "Canada",
+london: "United Kingdom",
+manchester: "United Kingdom",
+birmingham: "United Kingdom",
+"new york": "United States",
+"los angeles": "United States",
+chicago: "United States",
+austin: "United States",
+sydney: "Australia",
+melbourne: "Australia",
+dubai: "United Arab Emirates",
+"abu dhabi": "United Arab Emirates",
+lahore: "Pakistan",
+karachi: "Pakistan",
+islamabad: "Pakistan",
+rawalpindi: "Pakistan"
 };
 function clean(value: unknown): string {
-  return String(value ?? "")
-    .replace(/\s+/g, " ")
-    .trim();
+return String(value ?? "")
+.replace(/\s+/g, " ")
+.trim();
 }
 
 function normalizeText(value: unknown): string {
-  return clean(value).toLowerCase();
+return clean(value).toLowerCase();
 }
 
 function containsAny(text: string, terms: string[]): boolean {
-  const normalized = normalizeText(text);
-  return terms.some(term => normalized.includes(normalizeText(term)));
+const normalized = normalizeText(text);
+return terms.some(term => normalized.includes(normalizeText(term)));
 }
 
 function stripHtml(value: unknown): string {
-  return clean(
-    String(value ?? "")
-      .replace(/<script[\s\S]*?<\/script>/gi, " ")
-      .replace(/<style[\s\S]*?<\/style>/gi, " ")
-      .replace(/<[^>]*>/g, " ")
-      .replace(/&nbsp;/gi, " ")
-      .replace(/&amp;/gi, "&")
-      .replace(/&quot;/gi, '"')
-      .replace(/&#39;/gi, "'")
-      .replace(/&lt;/gi, "<")
-      .replace(/&gt;/gi, ">")
-  );
+return clean(
+String(value ?? "")
+.replace(/<script[\s\S]?</script>/gi, " ")
+.replace(/<style[\s\S]?</style>/gi, " ")
+.replace(/<[^>]*>/g, " ")
+.replace(/ /gi, " ")
+.replace(/&/gi, "&")
+.replace(/"/gi, '"')
+.replace(/'/gi, "'")
+.replace(/</gi, "<")
+.replace(/>/gi, ">")
+);
 }
 
 function cleanUrl(value: unknown): string {
-  try {
-    const raw = clean(value);
-    if (!raw) return "";
-    const url = new URL(raw);
+try {
+const raw = clean(value);
+if (!raw) return "";
+const url = new URL(raw);
 
-    if (url.protocol !== "https:" && url.protocol !== "http:") {
-      return "";
-    }
+if (url.protocol !== "https:" && url.protocol !== "http:") {  
+  return "";  
+}  
 
-    url.hash = "";
-    return url.toString();
-  } catch {
-    return "";
-  }
+url.hash = "";  
+return url.toString();
+
+} catch {
+return "";
+}
 }
 
 function getHostname(value: string): string {
-  try {
-    return new URL(value).hostname.toLowerCase().replace(/^www\./, "");
-  } catch {
-    return "";
-  }
+try {
+return new URL(value).hostname.toLowerCase().replace(/^www./, "");
+} catch {
+return "";
+}
 }
 
 function isBlockedDomain(value: string): boolean {
-  const host = getHostname(value);
-  if (!host) return false;
+const host = getHostname(value);
+if (!host) return false;
 
-  return BLOCKED_DOMAINS.some(
-    domain => host === domain || host.endsWith("." + domain)
-  );
+return BLOCKED_DOMAINS.some(
+domain => host === domain || host.endsWith("." + domain)
+);
 }
 
 function containsBlockedContent(text: string, url = ""): boolean {
-  return containsAny(text, BLOCKED_TERMS) || isBlockedDomain(url);
+return containsAny(text, BLOCKED_TERMS) || isBlockedDomain(url);
 }
 
 function safeDate(value: unknown): Date | null {
-  const input = clean(value);
-  if (!input) return null;
+const input = clean(value);
+if (!input) return null;
 
-  const relative = input.match(
-    /^(\d+)\s+(minute|hour|day|week)s?\s+ago$/i
-  );
+const relative = input.match(
+/^(\d+)\s+(minute|hour|day|week)s?\s+ago$/i
+);
 
-  if (relative) {
-    const amount = Number(relative[1]);
-    const unit = relative[2].toLowerCase();
-    const multiplier =
-      unit === "minute"
-        ? 60 * 1000
-        : unit === "hour"
-          ? 60 * 60 * 1000
-          : unit === "day"
-            ? 24 * 60 * 60 * 1000
-            : 7 * 24 * 60 * 60 * 1000;
+if (relative) {
+const amount = Number(relative[1]);
+const unit = relative[2].toLowerCase();
+const multiplier =
+unit === "minute"
+? 60 * 1000
+: unit === "hour"
+? 60 * 60 * 1000
+: unit === "day"
+? 24 * 60 * 60 * 1000
+: 7 * 24 * 60 * 60 * 1000;
 
-    return new Date(Date.now() - amount * multiplier);
-  }
+return new Date(Date.now() - amount * multiplier);
 
-  const numeric = Number(input);
-  if (Number.isFinite(numeric) && numeric > 1000000000) {
-    const timestamp = numeric < 100000000000 ? numeric * 1000 : numeric;
-    const date = new Date(timestamp);
-    return Number.isNaN(date.getTime()) ? null : date;
-  }
+}
 
-  const parsed = new Date(input);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
+const numeric = Number(input);
+if (Number.isFinite(numeric) && numeric > 1000000000) {
+const timestamp = numeric < 100000000000 ? numeric * 1000 : numeric;
+const date = new Date(timestamp);
+return Number.isNaN(date.getTime()) ? null : date;
+}
+
+const parsed = new Date(input);
+return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
 function isFresh(value: unknown): boolean {
-  const date = safeDate(value);
-  if (!date) return false;
+const date = safeDate(value);
+if (!date) return false;
 
-  const age = Date.now() - date.getTime();
-  return age >= 0 && age <= MAX_AGE_HOURS * 60 * 60 * 1000;
+const age = Date.now() - date.getTime();
+return age >= 0 && age <= MAX_AGE_HOURS * 60 * 60 * 1000;
 }
 
 async function fetchText(url: string): Promise<string> {
-  const controller = new AbortController();
-  const timeout = setTimeout(
-    () => controller.abort(),
-    REQUEST_TIMEOUT_MS
-  );
+const controller = new AbortController();
+const timeout = setTimeout(
+() => controller.abort(),
+REQUEST_TIMEOUT_MS
+);
 
-  try {
-    const response = await fetch(url, {
-      method: "GET",
-      headers: {
-        "User-Agent": USER_AGENT,
-        Accept:
-          "text/html, application/rss+xml, application/atom+xml, application/json, text/xml, text/plain, */*",
-        "Accept-Language": "en-US,en;q=0.9"
-      },
-      signal: controller.signal
-    });
+try {
+const response = await fetch(url, {
+method: "GET",
+headers: {
+"User-Agent": USER_AGENT,
+Accept:
+"text/html, application/rss+xml, application/atom+xml, application/json, text/xml, text/plain, /",
+"Accept-Language": "en-US,en;q=0.9"
+},
+signal: controller.signal
+});
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status} from ${getHostname(url)}`);
-    }
+if (!response.ok) {  
+  throw new Error(`HTTP ${response.status} from ${getHostname(url)}`);  
+}  
 
-    return await response.text();
-  } finally {
-    clearTimeout(timeout);
-  }
+return await response.text();
+
+} finally {
+clearTimeout(timeout);
+}
 }
 
 async function fetchJson(url: string): Promise<any> {
-  const body = await fetchText(url);
+const body = await fetchText(url);
 
-  try {
-    return JSON.parse(body);
-  } catch {
-    throw new Error(`Invalid JSON returned by ${getHostname(url)}`);
-  }
+try {
+return JSON.parse(body);
+} catch {
+throw new Error(Invalid JSON returned by ${getHostname(url)});
+}
 }
 
 function decodeRssValue(value: string): string {
-  return stripHtml(
-    value
-      .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
-      .replace(/&#x([0-9a-f]+);/gi, (_, hex) =>
-        String.fromCodePoint(parseInt(hex, 16))
-      )
-      .replace(/&#(\d+);/g, (_, number) =>
-        String.fromCodePoint(Number(number))
-      )
-  );
+return stripHtml(
+value
+.replace(/<!\(CDATA[([\s\S]*?)\)]>/g, "$1")
+.replace(/&#x([0-9a-f]+);/gi, (, hex) =>
+String.fromCodePoint(parseInt(hex, 16))
+)
+.replace(/&#(\d+);/g, (, number) =>
+String.fromCodePoint(Number(number))
+)
+);
 }
 
 function readXmlTag(block: string, tag: string): string {
-  const escaped = tag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const match = block.match(
-    new RegExp(
-      "<" + escaped + "(?:\\s[^>]*)?>([\\s\\S]*?)<\\/" + escaped + ">",
-      "i"
-    )
-  );
+const escaped = tag.replace(/[.+?^${}()|[]\]/g, "\$&");
+const match = block.match(
+new RegExp(
+"<" + escaped + "(?:\s[^>])?>([\s\S]*?)<\/" + escaped + ">",
+"i"
+)
+);
 
-  return match ? decodeRssValue(match[1]) : "";
+return match ? decodeRssValue(match[1]) : "";
 }
 
 function makeSearchResult(
-  title: string,
-  link: string,
-  description: string,
-  source: string,
-  publishedAt = "",
-  author = ""
+title: string,
+link: string,
+description: string,
+source: string,
+publishedAt = "",
+author = ""
 ): SearchResult {
-  const safeLink = cleanUrl(link);
+const safeLink = cleanUrl(link);
 
-  return {
-    title: clean(title),
-    link: safeLink,
-    sourceUrl: safeLink,
-    description: clean(description),
-    snippet: clean(description),
-    source,
-    sourceType: "rss",
-    publishedAt: clean(publishedAt),
-    published: clean(publishedAt),
-    author: clean(author)
-  };
+return {
+title: clean(title),
+link: safeLink,
+sourceUrl: safeLink,
+description: clean(description),
+snippet: clean(description),
+source,
+sourceType: "rss",
+publishedAt: clean(publishedAt),
+published: clean(publishedAt),
+author: clean(author)
+};
 }
 
 function parseRssFeed(xml: string, source: string): SearchResult[] {
-  const results: SearchResult[] = [];
+const results: SearchResult[] = [];
 
-  const blocks =
-    xml.match(/<item\b[\s\S]*?<\/item>/gi) ||
-    xml.match(/<entry\b[\s\S]*?<\/entry>/gi) ||
-    [];
+const blocks =
+xml.match(/<item\b[\s\S]?</item>/gi) ||
+xml.match(/<entry\b[\s\S]?</entry>/gi) ||
+[];
 
-  for (const block of blocks) {
-    const title = readXmlTag(block, "title");
-    let link = readXmlTag(block, "link");
+for (const block of blocks) {
+const title = readXmlTag(block, "title");
+let link = readXmlTag(block, "link");
 
-    if (!link) {
-      const linkMatch = block.match(/<link[^>]+href=["']([^"']+)["']/i);
-      link = linkMatch ? linkMatch[1] : "";
-    }
+if (!link) {  
+  const linkMatch = block.match(/<link[^>]+href=["']([^"']+)["']/i);  
+  link = linkMatch ? linkMatch[1] : "";  
+}  
 
-    const description =
-      readXmlTag(block, "description") ||
-      readXmlTag(block, "summary") ||
-      readXmlTag(block, "content:encoded") ||
-      readXmlTag(block, "content");
+const description =  
+  readXmlTag(block, "description") ||  
+  readXmlTag(block, "summary") ||  
+  readXmlTag(block, "content:encoded") ||  
+  readXmlTag(block, "content");  
 
-    const publishedAt =
-      readXmlTag(block, "pubDate") ||
-      readXmlTag(block, "published") ||
-      readXmlTag(block, "updated") ||
-      readXmlTag(block, "dc:date");
+const publishedAt =  
+  readXmlTag(block, "pubDate") ||  
+  readXmlTag(block, "published") ||  
+  readXmlTag(block, "updated") ||  
+  readXmlTag(block, "dc:date");  
 
-    const author =
-      readXmlTag(block, "author") || readXmlTag(block, "dc:creator");
+const author =  
+  readXmlTag(block, "author") || readXmlTag(block, "dc:creator");  
 
-    const result = makeSearchResult(
-      title,
-      link,
-      description,
-      source,
-      publishedAt,
-      author
-    );
+const result = makeSearchResult(  
+  title,  
+  link,  
+  description,  
+  source,  
+  publishedAt,  
+  author  
+);  
 
-    if (result.title && result.link) {
-      results.push(result);
-    }
-  }
+if (result.title && result.link) {  
+  results.push(result);  
+}
 
-  return results.slice(0, MAX_RESULTS_PER_SOURCE);
+}
+
+return results.slice(0, MAX_RESULTS_PER_SOURCE);
 }
 
 function getCountry(value: string): string {
-  const text = normalizeText(value);
+const text = normalizeText(value);
 
-  for (const [alias, country] of Object.entries(COUNTRY_ALIASES)) {
-    const expression = new RegExp(
-      "\\b" + alias.replace(/\s+/g, "\\s+") + "\\b",
-      "i"
-    );
-    if (expression.test(text)) {
-      return country;
-    }
-  }
+for (const [alias, country] of Object.entries(COUNTRY_ALIASES)) {
+const expression = new RegExp(
+"\b" + alias.replace(/\s+/g, "\s+") + "\b",
+"i"
+);
+if (expression.test(text)) {
+return country;
+}
+}
 
-  for (const [city, country] of Object.entries(CITY_COUNTRY_MAP)) {
-    const cityExpr = new RegExp(
-      "\\b" + city.replace(/\s+/g, "\\s+") + "\\b",
-      "i"
-    );
-    if (cityExpr.test(text)) {
-      return country;
-    }
-  }
+for (const [city, country] of Object.entries(CITY_COUNTRY_MAP)) {
+const cityExpr = new RegExp(
+"\b" + city.replace(/\s+/g, "\s+") + "\b",
+"i"
+);
+if (cityExpr.test(text)) {
+return country;
+}
+}
 
-  return "";
+return "";
 }
 
 function getCity(value: string): string {
-  const text = clean(value);
-  const match = text.match(
-    /\b(?:based in|located in|living in|from)\s+([A-Z][a-zA-Z .'-]{2,35})(?:,|\.|;|$)/i
-  );
+const text = clean(value);
+const match = text.match(
+/\b(?:based in|located in|living in|from)\s+([A-Z][a-zA-Z .'-]{2,35})(?:,|.|;|$)/i
+);
 
-  if (!match) return "";
-  const possible = clean(match[1]);
-  if (getCountry(possible)) return "";
+if (!match) return "";
+const possible = clean(match[1]);
+if (getCountry(possible)) return "";
 
-  return possible;
-  }
+return possible;
+}
 const BLOCKED_ECOMMERCE_COURSE_ARTICLE_HOSTS = [
   "amazon.com",
   "amazon.co.uk",
@@ -663,6 +667,28 @@ const BLOCKED_SOCIAL_ONLY_HOSTS = [
 
 const NON_DIRECT_PATH_REGEX =
   /\/(blog|blogs|post|posts|article|articles|news|book|books|course|courses|buy|shop|store|cart|checkout|pricing|subscribe|newsletter|podcast|episode|202\d)\b/i;
+
+const ACADEMY_OR_ORG_REGEX =
+  /\b(academy|academies|institute|institut|madrasa|madrasah|school|schools|college|university|center|centre|learning hub|studio group|official page|group|collective|agency|corporation|corp|inc\.?|llc|ltd\.?)\b/i;
+
+function isAcademyOrOrganization(
+  nameOrTitle: string,
+  text: string,
+  url: string
+): boolean {
+  const combined = `${nameOrTitle} ${text} ${url}`.toLowerCase();
+  if (ACADEMY_OR_ORG_REGEX.test(nameOrTitle.toLowerCase())) {
+    return true;
+  }
+  if (
+    /\b(quran academy|islamic academy|online academy|tutoring academy|language academy|our academy|welcome to our academy)\b/i.test(
+      combined
+    )
+  ) {
+    return true;
+  }
+  return false;
+}
 
 function isBlockedHost(url: string, blockedList: string[]): boolean {
   const host = getHostname(url);
@@ -835,6 +861,17 @@ function classifyLead(result: SearchResult): LeadType | null {
 
   if (
     result.sourceType === "social-profile" &&
+    isAcademyOrOrganization(
+      clean(result.author || result.title || ""),
+      text,
+      sourceUrl
+    )
+  ) {
+    return null;
+  }
+
+  if (
+    result.sourceType === "social-profile" &&
     (result.saasRole || hasProfessionalIntent(text))
   ) {
     if (isCourseBookOrArticleSpam(text)) return null;
@@ -853,30 +890,43 @@ function getSaasRoleFallbackSkill(
   text: string
 ): SkillRow | null {
   if (
-    result.saasRole === "teacher" ||
-    /\b(teacher|tutor|educator|instructor|lessons|tutoring|teaching|math|science|english|spanish|french|music|piano|history)\b/i.test(
+    /\b(quran|tajweed|tafseer|tafsir|fiqh|usul|sharia|islamic studies|arabic|urdu|french|spanish|english)\b/i.test(
       text
     )
   ) {
     return {
-      name: "Subject Teaching & Tutoring",
+      name: "Languages & Islamic Studies Teaching",
       category: "SaaS Prospects",
       subcategory: "Education",
-      tags: ["teacher", "tutor", "educator", "teaching"]
+      tags: ["quran", "tajweed", "tafseer", "fiqh", "arabic", "urdu", "french", "english"]
+    };
+  }
+
+  if (
+    result.saasRole === "teacher" ||
+    /\b(teacher|tutor|educator|instructor|lessons|tutoring|teaching|sociology|math|mathematics|physics|chemistry|biology|bio|history|geography|psychology|anthropology|law|kids|painting|art)\b/i.test(
+      text
+    )
+  ) {
+    return {
+      name: "Subject, Kids & Creative Teaching",
+      category: "SaaS Prospects",
+      subcategory: "Education",
+      tags: ["teacher", "tutor", "educator", "teaching", "kids", "painting"]
     };
   }
 
   if (
     result.saasRole === "freelancer" ||
-    /\b(freelancer|freelance|writer|editor|copywriter|translator|designer|illustrator|photographer|consultant|virtual assistant)\b/i.test(
+    /\b(freelancer|freelance|writer|editor|copywriter|ghostwriter|translator|wordpress|web developer|designer|illustrator|virtual assistant|consultant)\b/i.test(
       text
     )
   ) {
     return {
-      name: "Freelance Services",
+      name: "Writing, Design & Freelance Services",
       category: "SaaS Prospects",
       subcategory: "Independent Services",
-      tags: ["freelancer", "freelance", "writer", "editor", "designer"]
+      tags: ["freelancer", "freelance", "writer", "editor", "wordpress", "designer"]
     };
   }
 
@@ -937,6 +987,17 @@ function checkRejectionReason(
 
   if (type === "SaaS" && isCourseBookOrArticleSpam(text)) {
     return "course_or_article_promo";
+  }
+
+  if (
+    type === "SaaS" &&
+    isAcademyOrOrganization(
+      clean(result.author || result.title || ""),
+      text,
+      sourceUrl
+    )
+  ) {
+    return "academy_or_org";
   }
 
   if (type !== "SaaS" && !isFresh(result.publishedAt || result.published)) {
@@ -1009,7 +1070,7 @@ function buildProcessedLead(
     salaryMax: result.salaryMax ?? null,
     companyWebsite: cleanUrl(result.companyWebsite || "")
   };
-  }
+    }
 async function collectRedditQueries(
   queries: string[],
   sourceName: string
@@ -1109,12 +1170,15 @@ function extractDirectContactFromBio(raw: string): {
 
 function isRealPersonName(name: string): boolean {
   const n = clean(name);
-  if (!n || n.length < 2 || n.length > 55) return false;
+  if (!n || n.length < 2 || n.length > 50) return false;
   if (
-    /^(admin|staff|team|support|editorial|bot|unknown|medium|wordpress|scouthub|deleted|automoderator|official|news|daily|weekly|radar|hub|studio|agency|books|courses|shop|store)$/i.test(
+    /^(admin|staff|team|support|editorial|bot|unknown|medium|wordpress|scouthub|deleted|automoderator|official|news|daily|weekly|radar|hub|studio|agency|academy|institute|school|madrasa|books|courses|shop|store)$/i.test(
       n
     )
   ) {
+    return false;
+  }
+  if (ACADEMY_OR_ORG_REGEX.test(n)) {
     return false;
   }
   return /[a-zA-Z]{2,}/.test(n);
@@ -1161,25 +1225,22 @@ async function collectBlueskySubjectAndFreelanceLeads(
 ): Promise<SearchResult[]> {
   const queriesByRole: Record<SaasRole, string[]> = {
     teacher: [
-      "quran teacher",
-      "tajweed",
-      "tafseer",
-      "fiqh",
-      "arabic teacher",
-      "urdu teacher",
-      "french teacher",
-      "english teacher",
-      "math teacher",
-      "physics teacher",
-      "chemistry teacher",
-      "biology teacher",
-      "sociology teacher",
-      "history teacher",
-      "geography teacher",
-      "psychology teacher",
-      "law teacher",
-      "kids teacher",
-      "painting teacher"
+      "quran tutor",
+      "tajweed tutor",
+      "arabic tutor",
+      "urdu tutor",
+      "french tutor",
+      "english tutor",
+      "math tutor",
+      "physics tutor",
+      "chemistry tutor",
+      "biology tutor",
+      "history tutor",
+      "psychology tutor",
+      "private tutor",
+      "independent teacher",
+      "kids tutor",
+      "painting instructor"
     ],
     freelancer: [
       "freelance writer",
@@ -1228,6 +1289,7 @@ async function collectBlueskySubjectAndFreelanceLeads(
     const bio = clean(actor?.description || "");
     if (!bio || !isRealPersonName(displayName)) continue;
     if (isCourseBookOrArticleSpam(bio)) continue;
+    if (isAcademyOrOrganization(displayName, bio, "")) continue;
 
     const extracted = extractDirectContactFromBio(bio);
     if (!extracted.email && !extracted.contactUrl) continue;
@@ -1425,7 +1487,7 @@ async function collectRemoteOK(): Promise<SearchResult[]> {
   }
 
   return results.slice(0, MAX_RESULTS_PER_SOURCE);
-}
+        }
 const sourceCollectionErrors: Record<string, string> = {};
 
 async function runSource(source: SourceJob): Promise<SearchResult[]> {
@@ -1916,4 +1978,4 @@ export default async function handler(
       });
     }
   }
-  }
+        }
