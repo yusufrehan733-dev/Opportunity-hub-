@@ -1070,7 +1070,7 @@ function buildProcessedLead(
     salaryMax: result.salaryMax ?? null,
     companyWebsite: cleanUrl(result.companyWebsite || "")
   };
-    }
+     }
 async function collectRedditQueries(
   queries: string[],
   sourceName: string
@@ -1363,136 +1363,153 @@ async function collectBingSaaSCoaches(): Promise<SearchResult[]> {
   return collectSaaSByRole("coach", "SaaS Coaches");
     }
 async function collectJobicy(): Promise<SearchResult[]> {
-  const results: SearchResult[] = [];
+const results: SearchResult[] = [];
 
-  try {
-    const response = await fetchJson(
-      "https://jobicy.com/api/jobs?count=100"
-    );
+try {
+const response = await fetchJson(
+"https://jobicy.com/api/jobs?count=100"
+);
 
-    const jobs = Array.isArray(response)
-      ? response
-      : response?.jobs || [];
+const jobs = Array.isArray(response)  
+  ? response  
+  : response?.jobs || [];  
 
-    for (const job of jobs) {
-      const title = clean(job.jobTitle || job.title || "");
-      const description = stripHtml(
-        job.jobDescription || job.description || ""
-      );
-      const link = cleanUrl(job.url || job.jobUrl || "");
+for (const job of jobs) {  
+  const title = clean(job.jobTitle || job.title || "");  
+  const description = stripHtml(  
+    job.jobDescription || job.description || ""  
+  );  
+  const link = cleanUrl(job.url || job.jobUrl || "");  
 
-      if (!title || !link) continue;
+  if (!title || !link) continue;  
 
-      results.push({
-        title,
-        description,
-        snippet: description,
-        link,
-        sourceUrl: link,
-        source: "Jobicy",
-        sourceType: "job",
-        publishedAt: job.pubDate || job.date || job.createdAt || "",
-        published: job.pubDate || job.date || job.createdAt || "",
-        company: clean(job.companyName || job.company || ""),
-        location: clean(job.jobGeo || job.location || ""),
-        salaryRange: clean(job.salary || job.salaryRange || ""),
-        salaryMin: Number(job.salaryMin) || undefined,
-        salaryMax: Number(job.salaryMax) || undefined,
-        companyWebsite: cleanUrl(job.companyUrl || job.companyWebsite || ""),
-        applicationUrl: link,
-        contactUrl: link
-      });
-    }
-  } catch (error) {
-    console.error("[Jobicy] Collection failed:", error);
-  }
+  results.push({  
+    title,  
+    description,  
+    snippet: description,  
+    link,  
+    sourceUrl: link,  
+    source: "Jobicy",  
+    sourceType: "job",  
+    publishedAt: job.pubDate || job.date || job.createdAt || "",  
+    published: job.pubDate || job.date || job.createdAt || "",  
+    company: clean(job.companyName || job.company || ""),  
+    location: clean(job.jobGeo || job.location || ""),  
+    salaryRange: clean(job.salary || job.salaryRange || ""),  
+    salaryMin: Number(job.salaryMin) || undefined,  
+    salaryMax: Number(job.salaryMax) || undefined,  
+    companyWebsite: cleanUrl(job.companyUrl || job.companyWebsite || ""),  
+    applicationUrl: link,  
+    contactUrl: link  
+  });  
+}
 
-  return results.slice(0, MAX_RESULTS_PER_SOURCE);
+} catch (error) {
+console.error("[Jobicy] Collection failed:", error);
+}
+
+return results.slice(0, MAX_RESULTS_PER_SOURCE);
 }
 
 const WWR_FEEDS = [
-  "https://weworkremotely.com/categories/remote-programming-jobs.rss",
-  "https://weworkremotely.com/categories/remote-design-jobs.rss",
-  "https://weworkremotely.com/categories/remote-marketing-jobs.rss",
-  "https://weworkremotely.com/categories/remote-customer-support-jobs.rss",
-  "https://weworkremotely.com/categories/remote-sales-jobs.rss"
+"https://weworkremotely.com/categories/remote-programming-jobs.rss",
+"https://weworkremotely.com/categories/remote-design-jobs.rss",
+"https://weworkremotely.com/categories/remote-marketing-jobs.rss",
+"https://weworkremotely.com/categories/remote-customer-support-jobs.rss",
+"https://weworkremotely.com/categories/remote-sales-jobs.rss"
 ];
 
 async function collectWeWorkRemotely(): Promise<SearchResult[]> {
-  const results: SearchResult[] = [];
+const results: SearchResult[] = [];
 
-  const batches = await Promise.all(
-    WWR_FEEDS.map(async feed => {
-      try {
-        const xml = await fetchText(feed);
-        const feedResults = parseRssFeed(xml, "We Work Remotely");
+const batches = await Promise.all(
+WWR_FEEDS.map(async feed => {
+try {
+const xml = await fetchText(feed);
+const feedResults = parseRssFeed(xml, "We Work Remotely");
 
-        return feedResults.map(result => ({
-          ...result,
-          sourceType: "job",
-          applicationUrl: result.link,
-          contactUrl: result.link
-        }));
-      } catch (error) {
-        console.error("[We Work Remotely] Feed failed:", feed, error);
-        return [];
-      }
-    })
-  );
+return feedResults.map(result => ({  
+      ...result,  
+      sourceType: "job",  
+      applicationUrl: result.link,  
+      contactUrl: result.link  
+    }));  
+  } catch (error) {  
+    console.error("[We Work Remotely] Feed failed:", feed, error);  
+    return [];  
+  }  
+})
 
-  for (const batch of batches) {
-    results.push(...batch);
-  }
+);
 
-  return results.slice(0, MAX_RESULTS_PER_SOURCE);
+for (const batch of batches) {
+results.push(...batch);
+}
+
+return results.slice(0, MAX_RESULTS_PER_SOURCE);
 }
 
 async function collectRemoteOK(): Promise<SearchResult[]> {
-  const results: SearchResult[] = [];
+const results: SearchResult[] = [];
 
-  try {
-    const response = await fetchJson("https://remoteok.com/api");
+try {
+const response = await fetchJson("https://remoteok.com/api");
 
-    const jobs = Array.isArray(response) ? response.slice(1) : [];
+const jobs = Array.isArray(response) ? response.slice(1) : [];  
 
-    for (const job of jobs) {
-      const title = clean(job.position || "");
-      const description = stripHtml(job.description || "");
-      const link = cleanUrl(
-        job.url || (job.id ? `https://remoteok.com/remote-jobs/${job.id}` : "")
-      );
+for (const job of jobs) {  
+  const title = clean(job.position || "");  
+  const description = stripHtml(job.description || "");  
+  const link = cleanUrl(  
+    job.url || (job.id ? `https://remoteok.com/remote-jobs/${job.id}` : "")  
+  );  
 
-      if (!title || !link) continue;
+  if (!title || !link) continue;  
 
-      results.push({
-        title,
-        description,
-        snippet: description,
-        link,
-        sourceUrl: link,
-        source: "Remote OK",
-        sourceType: "job",
-        publishedAt: job.date || job.epoch || "",
-        published: job.date || job.epoch || "",
-        company: clean(job.company || ""),
-        location: clean(job.location || "Remote"),
-        salaryRange: clean(job.salary || ""),
-        companyWebsite: cleanUrl(job.company_url || ""),
-        applicationUrl: link,
-        contactUrl: link
-      });
-    }
-  } catch (error) {
-    console.error("[Remote OK] Collection failed:", error);
+  results.push({  
+    title,  
+    description,  
+    snippet: description,  
+    link,  
+    sourceUrl: link,  
+    source: "Remote OK",  
+    sourceType: "job",  
+    publishedAt: job.date || job.epoch || "",  
+    published: job.date || job.epoch || "",  
+    company: clean(job.company || ""),  
+    location: clean(job.location || "Remote"),  
+    salaryRange: clean(job.salary || ""),  
+    companyWebsite: cleanUrl(job.company_url || ""),  
+    applicationUrl: link,  
+    contactUrl: link  
+  });  
+}
+
+} catch (error) {
+console.error("[Remote OK] Collection failed:", error);
+}
+
+return results.slice(0, MAX_RESULTS_PER_SOURCE);
+                    }
+const sourceCollectionErrors: Record<string, string> = {};
+const HANDLER_SOFT_BUDGET_MS = 3800;
+
+async function runSourceWithBudget(
+  source: SourceJob,
+  deadlineMs: number
+): Promise<SearchResult[]> {
+  const remaining = deadlineMs - Date.now();
+  if (remaining <= 250) {
+    return [];
   }
 
-  return results.slice(0, MAX_RESULTS_PER_SOURCE);
-        }
-const sourceCollectionErrors: Record<string, string> = {};
-
-async function runSource(source: SourceJob): Promise<SearchResult[]> {
   try {
-    const results = await source.collect();
+    const results = await Promise.race<SearchResult[]>([
+      source.collect(),
+      new Promise<SearchResult[]>(resolve =>
+        setTimeout(() => resolve([]), Math.max(250, remaining - 150))
+      )
+    ]);
 
     console.log(`[${source.name}] Found ${results.length} results`);
 
@@ -1502,16 +1519,15 @@ async function runSource(source: SourceJob): Promise<SearchResult[]> {
     }));
   } catch (error: any) {
     const message = error?.message || String(error);
-
     sourceCollectionErrors[source.name] = message;
-
     console.error(`[${source.name}] Collection error:`, message);
-
     return [];
   }
 }
 
-async function collectAllSources(): Promise<{
+async function collectAllSources(
+  deadlineMs: number
+): Promise<{
   results: SearchResult[];
   sourceJobs: SourceJob[];
 }> {
@@ -1568,7 +1584,7 @@ async function collectAllSources(): Promise<{
   ];
 
   const collected = await Promise.all(
-    sourceJobs.map(source => runSource(source))
+    sourceJobs.map(source => runSourceWithBudget(source, deadlineMs))
   );
 
   return {
@@ -1617,42 +1633,40 @@ async function loadSkills(
     .filter((skill: SkillRow) => Boolean(skill.name));
 }
 
-async function leadAlreadyExists(
-  supabase: ReturnType<typeof createClient>,
-  lead: ProcessedLead
-): Promise<boolean> {
-  const table =
-    lead.type === "Demand"
-      ? "demand_leads"
-      : lead.type === "Supply"
-        ? "supply_leads"
-        : "saas_leads";
+async function loadExistingUrlSets(
+  supabase: ReturnType<typeof createClient>
+): Promise<{
+  existingSourceUrls: Set<string>;
+  existingContactUrls: Set<string>;
+}> {
+  const existingSourceUrls = new Set<string>();
+  const existingContactUrls = new Set<string>();
 
-  if (lead.sourceUrl) {
-    const { data, error } = await supabase
-      .from(table)
-      .select("id")
-      .eq("source_url", lead.sourceUrl)
-      .limit(1);
+  const tables = ["demand_leads", "supply_leads", "saas_leads"] as const;
 
-    if (!error && data && data.length > 0) {
-      return true;
-    }
-  }
+  await Promise.all(
+    tables.map(async table => {
+      try {
+        const { data, error } = await supabase
+          .from(table)
+          .select("source_url, contact_url")
+          .limit(500);
 
-  if (lead.contactUrl) {
-    const { data, error } = await supabase
-      .from(table)
-      .select("id")
-      .eq("contact_url", lead.contactUrl)
-      .limit(1);
+        if (!error && Array.isArray(data)) {
+          for (const row of data as any[]) {
+            const src = cleanUrl(row?.source_url || "").toLowerCase();
+            const cnt = cleanUrl(row?.contact_url || "").toLowerCase();
+            if (src) existingSourceUrls.add(src);
+            if (cnt) existingContactUrls.add(cnt);
+          }
+        }
+      } catch {
+        // Ignore lookup error and rely on in-memory deduplication
+      }
+    })
+  );
 
-    if (!error && data && data.length > 0) {
-      return true;
-    }
-  }
-
-  return false;
+  return { existingSourceUrls, existingContactUrls };
 }
 
 async function insertProcessedLead(
@@ -1774,13 +1788,17 @@ function incrementTypeCount(stats: LeadStats, type: LeadType): void {
 async function processCollectedResults(
   results: SearchResult[],
   sourceJobs: SourceJob[],
-  supabase: ReturnType<typeof createClient>
+  supabase: ReturnType<typeof createClient>,
+  deadlineMs: number
 ): Promise<LeadStats> {
   const stats = createEmptyStats();
-  const skills = await loadSkills(supabase);
+  const [skills, existingSets] = await Promise.all([
+    loadSkills(supabase),
+    loadExistingUrlSets(supabase)
+  ]);
 
-  const seenSourceUrls = new Set<string>();
-  const seenContactUrls = new Set<string>();
+  const seenSourceUrls = existingSets.existingSourceUrls;
+  const seenContactUrls = existingSets.existingContactUrls;
 
   const sourceDiagnostics: Record<string, any> = {};
 
@@ -1803,6 +1821,10 @@ async function processCollectedResults(
   stats.found = results.length;
 
   for (const result of results) {
+    if (Date.now() >= deadlineMs) {
+      break;
+    }
+
     const sourceName = clean(result.source || "Unknown");
 
     if (!sourceDiagnostics[sourceName]) {
@@ -1893,15 +1915,6 @@ async function processCollectedResults(
         continue;
       }
 
-      if (await leadAlreadyExists(supabase, lead)) {
-        if (sourceKey) seenSourceUrls.add(sourceKey);
-        if (contactKey) seenContactUrls.add(contactKey);
-
-        diagnostic.duplicates++;
-        stats.duplicates++;
-        continue;
-      }
-
       stats.accepted++;
       diagnostic.accepted++;
 
@@ -1948,15 +1961,18 @@ export default async function handler(
     });
   }
 
+  const deadlineMs = Date.now() + HANDLER_SOFT_BUDGET_MS;
+
   try {
     const supabase = getSupabaseClient();
 
-    const collection = await collectAllSources();
+    const collection = await collectAllSources(deadlineMs);
 
     const stats = await processCollectedResults(
       collection.results,
       collection.sourceJobs,
-      supabase
+      supabase,
+      deadlineMs
     );
 
     return res.status(200).json({
@@ -1972,10 +1988,12 @@ export default async function handler(
     console.error("[Fetch Leads] Handler failed:", message);
 
     if (!res.headersSent) {
-      return res.status(500).json({
+      return res.status(200).json({
         success: false,
-        message
+        message,
+        stats: createEmptyStats(),
+        sources: sourceCollectionErrors
       });
     }
   }
-        }
+  }
