@@ -389,13 +389,11 @@ function safeDate(value: unknown): Date | null {
   const input = clean(value);
   if (!input) return null;
 
-  const relative = input.match(
-    /^(\d+)\s+(minute|hour|day|week)s?\s+ago$/i
-  );
-
-  if (relative) {
-    const amount = Number(relative[1]);
-    const unit = relative[2].toLowerCase();
+  const lower = input.toLowerCase();
+  const agoMatch = lower.match(/^(\d+)\s+(minute|hour|day|week)s?\s+ago$/);
+  if (agoMatch) {
+    const amount = Number(agoMatch[1]);
+    const unit = agoMatch[2];
     const multiplier =
       unit === "minute"
         ? 60 * 1000
@@ -404,7 +402,6 @@ function safeDate(value: unknown): Date | null {
           : unit === "day"
             ? 24 * 60 * 60 * 1000
             : 7 * 24 * 60 * 60 * 1000;
-
     return new Date(Date.now() - amount * multiplier);
   }
 
@@ -480,15 +477,15 @@ function decodeRssValue(value: string): string {
 }
 
 function readXmlTag(block: string, tag: string): string {
-  const escaped = tag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const match = block.match(
-    new RegExp(
-      "<" + escaped + "(?:\\s[^>]*)?>([\\s\\S]*?)<\\/" + escaped + ">",
-      "i"
-    )
-  );
-
-  return match ? decodeRssValue(match[1]) : "";
+  const openTag = "<" + tag;
+  const closeTag = "</" + tag + ">";
+  const startIdx = block.toLowerCase().indexOf(openTag.toLowerCase());
+  if (startIdx === -1) return "";
+  const afterOpenIdx = block.indexOf(">", startIdx);
+  if (afterOpenIdx === -1) return "";
+  const endIdx = block.toLowerCase().indexOf(closeTag.toLowerCase(), afterOpenIdx + 1);
+  if (endIdx === -1) return "";
+  return decodeRssValue(block.slice(afterOpenIdx + 1, endIdx));
 }
 
 function makeSearchResult(
@@ -528,8 +525,8 @@ function parseRssFeed(xml: string, source: string): SearchResult[] {
     let link = readXmlTag(block, "link");
 
     if (!link) {
-      const linkMatch = block.match(/<link[^>]+href=["']([^"']+)["']/i);
-      link = linkMatch ? linkMatch[1] : "";
+      const hrefMatch = block.match(/href=["']([^"']+)["']/i);
+      link = hrefMatch ? hrefMatch[1] : "";
     }
 
     const description =
@@ -564,25 +561,27 @@ function parseRssFeed(xml: string, source: string): SearchResult[] {
   return results.slice(0, MAX_RESULTS_PER_SOURCE);
 }
 
+function hasWord(text: string, phrase: string): boolean {
+  const words = normalizeText(text).split(/[^a-z0-9]+/).filter(Boolean);
+  const targetWords = normalizeText(phrase).split(/[^a-z0-9]+/).filter(Boolean);
+  if (!targetWords.length) return false;
+  if (targetWords.length === 1) {
+    return words.includes(targetWords[0]);
+  }
+  return normalizeText(text).includes(targetWords.join(" "));
+}
+
 function getCountry(value: string): string {
   const text = normalizeText(value);
 
   for (const [alias, country] of Object.entries(COUNTRY_ALIASES)) {
-    const expression = new RegExp(
-      "\\b" + alias.replace(/\s+/g, "\\s+") + "\\b",
-      "i"
-    );
-    if (expression.test(text)) {
+    if (hasWord(text, alias)) {
       return country;
     }
   }
 
   for (const [city, country] of Object.entries(CITY_COUNTRY_MAP)) {
-    const cityExpr = new RegExp(
-      "\\b" + city.replace(/\s+/g, "\\s+") + "\\b",
-      "i"
-    );
-    if (cityExpr.test(text)) {
+    if (hasWord(text, city)) {
       return country;
     }
   }
@@ -592,15 +591,21 @@ function getCountry(value: string): string {
 
 function getCity(value: string): string {
   const text = clean(value);
-  const match = text.match(
-    /\b(?:based in|located in|living in|from)\s+([A-Z][a-zA-Z .'-]{2,35})(?:,|\.|;|$)/i
-  );
+  const lower = text.toLowerCase();
+  const markers = ["based in ", "located in ", "living in ", "from "];
 
-  if (!match) return "";
-  const possible = clean(match[1]);
-  if (getCountry(possible)) return "";
+  for (const marker of markers) {
+    const idx = lower.indexOf(marker);
+    if (idx !== -1) {
+      const rest = text.slice(idx + marker.length);
+      const cut = rest.split(/[,.;\n]/)[0].trim();
+      if (cut.length >= 2 && cut.length <= 35 && !getCountry(cut)) {
+        return cut;
+      }
+    }
+  }
 
-  return possible;
+  return "";
     }
 const BLOCKED_ECOMMERCE_COURSE_ARTICLE_HOSTS = [
   "amazon.com",
@@ -644,11 +649,50 @@ const BLOCKED_SOCIAL_ONLY_HOSTS = [
   "pinterest.com"
 ];
 
-const NON_DIRECT_PATH_REGEX =
-  /\/(blog|blogs|post|posts|article|articles|news|book|books|course|courses|buy|shop|store|cart|checkout|pricing|subscribe|newsletter|podcast|episode|202\d)\b/i;
+const NON_DIRECT_PATH_SEGMENTS = [
+  "/blog",
+  "/blogs",
+  "/post",
+  "/posts",
+  "/article",
+  "/articles",
+  "/news",
+  "/book",
+  "/books",
+  "/course",
+  "/courses",
+  "/buy",
+  "/shop",
+  "/store",
+  "/cart",
+  "/checkout",
+  "/pricing",
+  "/subscribe",
+  "/newsletter",
+  "/podcast",
+  "/episode"
+];
 
-const ACADEMY_OR_ORG_REGEX =
-  /\b(academy|academies|institute|institut|madrasa|madrasah|school|schools|college|university|center|centre|learning hub|studio group|official page|group|collective|agency|corporation|corp|inc\.?|llc|ltd\.?)\b/i;
+const ACADEMY_OR_ORG_KEYWORDS = [
+  "academy",
+  "academies",
+  "institute",
+  "institut",
+  "madrasa",
+  "madrasah",
+  "school",
+  "schools",
+  "college",
+  "university",
+  "learning hub",
+  "studio group",
+  "official page",
+  "collective",
+  "agency",
+  "corporation",
+  "llc",
+  "ltd"
+];
 
 function isAcademyOrOrganization(
   nameOrTitle: string,
@@ -656,16 +700,14 @@ function isAcademyOrOrganization(
   url: string
 ): boolean {
   const combined = `${nameOrTitle} ${text} ${url}`.toLowerCase();
-  if (ACADEMY_OR_ORG_REGEX.test(nameOrTitle.toLowerCase())) {
-    return true;
+  const targetName = nameOrTitle.toLowerCase();
+
+  for (const kw of ACADEMY_OR_ORG_KEYWORDS) {
+    if (hasWord(targetName, kw) || hasWord(combined, kw)) {
+      return true;
+    }
   }
-  if (
-    /\b(quran academy|islamic academy|online academy|tutoring academy|language academy|our academy|welcome to our academy)\b/i.test(
-      combined
-    )
-  ) {
-    return true;
-  }
+
   return false;
 }
 
@@ -691,17 +733,22 @@ function isParkedOrJunkUrl(url: string): boolean {
   }
 
   if (
-    /^(?:online-[a-z0-9-]+-tutoring|buy-[a-z0-9-]+|domain-[a-z0-9-]+|parked[a-z0-9-]*|coming-?soon|under-?construction)\./i.test(
-      host
-    )
+    host.startsWith("online-") ||
+    host.startsWith("buy-") ||
+    host.startsWith("domain-") ||
+    host.startsWith("parked") ||
+    host.startsWith("coming-soon") ||
+    host.startsWith("under-construction")
   ) {
     return true;
   }
 
   try {
     const pathname = new URL(cleaned).pathname.toLowerCase();
-    if (NON_DIRECT_PATH_REGEX.test(pathname)) {
-      return true;
+    for (const seg of NON_DIRECT_PATH_SEGMENTS) {
+      if (pathname === seg || pathname.startsWith(seg + "/")) {
+        return true;
+      }
     }
   } catch {
     return true;
@@ -720,21 +767,50 @@ function isDirectContactUrl(url: string): boolean {
 
 function isValidDirectEmail(email: string): boolean {
   const e = clean(email).toLowerCase();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) return false;
-  if (
-    /^(hi|hello|info|support|admin|team|contact|sales|help|noreply|no-reply|press|media|jobs|careers|billing|accounts)@/i.test(
-      e
-    )
-  ) {
+  const atIdx = e.indexOf("@");
+  if (atIdx <= 0 || atIdx === e.length - 1) return false;
+
+  const local = e.slice(0, atIdx);
+  const domain = e.slice(atIdx + 1);
+  if (!domain.includes(".") || /\s/.test(e)) return false;
+
+  const blockedLocals = [
+    "hi",
+    "hello",
+    "info",
+    "support",
+    "admin",
+    "team",
+    "contact",
+    "sales",
+    "help",
+    "noreply",
+    "no-reply",
+    "press",
+    "media",
+    "jobs",
+    "careers",
+    "billing",
+    "accounts"
+  ];
+  if (blockedLocals.includes(local)) return false;
+
+  const blockedDomains = [
+    "example.com",
+    "sentry.io",
+    "wixpress.com",
+    "wordpress.com",
+    "medium.com",
+    "substack.com",
+    "amazon.com",
+    "github.com",
+    "bsky.app",
+    "w3.org"
+  ];
+  if (blockedDomains.some(d => domain === d || domain.endsWith("." + d))) {
     return false;
   }
-  if (
-    /@(example\.com|sentry|wixpress|wordpress|medium\.com|substack\.com|amazon\.com|github\.com|bsky\.app|w3\.org)/i.test(
-      e
-    )
-  ) {
-    return false;
-  }
+
   return true;
 }
 
@@ -772,7 +848,8 @@ function hasRealContact(result: SearchResult, type: LeadType): boolean {
     return true;
   }
 
-  if (clean(result.phone).replace(/\D/g, "").length >= 7) {
+  const digits = clean(result.phone).replace(/[^0-9]/g, "");
+  if (digits.length >= 7) {
     return true;
   }
 
@@ -826,9 +903,18 @@ function hasProfessionalIntent(text: string): boolean {
 }
 
 function isCourseBookOrArticleSpam(text: string): boolean {
-  return /\b(buy my course|enroll now|get the book|available on amazon|kindle edition|paperback|read the full article|in this article|subscribe to my newsletter)\b/i.test(
-    text
-  );
+  const spamPhrases = [
+    "buy my course",
+    "enroll now",
+    "get the book",
+    "available on amazon",
+    "kindle edition",
+    "paperback",
+    "read the full article",
+    "in this article",
+    "subscribe to my newsletter"
+  ];
+  return containsAny(text, spamPhrases);
 }
 
 function classifyLead(result: SearchResult): LeadType | null {
@@ -868,11 +954,22 @@ function getSaasRoleFallbackSkill(
   result: SearchResult,
   text: string
 ): SkillRow | null {
-  if (
-    /\b(quran|tajweed|tafseer|tafsir|fiqh|usul|sharia|islamic studies|arabic|urdu|french|spanish|english)\b/i.test(
-      text
-    )
-  ) {
+  const langAndIslamic = [
+    "quran",
+    "tajweed",
+    "tafseer",
+    "tafsir",
+    "fiqh",
+    "usul",
+    "sharia",
+    "islamic studies",
+    "arabic",
+    "urdu",
+    "french",
+    "spanish",
+    "english"
+  ];
+  if (containsAny(text, langAndIslamic)) {
     return {
       name: "Languages & Islamic Studies Teaching",
       category: "SaaS Prospects",
@@ -881,12 +978,30 @@ function getSaasRoleFallbackSkill(
     };
   }
 
-  if (
-    result.saasRole === "teacher" ||
-    /\b(teacher|tutor|educator|instructor|lessons|tutoring|teaching|sociology|math|mathematics|physics|chemistry|biology|bio|history|geography|psychology|anthropology|law|kids|painting|art)\b/i.test(
-      text
-    )
-  ) {
+  const subjectAndKids = [
+    "teacher",
+    "tutor",
+    "educator",
+    "instructor",
+    "lessons",
+    "tutoring",
+    "teaching",
+    "sociology",
+    "math",
+    "mathematics",
+    "physics",
+    "chemistry",
+    "biology",
+    "history",
+    "geography",
+    "psychology",
+    "anthropology",
+    "law",
+    "kids",
+    "painting",
+    "art"
+  ];
+  if (result.saasRole === "teacher" || containsAny(text, subjectAndKids)) {
     return {
       name: "Subject, Kids & Creative Teaching",
       category: "SaaS Prospects",
@@ -895,12 +1010,22 @@ function getSaasRoleFallbackSkill(
     };
   }
 
-  if (
-    result.saasRole === "freelancer" ||
-    /\b(freelancer|freelance|writer|editor|copywriter|ghostwriter|translator|wordpress|web developer|designer|illustrator|virtual assistant|consultant)\b/i.test(
-      text
-    )
-  ) {
+  const freelanceTerms = [
+    "freelancer",
+    "freelance",
+    "writer",
+    "editor",
+    "copywriter",
+    "ghostwriter",
+    "translator",
+    "wordpress",
+    "web developer",
+    "designer",
+    "illustrator",
+    "virtual assistant",
+    "consultant"
+  ];
+  if (result.saasRole === "freelancer" || containsAny(text, freelanceTerms)) {
     return {
       name: "Writing, Design & Freelance Services",
       category: "SaaS Prospects",
@@ -909,10 +1034,8 @@ function getSaasRoleFallbackSkill(
     };
   }
 
-  if (
-    result.saasRole === "coach" ||
-    /\b(coach|coaching|mentor|mentorship)\b/i.test(text)
-  ) {
+  const coachTerms = ["coach", "coaching", "mentor", "mentorship"];
+  if (result.saasRole === "coach" || containsAny(text, coachTerms)) {
     return {
       name: "Coaching & Mentoring",
       category: "SaaS Prospects",
@@ -1049,7 +1172,7 @@ function buildProcessedLead(
     salaryMax: result.salaryMax ?? null,
     companyWebsite: cleanUrl(result.companyWebsite || "")
   };
-   }
+       }
 async function collectRedditQueries(
   queries: string[],
   sourceName: string
@@ -1122,7 +1245,7 @@ function extractDirectContactFromBio(raw: string): {
     cleanHtml.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g) || [];
   const validEmail = emailMatches.find(e => isValidDirectEmail(e)) || "";
 
-  const explicitUrls = raw.match(/https?:\/\/[^\s<>"')\\]+/gi) || [];
+  const explicitUrls = raw.match(/https?:\/\/[^\s<>"')]+/gi) || [];
   const bareDomains =
     cleanHtml.match(
       /(?:^|\s)((?:[a-z0-9-]+\.)+(?:com|org|net|io|co|me|edu|uk|ca|au|de|fr|in|pk|us|info|biz|ai|app|site|online|coach|academy|tutor|studio|link|ee|cc)(?:\/[^\s<>"')]*)?)/gi
@@ -1150,17 +1273,43 @@ function extractDirectContactFromBio(raw: string): {
 function isRealPersonName(name: string): boolean {
   const n = clean(name);
   if (!n || n.length < 2 || n.length > 50) return false;
-  if (
-    /^(admin|staff|team|support|editorial|bot|unknown|medium|wordpress|scouthub|deleted|automoderator|official|news|daily|weekly|radar|hub|studio|agency|academy|institute|school|madrasa|books|courses|shop|store)$/i.test(
-      n
-    )
-  ) {
+  const blockedNames = [
+    "admin",
+    "staff",
+    "team",
+    "support",
+    "editorial",
+    "bot",
+    "unknown",
+    "medium",
+    "wordpress",
+    "scouthub",
+    "deleted",
+    "automoderator",
+    "official",
+    "news",
+    "daily",
+    "weekly",
+    "radar",
+    "hub",
+    "studio",
+    "agency",
+    "academy",
+    "institute",
+    "school",
+    "madrasa",
+    "books",
+    "courses",
+    "shop",
+    "store"
+  ];
+  if (blockedNames.includes(n.toLowerCase())) {
     return false;
   }
-  if (ACADEMY_OR_ORG_REGEX.test(n)) {
+  if (isAcademyOrOrganization(n, "", "")) {
     return false;
   }
-  return /[a-zA-Z]{2,}/.test(n);
+  return /[a-zA-Z]{2}/.test(n);
 }
 
 async function isUrlReachableAndActive(url: string): Promise<boolean> {
@@ -1338,7 +1487,7 @@ async function collectBingSaaSFreelancers(): Promise<SearchResult[]> {
 
 async function collectBingSaaSCoaches(): Promise<SearchResult[]> {
   return collectSaaSByRole("coach", "SaaS Coaches");
-    }
+      }
 async function collectJobicy(): Promise<SearchResult[]> {
   const results: SearchResult[] = [];
 
@@ -1464,7 +1613,7 @@ async function collectRemoteOK(): Promise<SearchResult[]> {
   }
 
   return results.slice(0, MAX_RESULTS_PER_SOURCE);
-      }
+        }
 const sourceCollectionErrors: Record<string, string> = {};
 
 async function runSource(source: SourceJob): Promise<SearchResult[]> {
