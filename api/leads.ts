@@ -96,7 +96,7 @@ type SourceJob = {
   collect: () => Promise<SearchResult[]>;
 };
 
-const REQUEST_TIMEOUT_MS = 950;
+const REQUEST_TIMEOUT_MS = 1200;
 const MAX_RESULTS_PER_SOURCE = 100;
 const MAX_AGE_HOURS = 72;
 
@@ -601,7 +601,7 @@ function getCity(value: string): string {
   if (getCountry(possible)) return "";
 
   return possible;
-  }
+    }
 const BLOCKED_ECOMMERCE_COURSE_ARTICLE_HOSTS = [
   "amazon.com",
   "amazon.co.uk",
@@ -1049,7 +1049,7 @@ function buildProcessedLead(
     salaryMax: result.salaryMax ?? null,
     companyWebsite: cleanUrl(result.companyWebsite || "")
   };
-}
+   }
 async function collectRedditQueries(
   queries: string[],
   sourceName: string
@@ -1168,7 +1168,7 @@ async function isUrlReachableAndActive(url: string): Promise<boolean> {
   if (!cleaned || !isDirectContactUrl(cleaned)) return false;
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 750);
+  const timer = setTimeout(() => controller.abort(), 800);
 
   try {
     const response = await fetch(cleaned, {
@@ -1338,7 +1338,7 @@ async function collectBingSaaSFreelancers(): Promise<SearchResult[]> {
 
 async function collectBingSaaSCoaches(): Promise<SearchResult[]> {
   return collectSaaSByRole("coach", "SaaS Coaches");
-}
+    }
 async function collectJobicy(): Promise<SearchResult[]> {
   const results: SearchResult[] = [];
 
@@ -1464,26 +1464,12 @@ async function collectRemoteOK(): Promise<SearchResult[]> {
   }
 
   return results.slice(0, MAX_RESULTS_PER_SOURCE);
-  }
+      }
 const sourceCollectionErrors: Record<string, string> = {};
-const HANDLER_SOFT_BUDGET_MS = 3600;
 
-async function runSourceWithBudget(
-  source: SourceJob,
-  deadlineMs: number
-): Promise<SearchResult[]> {
-  const remaining = deadlineMs - Date.now();
-  if (remaining <= 250) {
-    return [];
-  }
-
+async function runSource(source: SourceJob): Promise<SearchResult[]> {
   try {
-    const results = await Promise.race<SearchResult[]>([
-      source.collect(),
-      new Promise<SearchResult[]>(resolve =>
-        setTimeout(() => resolve([]), Math.max(250, remaining - 150))
-      )
-    ]);
+    const results = await source.collect();
 
     console.log(`[${source.name}] Found ${results.length} results`);
 
@@ -1493,15 +1479,16 @@ async function runSourceWithBudget(
     }));
   } catch (error: any) {
     const message = error?.message || String(error);
+
     sourceCollectionErrors[source.name] = message;
+
     console.error(`[${source.name}] Collection error:`, message);
+
     return [];
   }
 }
 
-async function collectAllSources(
-  deadlineMs: number
-): Promise<{
+async function collectAllSources(): Promise<{
   results: SearchResult[];
   sourceJobs: SourceJob[];
 }> {
@@ -1558,7 +1545,7 @@ async function collectAllSources(
   ];
 
   const collected = await Promise.all(
-    sourceJobs.map(source => runSourceWithBudget(source, deadlineMs))
+    sourceJobs.map(source => runSource(source))
   );
 
   return {
@@ -1762,8 +1749,7 @@ function incrementTypeCount(stats: LeadStats, type: LeadType): void {
 async function processCollectedResults(
   results: SearchResult[],
   sourceJobs: SourceJob[],
-  supabase: ReturnType<typeof createClient>,
-  deadlineMs: number
+  supabase: ReturnType<typeof createClient>
 ): Promise<LeadStats> {
   const stats = createEmptyStats();
   const [skills, existingSets] = await Promise.all([
@@ -1795,10 +1781,6 @@ async function processCollectedResults(
   stats.found = results.length;
 
   for (const result of results) {
-    if (Date.now() >= deadlineMs) {
-      break;
-    }
-
     const sourceName = clean(result.source || "Unknown");
 
     if (!sourceDiagnostics[sourceName]) {
@@ -1935,18 +1917,15 @@ export default async function handler(
     });
   }
 
-  const deadlineMs = Date.now() + HANDLER_SOFT_BUDGET_MS;
-
   try {
     const supabase = getSupabaseClient();
 
-    const collection = await collectAllSources(deadlineMs);
+    const collection = await collectAllSources();
 
     const stats = await processCollectedResults(
       collection.results,
       collection.sourceJobs,
-      supabase,
-      deadlineMs
+      supabase
     );
 
     return res.status(200).json({
@@ -1962,12 +1941,10 @@ export default async function handler(
     console.error("[Fetch Leads] Handler failed:", message);
 
     if (!res.headersSent) {
-      return res.status(200).json({
+      return res.status(500).json({
         success: false,
-        message,
-        stats: createEmptyStats(),
-        sources: sourceCollectionErrors
+        message
       });
     }
   }
-  }
+}
