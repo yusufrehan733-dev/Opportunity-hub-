@@ -466,7 +466,7 @@ function detectSkillNeeded(text: string, role?: SaasRole): string {
   }
 
   return "Freelancing & Business";
-}
+     }
 function stripTrailingPunctuation(token: string): string {
   let out = token.trim();
   const endChars = [".", ",", ";", "!", "?", ")", "]", "}", ">", '"', "'"];
@@ -641,69 +641,6 @@ async function isUrlReachableAndActive(url: string): Promise<boolean> {
   }
 }
 
-async function collectFreshDemandFromBlueskyPosts(
-  queries: string[],
-  sourceName: string
-): Promise<SearchResult[]> {
-  const cutoffIso = new Date(Date.now() - MAX_DEMAND_AGE_MS).toISOString();
-  const collected: SearchResult[] = [];
-  const seen = new Set<string>();
-
-  const batches = await Promise.all(
-    queries.map(async q => {
-      try {
-        const url =
-          "https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts?q=" +
-          encodeURIComponent(q) +
-          "&since=" +
-          encodeURIComponent(cutoffIso) +
-          "&sort=latest&limit=25";
-        const data = await fetchJson(url);
-        return Array.isArray(data?.posts) ? data.posts : [];
-      } catch (error) {
-        console.error(`[${sourceName}] Bluesky post query failed:`, q, error);
-        return [];
-      }
-    })
-  );
-
-  for (const post of batches.flat() as Array<Record<string, unknown>>) {
-    const record = (post?.record || {}) as Record<string, unknown>;
-    const authorObj = (post?.author || {}) as Record<string, unknown>;
-    const text = clean(record?.text || "");
-    const createdAt = clean(record?.createdAt || post?.indexedAt || "");
-    const authorName = clean(authorObj?.displayName || authorObj?.handle || "");
-
-    if (!text || !isFreshWithin72Hours(createdAt)) continue;
-    if (isAcademyOrAgencyOrCompanyDemand(authorName, text, "")) continue;
-    if (isCourseBookOrArticleSpam(text)) continue;
-
-    const contact = extractDirectContactFromBio(text);
-    if (!contact.email && !contact.contactUrl) continue;
-
-    const dedupeKey = `${(contact.email || contact.contactUrl).toLowerCase()}|${text.slice(0, 60).toLowerCase()}`;
-    if (seen.has(dedupeKey)) continue;
-    seen.add(dedupeKey);
-
-    collected.push({
-      title: text.slice(0, 110),
-      link: contact.contactUrl || `mailto:${contact.email}`,
-      sourceUrl: contact.contactUrl || `mailto:${contact.email}`,
-      contactUrl: contact.contactUrl,
-      email: contact.email,
-      author: authorName,
-      country: getCountry(text) || "Remote / Global",
-      description: text,
-      snippet: text,
-      publishedAt: createdAt,
-      source: sourceName,
-      sourceType: "bluesky-post"
-    });
-  }
-
-  return collected.slice(0, MAX_RESULTS_PER_SOURCE);
-}
-
 async function collectFreshDemandFromHackerNews(
   queries: string[],
   sourceName: string
@@ -773,34 +710,178 @@ async function collectFreshDemandFromHackerNews(
   return collected.slice(0, MAX_RESULTS_PER_SOURCE);
 }
 
+async function collectFreshDemandFromRemotive(
+  keywords: string[],
+  sourceName: string
+): Promise<SearchResult[]> {
+  try {
+    const data = await fetchJson("https://remotive.com/api/remote-jobs?limit=100");
+    const jobs = Array.isArray(data?.jobs) ? (data.jobs as Array<Record<string, unknown>>) : [];
+    const collected: SearchResult[] = [];
+    const seen = new Set<string>();
+
+    for (const job of jobs) {
+      const title = clean(job?.title || "");
+      const company = clean(job?.company_name || "");
+      const desc = stripAllTags(job?.description || "");
+      const pubDate = clean(job?.publication_date || "");
+      const applyUrl = cleanUrl(String(job?.url || ""));
+      const location = clean(job?.candidate_required_location || "");
+      const combined = `${title} ${desc}`.toLowerCase();
+
+      if (!title || !isFreshWithin72Hours(pubDate)) continue;
+      if (isAcademyOrAgencyOrCompanyDemand(company, `${title} ${desc}`, applyUrl)) continue;
+      if (!keywords.some(kw => combined.includes(kw.toLowerCase()))) continue;
+
+      const extracted = extractDirectContactFromBio(desc);
+      const contactEmail = extracted.email;
+      const contactUrl = extracted.contactUrl || (isDirectContactUrl(applyUrl) ? applyUrl : "");
+      if (!contactEmail && !contactUrl) continue;
+
+      const key = `${(contactEmail || contactUrl).toLowerCase()}|${title.toLowerCase()}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      collected.push({
+        title: title.slice(0, 110),
+        link: contactUrl || `mailto:${contactEmail}`,
+        sourceUrl: applyUrl || contactUrl,
+        contactUrl,
+        email: contactEmail,
+        author: company,
+        country: location || getCountry(`${title} ${desc}`) || "Remote / Global",
+        description: desc.slice(0, 300),
+        snippet: desc.slice(0, 300),
+        publishedAt: pubDate,
+        source: sourceName,
+        sourceType: "remotive-api"
+      });
+    }
+
+    return collected.slice(0, MAX_RESULTS_PER_SOURCE);
+  } catch (error) {
+    console.error(`[${sourceName}] Remotive failed:`, error);
+    return [];
+  }
+}
+
+async function collectFreshDemandFromJobicy(
+  keywords: string[],
+  sourceName: string
+): Promise<SearchResult[]> {
+  try {
+    const data = await fetchJson("https://jobicy.com/api/v2/remote-jobs?count=50");
+    const jobs = Array.isArray(data?.jobs) ? (data.jobs as Array<Record<string, unknown>>) : [];
+    const collected: SearchResult[] = [];
+    const seen = new Set<string>();
+
+    for (const job of jobs) {
+      const title = clean(job?.jobTitle || "");
+      const company = clean(job?.companyName || "");
+      const desc = stripAllTags(job?.jobDescription || job?.jobExcerpt || "");
+      const pubDate = clean(job?.pubDate || "");
+      const applyUrl = cleanUrl(String(job?.url || ""));
+      const geo = clean(job?.jobGeo || "");
+      const combined = `${title} ${desc}`.toLowerCase();
+
+      if (!title || !isFreshWithin72Hours(pubDate)) continue;
+      if (isAcademyOrAgencyOrCompanyDemand(company, `${title} ${desc}`, applyUrl)) continue;
+      if (!keywords.some(kw => combined.includes(kw.toLowerCase()))) continue;
+
+      const extracted = extractDirectContactFromBio(desc);
+      const contactEmail = extracted.email;
+      const contactUrl = extracted.contactUrl || (isDirectContactUrl(applyUrl) ? applyUrl : "");
+      if (!contactEmail && !contactUrl) continue;
+
+      const key = `${(contactEmail || contactUrl).toLowerCase()}|${title.toLowerCase()}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      collected.push({
+        title: title.slice(0, 110),
+        link: contactUrl || `mailto:${contactEmail}`,
+        sourceUrl: applyUrl || contactUrl,
+        contactUrl,
+        email: contactEmail,
+        author: company,
+        country: geo || getCountry(`${title} ${desc}`) || "Remote / Global",
+        description: desc.slice(0, 300),
+        snippet: desc.slice(0, 300),
+        publishedAt: pubDate,
+        source: sourceName,
+        sourceType: "jobicy-api"
+      });
+    }
+
+    return collected.slice(0, MAX_RESULTS_PER_SOURCE);
+  } catch (error) {
+    console.error(`[${sourceName}] Jobicy failed:`, error);
+    return [];
+  }
+}
+
 async function collectRedditDemandTeachers(): Promise<SearchResult[]> {
-  const [bsky, hn] = await Promise.all([
-    collectFreshDemandFromBlueskyPosts(DEMAND_TEACHER_QUERIES, "Demand Teachers"),
-    collectFreshDemandFromHackerNews(DEMAND_TEACHER_QUERIES, "Demand Teachers")
+  const teacherKeywords = [
+    "quran",
+    "tajweed",
+    "arabic",
+    "tutor",
+    "teacher",
+    "instructor",
+    "esl",
+    "ielts",
+    "math tutor",
+    "english tutor"
+  ];
+  const [hn, remotive, jobicy] = await Promise.all([
+    collectFreshDemandFromHackerNews(DEMAND_TEACHER_QUERIES, "Demand Teachers"),
+    collectFreshDemandFromRemotive(teacherKeywords, "Demand Teachers"),
+    collectFreshDemandFromJobicy(teacherKeywords, "Demand Teachers")
   ]);
-  return [...bsky, ...hn].slice(0, MAX_RESULTS_PER_SOURCE);
+  return [...hn, ...remotive, ...jobicy].slice(0, MAX_RESULTS_PER_SOURCE);
 }
 
 async function collectRedditDemandCoaches(): Promise<SearchResult[]> {
-  const [bsky, hn] = await Promise.all([
-    collectFreshDemandFromBlueskyPosts(DEMAND_COACH_QUERIES, "Demand Coaches"),
-    collectFreshDemandFromHackerNews(DEMAND_COACH_QUERIES, "Demand Coaches")
+  const coachKeywords = [
+    "career coach",
+    "business coach",
+    "executive coach",
+    "life coach",
+    "interview coach",
+    "mentor",
+    "coaching"
+  ];
+  const [hn, remotive, jobicy] = await Promise.all([
+    collectFreshDemandFromHackerNews(DEMAND_COACH_QUERIES, "Demand Coaches"),
+    collectFreshDemandFromRemotive(coachKeywords, "Demand Coaches"),
+    collectFreshDemandFromJobicy(coachKeywords, "Demand Coaches")
   ]);
-  return [...bsky, ...hn].slice(0, MAX_RESULTS_PER_SOURCE);
+  return [...hn, ...remotive, ...jobicy].slice(0, MAX_RESULTS_PER_SOURCE);
 }
 
 async function collectRedditDemandFreelancers(): Promise<SearchResult[]> {
-  const [bsky, hn] = await Promise.all([
-    collectFreshDemandFromBlueskyPosts(
-      DEMAND_TRANSLATION_WRITING_LEGAL_QUERIES,
-      "Demand Translation Writing Legal"
-    ),
+  const freelancerKeywords = [
+    "arabic",
+    "translator",
+    "translation",
+    "freelance writer",
+    "content writer",
+    "copywriter",
+    "editor",
+    "proofreader",
+    "legal",
+    "paralegal",
+    "contract"
+  ];
+  const [hn, remotive, jobicy] = await Promise.all([
     collectFreshDemandFromHackerNews(
       DEMAND_TRANSLATION_WRITING_LEGAL_QUERIES,
       "Demand Translation Writing Legal"
-    )
+    ),
+    collectFreshDemandFromRemotive(freelancerKeywords, "Demand Translation Writing Legal"),
+    collectFreshDemandFromJobicy(freelancerKeywords, "Demand Translation Writing Legal")
   ]);
-  return [...bsky, ...hn].slice(0, MAX_RESULTS_PER_SOURCE);
+  return [...hn, ...remotive, ...jobicy].slice(0, MAX_RESULTS_PER_SOURCE);
 }
 
 async function collectBlueskySubjectAndFreelanceLeads(
@@ -1131,7 +1212,7 @@ async function insertProcessedLead(
   }
 
   return { inserted: false, duplicate: false, error: error.message };
-}
+          }
 export default async function handler(
   req: VercelRequest,
   res: VercelResponse
