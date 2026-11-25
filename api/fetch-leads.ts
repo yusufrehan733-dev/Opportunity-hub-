@@ -466,7 +466,7 @@ function detectSkillNeeded(text: string, role?: SaasRole): string {
   }
 
   return "Freelancing & Business";
-     }
+    }
 function stripTrailingPunctuation(token: string): string {
   let out = token.trim();
   const endChars = [".", ",", ";", "!", "?", ")", "]", "}", ">", '"', "'"];
@@ -1039,7 +1039,7 @@ async function collectBingSaaSFreelancers(): Promise<SearchResult[]> {
 
 async function collectBingSaaSCoaches(): Promise<SearchResult[]> {
   return collectSaaSByRole("coach", "SaaS Coaches");
-    }
+}
 async function collectAllSources(): Promise<{
   results: SearchResult[];
   errors: Array<{ source: string; error: string }>;
@@ -1185,20 +1185,61 @@ async function insertProcessedLead(
   lead: ProcessedLead
 ): Promise<{ inserted: boolean; duplicate: boolean; error?: string }> {
   const table = tableForLeadType(lead.lead_type);
+  const directContact = lead.contact_email || lead.contact_url || lead.source_url;
+  const authorName = clean(lead.raw_data?.author || "");
 
-  const payload = {
-    title: lead.title,
-    description: lead.description,
-    skill_needed: lead.skill_needed,
-    country: lead.country,
-    salary_range: lead.salary_range,
-    contact_email: lead.contact_email,
-    contact_url: lead.contact_url,
-    source: lead.source,
-    source_url: lead.source_url,
-    published_at: lead.published_at,
-    status: lead.status
-  };
+  let payload: Record<string, string> = {};
+
+  if (lead.lead_type === "Demand") {
+    payload = {
+      type: "Demand",
+      source: lead.source,
+      client_name: authorName,
+      contact_name: authorName,
+      skill_needed: lead.skill_needed,
+      category: lead.skill_needed,
+      title: lead.title,
+      description: lead.description,
+      country: lead.country,
+      budget: lead.budget_range || lead.salary_range,
+      contact_email: lead.contact_email,
+      contact_url: lead.contact_url || lead.source_url,
+      source_url: lead.source_url || lead.contact_url,
+      status: lead.status || "new"
+    };
+  } else if (lead.lead_type === "SaaS") {
+    payload = {
+      name: authorName || lead.title,
+      platform: lead.source,
+      niche: lead.skill_needed,
+      contect: directContact,
+      description: lead.description,
+      country: lead.country,
+      landing_url: lead.contact_url || lead.source_url,
+      contact_url: lead.contact_url || lead.source_url,
+      source_url: lead.source_url || lead.contact_url,
+      status: lead.status || "new"
+    };
+  } else {
+    payload = {
+      name: authorName || lead.title,
+      company_name: authorName || lead.title,
+      job_title: lead.title,
+      position: lead.title,
+      description: lead.description,
+      required_skill: lead.skill_needed,
+      category: lead.skill_needed,
+      niche: lead.skill_needed,
+      country: lead.country,
+      salary_range: lead.salary_range,
+      contact_email: lead.contact_email,
+      contact: directContact,
+      contact_url: lead.contact_url || lead.source_url,
+      apply_url: lead.contact_url || lead.source_url,
+      source: lead.source,
+      contact_name: authorName
+    };
+  }
 
   const { error } = await supabase.from(table).insert(payload);
 
@@ -1211,8 +1252,9 @@ async function insertProcessedLead(
     return { inserted: false, duplicate: true };
   }
 
+  console.error(`[Insert Error - ${table}]`, error.message);
   return { inserted: false, duplicate: false, error: error.message };
-          }
+}
 export default async function handler(
   req: VercelRequest,
   res: VercelResponse
@@ -1275,4 +1317,4 @@ export default async function handler(
       message
     });
   }
-}
+   }
