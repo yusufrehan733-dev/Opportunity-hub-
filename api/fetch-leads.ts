@@ -466,7 +466,7 @@ function detectSkillNeeded(text: string, role?: SaasRole): string {
   }
 
   return "Freelancing & Business";
-    }
+}
 function stripTrailingPunctuation(token: string): string {
   let out = token.trim();
   const endChars = [".", ",", ";", "!", "?", ")", "]", "}", ">", '"', "'"];
@@ -1157,7 +1157,7 @@ function processCollectedResults(results: SearchResult[]): ProcessedLead[] {
       source: clean(item.source || "Collector"),
       source_url: sourceUrl || contactUrl,
       published_at: clean(item.publishedAt || "") || new Date().toISOString(),
-      status: "new",
+      status: "active",
       tags: [leadType.toLowerCase(), skillNeeded.toLowerCase()],
       raw_data: {
         sourceType: clean(item.sourceType || ""),
@@ -1205,7 +1205,7 @@ async function insertProcessedLead(
       contact_email: lead.contact_email,
       contact_url: lead.contact_url || lead.source_url,
       source_url: lead.source_url || lead.contact_url,
-      status: lead.status || "new"
+      status: lead.status || "active"
     };
   } else if (lead.lead_type === "SaaS") {
     payload = {
@@ -1218,7 +1218,7 @@ async function insertProcessedLead(
       landing_url: lead.contact_url || lead.source_url,
       contact_url: lead.contact_url || lead.source_url,
       source_url: lead.source_url || lead.contact_url,
-      status: lead.status || "new"
+      status: lead.status || "active"
     };
   } else {
     payload = {
@@ -1252,9 +1252,27 @@ async function insertProcessedLead(
     return { inserted: false, duplicate: true };
   }
 
+  if (msg.includes("check") || msg.includes("status") || msg.includes("value too long")) {
+    const retryPayload: Record<string, string> = { ...payload };
+    delete retryPayload.status;
+    retryPayload.title = retryPayload.title ? retryPayload.title.slice(0, 95) : "";
+    retryPayload.description = retryPayload.description ? retryPayload.description.slice(0, 240) : "";
+
+    const retry = await supabase.from(table).insert(retryPayload);
+    if (!retry.error) {
+      return { inserted: true, duplicate: false };
+    }
+    const retryMsg = String(retry.error.message || "").toLowerCase();
+    if (retryMsg.includes("duplicate") || retryMsg.includes("unique")) {
+      return { inserted: false, duplicate: true };
+    }
+    console.error(`[Insert Error - ${table}]`, retry.error.message);
+    return { inserted: false, duplicate: false, error: retry.error.message };
+  }
+
   console.error(`[Insert Error - ${table}]`, error.message);
   return { inserted: false, duplicate: false, error: error.message };
-}
+    }
 export default async function handler(
   req: VercelRequest,
   res: VercelResponse
@@ -1317,4 +1335,4 @@ export default async function handler(
       message
     });
   }
-   }
+  }
