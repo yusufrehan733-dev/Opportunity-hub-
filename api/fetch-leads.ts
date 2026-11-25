@@ -1,6 +1,6 @@
 import type {
-VercelRequest,
-VercelResponse
+  VercelRequest,
+  VercelResponse
 } from "@vercel/node";
 
 import { createClient } from "@supabase/supabase-js";
@@ -9,620 +9,315 @@ type LeadType = "Demand" | "Supply" | "SaaS";
 type SaasRole = "teacher" | "freelancer" | "coach";
 
 type LeadStats = {
-found: number;
-accepted: number;
-inserted: number;
-total: number;
-demand: number;
-supply: number;
-saas: number;
-rejected: number;
-wrongType: number;
-noSkill: number;
-noContact: number;
-stale: number;
-duplicates: number;
-errors: number;
-sources: Record<string, any>;
+  found: number;
+  accepted: number;
+  inserted: number;
+  total: number;
+  demand: number;
+  supply: number;
+  saas: number;
+  rejected: number;
+  wrongType: number;
+  noSkill: number;
+  noContact: number;
+  stale: number;
+  duplicates: number;
+  errors: number;
+  sources: Record<string, any>;
 };
 
 type SkillRow = {
-id?: string;
-name: string;
-category: string | null;
-subcategory: string | null;
-tags: string[];
+  id?: string;
+  name: string;
+  category: string | null;
+  subcategory: string | null;
+  tags: string[];
 };
 
 type SearchResult = {
-title: string;
-link: string;
-description: string;
-snippet?: string;
-searchQuery?: string;
-author?: string;
-company?: string;
-location?: string;
-country?: string;
-publishedAt?: string;
-published?: string;
-sourceType: string;
-source?: string;
-sourceUrl?: string;
-contactUrl?: string;
-applicationUrl?: string;
-email?: string;
-phone?: string;
-salaryRange?: string;
-salaryMin?: number | null;
-salaryMax?: number | null;
-companyWebsite?: string;
-saasRole?: SaasRole;
+  title: string;
+  link: string;
+  description: string;
+  snippet?: string;
+  searchQuery?: string;
+  author?: string;
+  company?: string;
+  location?: string;
+  country?: string;
+  publishedAt?: string;
+  published?: string;
+  sourceType: string;
+  source?: string;
+  sourceUrl?: string;
+  contactUrl?: string;
+  applicationUrl?: string;
+  email?: string;
+  phone?: string;
+  salaryRange?: string;
+  salaryMin?: number | null;
+  salaryMax?: number | null;
+  companyWebsite?: string;
+  saasRole?: SaasRole;
 };
 
 type ProcessedLead = {
-type: LeadType;
-source: string;
-sourceUrl: string;
-contactUrl: string;
-title: string;
-description: string;
-skill: string;
-category: string;
-subcategory: string;
-country: string;
-city: string;
-email: string;
-phone: string;
-contactName: string;
-applicationUrl: string;
-platform: string;
-niche: string;
-name: string;
-clientName: string;
-company: string;
-position: string;
-publishedAt: string;
-createdAt: string;
-salaryRange?: string;
-salaryMin?: number | null;
-salaryMax?: number | null;
-companyWebsite?: string;
+  type: LeadType;
+  source: string;
+  sourceUrl: string;
+  contactUrl: string;
+  title: string;
+  description: string;
+  skill: string;
+  category: string;
+  subcategory: string;
+  country: string;
+  city: string;
+  email: string;
+  phone: string;
+  contactName: string;
+  applicationUrl: string;
+  platform: string;
+  niche: string;
+  name: string;
+  clientName: string;
+  company: string;
+  position: string;
+  publishedAt: string;
+  createdAt: string;
+  salaryRange?: string;
+  salaryMin?: number | null;
+  salaryMax?: number | null;
+  companyWebsite?: string;
 };
 
 type SourceJob = {
-name: string;
-category: LeadType;
-collect: () => Promise<SearchResult[]>;
+  name: string;
+  category: LeadType;
+  collect: () => Promise<SearchResult[]>;
 };
 
-const REQUEST_TIMEOUT_MS = 2200;
+const REQUEST_TIMEOUT_MS = 1200;
 const MAX_RESULTS_PER_SOURCE = 100;
 const MAX_AGE_HOURS = 72;
 
 const USER_AGENT =
-"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 
 const DEMAND_TEACHER_QUERIES = [
-'"looking for a tutor"',
-'"need a tutor"',
-'"looking for an online teacher"',
-'"need an online teacher"',
-'"looking for a math tutor"',
-'"need a math tutor"',
-'"looking for an English teacher"',
-'"need a language teacher"',
-'"need help with lessons"',
-'"looking for a private teacher"'
+  '"looking for a tutor"',
+  '"need a tutor"',
+  '"looking for an online teacher"',
+  '"need an online teacher"',
+  '"looking for a math tutor"',
+  '"looking for an English teacher"',
+  '"need a language teacher"',
+  '"looking for a private teacher"'
 ];
 
 const DEMAND_FREELANCER_QUERIES = [
-'"looking for a freelancer"',
-'"need a freelancer"',
-'"looking for a web developer"',
-'"need a web developer"',
-'"looking for a graphic designer"',
-'"need a graphic designer"',
-'"looking for a freelance writer"',
-'"need a content writer"',
-'"looking for a video editor"',
-'"need a virtual assistant"'
+  '"looking for a freelancer"',
+  '"need a freelancer"',
+  '"looking for a web developer"',
+  '"looking for a graphic designer"',
+  '"looking for a freelance writer"',
+  '"need a content writer"',
+  '"looking for a video editor"',
+  '"need a virtual assistant"'
 ];
 
 const DEMAND_COACH_QUERIES = [
-'"looking for a business coach"',
-'"need a business coach"',
-'"looking for a career coach"',
-'"need a career coach"',
-'"looking for a life coach"',
-'"need a life coach"',
-'"looking for a consultant"',
-'"need a consultant"'
+  '"looking for a business coach"',
+  '"need a business coach"',
+  '"looking for a career coach"',
+  '"need a career coach"',
+  '"looking for a life coach"',
+  '"looking for a consultant"'
 ];
 
 const DEMAND_INTENT_TERMS = [
-"looking for a tutor",
-"need a tutor",
-"need tutoring",
-"looking for a teacher",
-"need a teacher",
-"looking for an online teacher",
-"need an online teacher",
-"looking for a freelancer",
-"need a freelancer",
-"looking for a designer",
-"need a designer",
-"looking for a coach",
-"need a coach",
-"need help with",
-"looking for help with",
-"can anyone recommend",
-"looking for a math tutor",
-"need a math tutor",
-"looking for a developer",
-"need a developer",
-"looking for a consultant",
-"need a consultant",
-"looking for a writer",
-"need a writer",
-"looking for a video editor",
-"need a video editor",
-"looking for a virtual assistant",
-"need a virtual assistant"
+  "looking for a tutor",
+  "need a tutor",
+  "need tutoring",
+  "looking for a teacher",
+  "need a teacher",
+  "looking for an online teacher",
+  "need an online teacher",
+  "looking for a freelancer",
+  "need a freelancer",
+  "looking for a designer",
+  "need a designer",
+  "looking for a coach",
+  "need a coach",
+  "need help with",
+  "looking for help with",
+  "can anyone recommend",
+  "looking for a math tutor",
+  "need a math tutor",
+  "looking for a developer",
+  "need a developer",
+  "looking for a consultant",
+  "need a consultant",
+  "looking for a writer",
+  "need a writer",
+  "looking for a video editor",
+  "need a video editor",
+  "looking for a virtual assistant",
+  "need a virtual assistant"
 ];
 
 const DEMAND_REJECT_TERMS = [
-"we are hiring",
-"now hiring",
-"job vacancy",
-"job opening",
-"apply now",
-"submit your application",
-"looking for clients",
-"looking for students",
-"hire me",
-"my services",
-"available for hire",
-"join our team",
-"career opportunity",
-"we are recruiting",
-"i offer my services",
-"i am available for work",
-"book my services",
-"check out my portfolio"
+  "we are hiring",
+  "now hiring",
+  "job vacancy",
+  "job opening",
+  "apply now",
+  "submit your application",
+  "looking for clients",
+  "looking for students",
+  "hire me",
+  "my services",
+  "available for hire",
+  "join our team",
+  "career opportunity",
+  "we are recruiting",
+  "i offer my services",
+  "i am available for work",
+  "book my services",
+  "check out my portfolio"
 ];
 
 const SUPPLY_INTENT_TERMS = [
-"we are hiring",
-"hiring for",
-"job opening",
-"job vacancy",
-"job vacancies",
-"vacancies available",
-"recruiting",
-"recruitment",
-"join our team",
-"apply now",
-"apply here",
-"position available",
-"employment opportunity",
-"freelance opportunity",
-"contract opportunity",
-"remote position",
-"full-time position",
-"part-time position",
-"remote job",
-"we are looking for a candidate",
-"salary",
-"compensation",
-"job description"
+  "we are hiring",
+  "hiring for",
+  "job opening",
+  "job vacancy",
+  "job vacancies",
+  "vacancies available",
+  "recruiting",
+  "recruitment",
+  "join our team",
+  "apply now",
+  "apply here",
+  "position available",
+  "employment opportunity",
+  "freelance opportunity",
+  "contract opportunity",
+  "remote position",
+  "full-time position",
+  "part-time position",
+  "remote job",
+  "we are looking for a candidate",
+  "salary",
+  "compensation",
+  "job description"
 ];
 
 const PROFESSIONAL_TERMS = [
-"teacher",
-"tutor",
-"coach",
-"freelancer",
-"consultant",
-"designer",
-"developer",
-"instructor",
-"educator",
-"mentor",
-"portfolio",
-"professional profile",
-"freelance",
-"professional services",
-"online tutor",
-"business coach",
-"career coach",
-"life coach",
-"fitness coach",
-"leadership coach",
-"language teacher",
-"graphic designer",
-"web developer",
-"digital marketer",
-"virtual assistant",
-"content writer",
-"video editor",
-"online lessons",
-"online classes",
-"coaching services",
-"tutoring services",
-"my students",
-"my clients",
-"book a session",
-"work with me",
-"available for projects",
-"open for freelance work"
+  "teacher",
+  "tutor",
+  "coach",
+  "freelancer",
+  "consultant",
+  "designer",
+  "developer",
+  "instructor",
+  "educator",
+  "mentor",
+  "portfolio",
+  "professional profile",
+  "freelance",
+  "professional services",
+  "online tutor",
+  "business coach",
+  "career coach",
+  "life coach",
+  "fitness coach",
+  "leadership coach",
+  "language teacher",
+  "graphic designer",
+  "web developer",
+  "digital marketer",
+  "virtual assistant",
+  "content writer",
+  "video editor",
+  "online lessons",
+  "online classes",
+  "coaching services",
+  "tutoring services",
+  "my students",
+  "my clients",
+  "book a session",
+  "work with me",
+  "available for projects",
+  "open for freelance work"
 ];
 
 const BLOCKED_TERMS = [
-"casino",
-"gambling",
-"crypto giveaway",
-"get rich quick",
-"ebook",
-"affiliate spam",
-"investment scheme",
-"guaranteed income"
+  "casino",
+  "gambling",
+  "crypto giveaway",
+  "get rich quick",
+  "ebook",
+  "affiliate spam",
+  "investment scheme",
+  "guaranteed income"
 ];
 
 const BLOCKED_DOMAINS = [
-"indeed.com",
-"glassdoor.com",
-"ziprecruiter.com",
-"monster.com",
-"simplyhired.com",
-"careerbuilder.com",
-"jooble.org"
-];
-
-const CONTACT_PATH_TERMS = [
-"contact",
-"contact-us",
-"hire",
-"book",
-"message",
-"apply",
-"request",
-"get-in-touch"
+  "indeed.com",
+  "glassdoor.com",
+  "ziprecruiter.com",
+  "monster.com",
+  "simplyhired.com",
+  "careerbuilder.com",
+  "jooble.org"
 ];
 
 const COUNTRY_ALIASES: Record<string, string> = {
-"united states": "United States",
-usa: "United States",
-"united kingdom": "United Kingdom",
-uk: "United Kingdom",
-canada: "Canada",
-australia: "Australia",
-pakistan: "Pakistan",
-india: "India",
-uae: "United Arab Emirates",
-"united arab emirates": "United Arab Emirates",
-"saudi arabia": "Saudi Arabia",
-germany: "Germany",
-france: "France",
-netherlands: "Netherlands",
-ireland: "Ireland",
-"new zealand": "New Zealand",
-singapore: "Singapore",
-"south africa": "South Africa",
-nigeria: "Nigeria",
-egypt: "Egypt"
+  "united states": "United States",
+  usa: "United States",
+  "united kingdom": "United Kingdom",
+  uk: "United Kingdom",
+  canada: "Canada",
+  australia: "Australia",
+  pakistan: "Pakistan",
+  india: "India",
+  uae: "United Arab Emirates",
+  "united arab emirates": "United Arab Emirates",
+  "saudi arabia": "Saudi Arabia",
+  germany: "Germany",
+  france: "France",
+  netherlands: "Netherlands",
+  ireland: "Ireland",
+  "new zealand": "New Zealand",
+  singapore: "Singapore",
+  "south africa": "South Africa",
+  nigeria: "Nigeria",
+  egypt: "Egypt"
 };
 
 const CITY_COUNTRY_MAP: Record<string, string> = {
-toronto: "Canada",
-vancouver: "Canada",
-montreal: "Canada",
-calgary: "Canada",
-london: "United Kingdom",
-manchester: "United Kingdom",
-birmingham: "United Kingdom",
-"new york": "United States",
-"los angeles": "United States",
-chicago: "United States",
-austin: "United States",
-sydney: "Australia",
-melbourne: "Australia",
-dubai: "United Arab Emirates",
-"abu dhabi": "United Arab Emirates",
-lahore: "Pakistan",
-karachi: "Pakistan",
-islamabad: "Pakistan",
-rawalpindi: "Pakistan"
+  toronto: "Canada",
+  vancouver: "Canada",
+  montreal: "Canada",
+  calgary: "Canada",
+  london: "United Kingdom",
+  manchester: "United Kingdom",
+  birmingham: "United Kingdom",
+  "new york": "United States",
+  "los angeles": "United States",
+  chicago: "United States",
+  austin: "United States",
+  sydney: "Australia",
+  melbourne: "Australia",
+  dubai: "United Arab Emirates",
+  "abu dhabi": "United Arab Emirates",
+  lahore: "Pakistan",
+  karachi: "Pakistan",
+  islamabad: "Pakistan",
+  rawalpindi: "Pakistan"
 };
-function clean(value: unknown): string {
-return String(value ?? "")
-.replace(/\s+/g, " ")
-.trim();
-}
 
-function normalizeText(value: unknown): string {
-return clean(value).toLowerCase();
-}
-
-function containsAny(text: string, terms: string[]): boolean {
-const normalized = normalizeText(text);
-return terms.some(term => normalized.includes(normalizeText(term)));
-}
-
-function stripHtml(value: unknown): string {
-return clean(
-String(value ?? "")
-.replace(/<script[\s\S]?</script>/gi, " ")
-.replace(/<style[\s\S]?</style>/gi, " ")
-.replace(/<[^>]*>/g, " ")
-.replace(/ /gi, " ")
-.replace(/&/gi, "&")
-.replace(/"/gi, '"')
-.replace(/'/gi, "'")
-.replace(/</gi, "<")
-.replace(/>/gi, ">")
-);
-}
-
-function cleanUrl(value: unknown): string {
-try {
-const raw = clean(value);
-if (!raw) return "";
-const url = new URL(raw);
-
-if (url.protocol !== "https:" && url.protocol !== "http:") {  
-  return "";  
-}  
-
-url.hash = "";  
-return url.toString();
-
-} catch {
-return "";
-}
-}
-
-function getHostname(value: string): string {
-try {
-return new URL(value).hostname.toLowerCase().replace(/^www./, "");
-} catch {
-return "";
-}
-}
-
-function isBlockedDomain(value: string): boolean {
-const host = getHostname(value);
-if (!host) return false;
-
-return BLOCKED_DOMAINS.some(
-domain => host === domain || host.endsWith("." + domain)
-);
-}
-
-function containsBlockedContent(text: string, url = ""): boolean {
-return containsAny(text, BLOCKED_TERMS) || isBlockedDomain(url);
-}
-
-function safeDate(value: unknown): Date | null {
-const input = clean(value);
-if (!input) return null;
-
-const relative = input.match(
-/^(\d+)\s+(minute|hour|day|week)s?\s+ago$/i
-);
-
-if (relative) {
-const amount = Number(relative[1]);
-const unit = relative[2].toLowerCase();
-const multiplier =
-unit === "minute"
-? 60 * 1000
-: unit === "hour"
-? 60 * 60 * 1000
-: unit === "day"
-? 24 * 60 * 60 * 1000
-: 7 * 24 * 60 * 60 * 1000;
-
-return new Date(Date.now() - amount * multiplier);
-
-}
-
-const numeric = Number(input);
-if (Number.isFinite(numeric) && numeric > 1000000000) {
-const timestamp = numeric < 100000000000 ? numeric * 1000 : numeric;
-const date = new Date(timestamp);
-return Number.isNaN(date.getTime()) ? null : date;
-}
-
-const parsed = new Date(input);
-return Number.isNaN(parsed.getTime()) ? null : parsed;
-}
-
-function isFresh(value: unknown): boolean {
-const date = safeDate(value);
-if (!date) return false;
-
-const age = Date.now() - date.getTime();
-return age >= 0 && age <= MAX_AGE_HOURS * 60 * 60 * 1000;
-}
-
-async function fetchText(url: string): Promise<string> {
-const controller = new AbortController();
-const timeout = setTimeout(
-() => controller.abort(),
-REQUEST_TIMEOUT_MS
-);
-
-try {
-const response = await fetch(url, {
-method: "GET",
-headers: {
-"User-Agent": USER_AGENT,
-Accept:
-"text/html, application/rss+xml, application/atom+xml, application/json, text/xml, text/plain, /",
-"Accept-Language": "en-US,en;q=0.9"
-},
-signal: controller.signal
-});
-
-if (!response.ok) {  
-  throw new Error(`HTTP ${response.status} from ${getHostname(url)}`);  
-}  
-
-return await response.text();
-
-} finally {
-clearTimeout(timeout);
-}
-}
-
-async function fetchJson(url: string): Promise<any> {
-const body = await fetchText(url);
-
-try {
-return JSON.parse(body);
-} catch {
-throw new Error(Invalid JSON returned by ${getHostname(url)});
-}
-}
-
-function decodeRssValue(value: string): string {
-return stripHtml(
-value
-.replace(/<!\(CDATA[([\s\S]*?)\)]>/g, "$1")
-.replace(/&#x([0-9a-f]+);/gi, (, hex) =>
-String.fromCodePoint(parseInt(hex, 16))
-)
-.replace(/&#(\d+);/g, (, number) =>
-String.fromCodePoint(Number(number))
-)
-);
-}
-
-function readXmlTag(block: string, tag: string): string {
-const escaped = tag.replace(/[.+?^${}()|[]\]/g, "\$&");
-const match = block.match(
-new RegExp(
-"<" + escaped + "(?:\s[^>])?>([\s\S]*?)<\/" + escaped + ">",
-"i"
-)
-);
-
-return match ? decodeRssValue(match[1]) : "";
-}
-
-function makeSearchResult(
-title: string,
-link: string,
-description: string,
-source: string,
-publishedAt = "",
-author = ""
-): SearchResult {
-const safeLink = cleanUrl(link);
-
-return {
-title: clean(title),
-link: safeLink,
-sourceUrl: safeLink,
-description: clean(description),
-snippet: clean(description),
-source,
-sourceType: "rss",
-publishedAt: clean(publishedAt),
-published: clean(publishedAt),
-author: clean(author)
-};
-}
-
-function parseRssFeed(xml: string, source: string): SearchResult[] {
-const results: SearchResult[] = [];
-
-const blocks =
-xml.match(/<item\b[\s\S]?</item>/gi) ||
-xml.match(/<entry\b[\s\S]?</entry>/gi) ||
-[];
-
-for (const block of blocks) {
-const title = readXmlTag(block, "title");
-let link = readXmlTag(block, "link");
-
-if (!link) {  
-  const linkMatch = block.match(/<link[^>]+href=["']([^"']+)["']/i);  
-  link = linkMatch ? linkMatch[1] : "";  
-}  
-
-const description =  
-  readXmlTag(block, "description") ||  
-  readXmlTag(block, "summary") ||  
-  readXmlTag(block, "content:encoded") ||  
-  readXmlTag(block, "content");  
-
-const publishedAt =  
-  readXmlTag(block, "pubDate") ||  
-  readXmlTag(block, "published") ||  
-  readXmlTag(block, "updated") ||  
-  readXmlTag(block, "dc:date");  
-
-const author =  
-  readXmlTag(block, "author") || readXmlTag(block, "dc:creator");  
-
-const result = makeSearchResult(  
-  title,  
-  link,  
-  description,  
-  source,  
-  publishedAt,  
-  author  
-);  
-
-if (result.title && result.link) {  
-  results.push(result);  
-}
-
-}
-
-return results.slice(0, MAX_RESULTS_PER_SOURCE);
-}
-
-function getCountry(value: string): string {
-const text = normalizeText(value);
-
-for (const [alias, country] of Object.entries(COUNTRY_ALIASES)) {
-const expression = new RegExp(
-"\b" + alias.replace(/\s+/g, "\s+") + "\b",
-"i"
-);
-if (expression.test(text)) {
-return country;
-}
-}
-
-for (const [city, country] of Object.entries(CITY_COUNTRY_MAP)) {
-const cityExpr = new RegExp(
-"\b" + city.replace(/\s+/g, "\s+") + "\b",
-"i"
-);
-if (cityExpr.test(text)) {
-return country;
-}
-}
-
-return "";
-}
-
-function getCity(value: string): string {
-const text = clean(value);
-const match = text.match(
-/\b(?:based in|located in|living in|from)\s+([A-Z][a-zA-Z .'-]{2,35})(?:,|.|;|$)/i
-);
-
-if (!match) return "";
-const possible = clean(match[1]);
-if (getCountry(possible)) return "";
-
-return possible;
-}
 const BLOCKED_ECOMMERCE_COURSE_ARTICLE_HOSTS = [
   "amazon.com",
   "amazon.co.uk",
@@ -665,28 +360,455 @@ const BLOCKED_SOCIAL_ONLY_HOSTS = [
   "pinterest.com"
 ];
 
-const NON_DIRECT_PATH_REGEX =
-  /\/(blog|blogs|post|posts|article|articles|news|book|books|course|courses|buy|shop|store|cart|checkout|pricing|subscribe|newsletter|podcast|episode|202\d)\b/i;
+const NON_DIRECT_PATH_SEGMENTS = [
+  "/blog",
+  "/blogs",
+  "/post",
+  "/posts",
+  "/article",
+  "/articles",
+  "/news",
+  "/book",
+  "/books",
+  "/course",
+  "/courses",
+  "/buy",
+  "/shop",
+  "/store",
+  "/cart",
+  "/checkout",
+  "/pricing",
+  "/subscribe",
+  "/newsletter",
+  "/podcast",
+  "/episode"
+];
 
-const ACADEMY_OR_ORG_REGEX =
-  /\b(academy|academies|institute|institut|madrasa|madrasah|school|schools|college|university|center|centre|learning hub|studio group|official page|group|collective|agency|corporation|corp|inc\.?|llc|ltd\.?)\b/i;
+const ACADEMY_OR_ORG_KEYWORDS = [
+  "academy",
+  "academies",
+  "institute",
+  "institut",
+  "madrasa",
+  "madrasah",
+  "school",
+  "schools",
+  "college",
+  "university",
+  "learning hub",
+  "studio group",
+  "official page",
+  "collective",
+  "agency",
+  "corporation",
+  "llc",
+  "ltd"
+];
+function clean(value: unknown): string {
+  return String(value ?? "")
+    .split("\r").join(" ")
+    .split("\n").join(" ")
+    .split("\t").join(" ")
+    .split(" ")
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+}
 
+function normalizeText(value: unknown): string {
+  return clean(value).toLowerCase();
+}
+
+function containsAny(text: string, terms: string[]): boolean {
+  const normalized = normalizeText(text);
+  return terms.some(term => normalized.includes(normalizeText(term)));
+}
+
+function removeTagBlocks(html: string, tagName: string): string {
+  let out = html;
+  const openNeedle = "<" + tagName;
+  const closeNeedle = "</" + tagName + ">";
+
+  while (true) {
+    const lower = out.toLowerCase();
+    const start = lower.indexOf(openNeedle);
+    if (start === -1) break;
+    const end = lower.indexOf(closeNeedle, start);
+    if (end === -1) {
+      out = out.slice(0, start);
+      break;
+    }
+    out = out.slice(0, start) + " " + out.slice(end + closeNeedle.length);
+  }
+  return out;
+}
+
+function stripAllTags(html: string): string {
+  let out = "";
+  let inTag = false;
+  for (let i = 0; i < html.length; i++) {
+    const ch = html[i];
+    if (ch === "<") {
+      inTag = true;
+      out += " ";
+    } else if (ch === ">") {
+      inTag = false;
+    } else if (!inTag) {
+      out += ch;
+    }
+  }
+  return out;
+}
+
+function stripHtml(value: unknown): string {
+  let text = String(value ?? "");
+  text = removeTagBlocks(text, "script");
+  text = removeTagBlocks(text, "style");
+  text = stripAllTags(text);
+
+  return clean(
+    text
+      .split("&nbsp;").join(" ")
+      .split("&amp;").join("&")
+      .split("&quot;").join('"')
+      .split("&#39;").join("'")
+      .split("&lt;").join("<")
+      .split("&gt;").join(">")
+  );
+}
+
+function cleanUrl(value: unknown): string {
+  try {
+    const raw = clean(value);
+    if (!raw) return "";
+    const url = new URL(raw);
+
+    if (url.protocol !== "https:" && url.protocol !== "http:") {
+      return "";
+    }
+
+    url.hash = "";
+    return url.toString();
+  } catch {
+    return "";
+  }
+}
+
+function getHostname(value: string): string {
+  try {
+    const host = new URL(value).hostname.toLowerCase();
+    return host.startsWith("www.") ? host.slice(4) : host;
+  } catch {
+    return "";
+  }
+}
+
+function isBlockedDomain(value: string): boolean {
+  const host = getHostname(value);
+  if (!host) return false;
+
+  return BLOCKED_DOMAINS.some(
+    domain => host === domain || host.endsWith("." + domain)
+  );
+}
+
+function containsBlockedContent(text: string, url = ""): boolean {
+  return containsAny(text, BLOCKED_TERMS) || isBlockedDomain(url);
+}
+
+function safeDate(value: unknown): Date | null {
+  const input = clean(value);
+  if (!input) return null;
+
+  const lower = input.toLowerCase();
+  if (lower.endsWith(" ago")) {
+    const parts = lower.slice(0, -4).trim().split(" ");
+    if (parts.length === 2) {
+      const amount = Number(parts[0]);
+      const unit = parts[1];
+      if (Number.isFinite(amount)) {
+        const multiplier =
+          unit.startsWith("minute")
+            ? 60 * 1000
+            : unit.startsWith("hour")
+              ? 60 * 60 * 1000
+              : unit.startsWith("day")
+                ? 24 * 60 * 60 * 1000
+                : unit.startsWith("week")
+                  ? 7 * 24 * 60 * 60 * 1000
+                  : 0;
+        if (multiplier > 0) {
+          return new Date(Date.now() - amount * multiplier);
+        }
+      }
+    }
+  }
+
+  const numeric = Number(input);
+  if (Number.isFinite(numeric) && numeric > 1000000000) {
+    const timestamp = numeric < 100000000000 ? numeric * 1000 : numeric;
+    const date = new Date(timestamp);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  const parsed = new Date(input);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function isFresh(value: unknown): boolean {
+  const date = safeDate(value);
+  if (!date) return false;
+
+  const age = Date.now() - date.getTime();
+  return age >= 0 && age <= MAX_AGE_HOURS * 60 * 60 * 1000;
+}
+
+async function fetchText(url: string): Promise<string> {
+  const controller = new AbortController();
+  const timeout = setTimeout(
+    () => controller.abort(),
+    REQUEST_TIMEOUT_MS
+  );
+
+  try {
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        "User-Agent": USER_AGENT,
+        Accept:
+          "text/html, application/rss+xml, application/atom+xml, application/json, text/xml, text/plain, */*",
+        "Accept-Language": "en-US,en;q=0.9"
+      },
+      signal: controller.signal
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status} from ${getHostname(url)}`);
+    }
+
+    return await response.text();
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function fetchJson(url: string): Promise<any> {
+  const body = await fetchText(url);
+
+  try {
+    return JSON.parse(body);
+  } catch {
+    throw new Error(`Invalid JSON returned by ${getHostname(url)}`);
+  }
+}
+
+function decodeRssValue(value: string): string {
+  const unwrapped = value
+    .split("<![CDATA[").join("")
+    .split("]]>").join("");
+  return stripHtml(unwrapped);
+}
+
+function readXmlTag(block: string, tag: string): string {
+  const openTag = "<" + tag;
+  const closeTag = "</" + tag + ">";
+  const lowerBlock = block.toLowerCase();
+  const startIdx = lowerBlock.indexOf(openTag.toLowerCase());
+  if (startIdx === -1) return "";
+  const afterOpenIdx = block.indexOf(">", startIdx);
+  if (afterOpenIdx === -1) return "";
+  const endIdx = lowerBlock.indexOf(closeTag.toLowerCase(), afterOpenIdx + 1);
+  if (endIdx === -1) return "";
+  return decodeRssValue(block.slice(afterOpenIdx + 1, endIdx));
+}
+
+function extractTagBlocks(xml: string, tagName: string): string[] {
+  const blocks: string[] = [];
+  const openNeedle = "<" + tagName;
+  const closeNeedle = "</" + tagName + ">";
+  const lower = xml.toLowerCase();
+  let pos = 0;
+
+  while (pos < xml.length) {
+    const start = lower.indexOf(openNeedle, pos);
+    if (start === -1) break;
+    const end = lower.indexOf(closeNeedle, start);
+    if (end === -1) break;
+    blocks.push(xml.slice(start, end + closeNeedle.length));
+    pos = end + closeNeedle.length;
+  }
+
+  return blocks;
+}
+
+function extractHrefAttribute(block: string): string {
+  const lower = block.toLowerCase();
+  const idx = lower.indexOf("href=");
+  if (idx === -1) return "";
+  const quote = block[idx + 5];
+  if (quote !== '"' && quote !== "'") return "";
+  const end = block.indexOf(quote, idx + 6);
+  if (end === -1) return "";
+  return block.slice(idx + 6, end);
+}
+
+function makeSearchResult(
+  title: string,
+  link: string,
+  description: string,
+  source: string,
+  publishedAt = "",
+  author = ""
+): SearchResult {
+  const safeLink = cleanUrl(link);
+
+  return {
+    title: clean(title),
+    link: safeLink,
+    sourceUrl: safeLink,
+    description: clean(description),
+    snippet: clean(description),
+    source,
+    sourceType: "rss",
+    publishedAt: clean(publishedAt),
+    published: clean(publishedAt),
+    author: clean(author)
+  };
+}
+
+function parseRssFeed(xml: string, source: string): SearchResult[] {
+  const results: SearchResult[] = [];
+
+  const itemBlocks = extractTagBlocks(xml, "item");
+  const blocks = itemBlocks.length ? itemBlocks : extractTagBlocks(xml, "entry");
+
+  for (const block of blocks) {
+    const title = readXmlTag(block, "title");
+    let link = readXmlTag(block, "link");
+
+    if (!link) {
+      link = extractHrefAttribute(block);
+    }
+
+    const description =
+      readXmlTag(block, "description") ||
+      readXmlTag(block, "summary") ||
+      readXmlTag(block, "content:encoded") ||
+      readXmlTag(block, "content");
+
+    const publishedAt =
+      readXmlTag(block, "pubDate") ||
+      readXmlTag(block, "published") ||
+      readXmlTag(block, "updated") ||
+      readXmlTag(block, "dc:date");
+
+    const author =
+      readXmlTag(block, "author") || readXmlTag(block, "dc:creator");
+
+    const result = makeSearchResult(
+      title,
+      link,
+      description,
+      source,
+      publishedAt,
+      author
+    );
+
+    if (result.title && result.link) {
+      results.push(result);
+    }
+  }
+
+  return results.slice(0, MAX_RESULTS_PER_SOURCE);
+}
+
+function isAlphaNum(ch: string): boolean {
+  const code = ch.charCodeAt(0);
+  return (
+    (code >= 48 && code <= 57) ||
+    (code >= 65 && code <= 90) ||
+    (code >= 97 && code <= 122)
+  );
+}
+
+function tokenizeWords(text: string): string[] {
+  const lower = normalizeText(text);
+  const words: string[] = [];
+  let current = "";
+
+  for (let i = 0; i < lower.length; i++) {
+    const ch = lower[i];
+    if (isAlphaNum(ch)) {
+      current += ch;
+    } else if (current) {
+      words.push(current);
+      current = "";
+    }
+  }
+  if (current) words.push(current);
+  return words;
+}
+
+function hasWord(text: string, phrase: string): boolean {
+  const words = tokenizeWords(text);
+  const targetWords = tokenizeWords(phrase);
+  if (!targetWords.length) return false;
+  if (targetWords.length === 1) {
+    return words.includes(targetWords[0]);
+  }
+  return words.join(" ").includes(targetWords.join(" "));
+}
+
+function getCountry(value: string): string {
+  const text = normalizeText(value);
+
+  for (const [alias, country] of Object.entries(COUNTRY_ALIASES)) {
+    if (hasWord(text, alias)) {
+      return country;
+    }
+  }
+
+  for (const [city, country] of Object.entries(CITY_COUNTRY_MAP)) {
+    if (hasWord(text, city)) {
+      return country;
+    }
+  }
+
+  return "";
+}
+
+function getCity(value: string): string {
+  const text = clean(value);
+  const lower = text.toLowerCase();
+  const markers = ["based in ", "located in ", "living in ", "from "];
+
+  for (const marker of markers) {
+    const idx = lower.indexOf(marker);
+    if (idx !== -1) {
+      const rest = text.slice(idx + marker.length);
+      const cut = rest.split(",")[0].split(".")[0].split(";")[0].trim();
+      if (cut.length >= 2 && cut.length <= 35 && !getCountry(cut)) {
+        return cut;
+      }
+    }
+  }
+
+  return "";
+      }
 function isAcademyOrOrganization(
   nameOrTitle: string,
   text: string,
   url: string
 ): boolean {
   const combined = `${nameOrTitle} ${text} ${url}`.toLowerCase();
-  if (ACADEMY_OR_ORG_REGEX.test(nameOrTitle.toLowerCase())) {
-    return true;
+  const targetName = nameOrTitle.toLowerCase();
+
+  for (const kw of ACADEMY_OR_ORG_KEYWORDS) {
+    if (hasWord(targetName, kw) || hasWord(combined, kw)) {
+      return true;
+    }
   }
-  if (
-    /\b(quran academy|islamic academy|online academy|tutoring academy|language academy|our academy|welcome to our academy)\b/i.test(
-      combined
-    )
-  ) {
-    return true;
-  }
+
   return false;
 }
 
@@ -712,17 +834,22 @@ function isParkedOrJunkUrl(url: string): boolean {
   }
 
   if (
-    /^(?:online-[a-z0-9-]+-tutoring|buy-[a-z0-9-]+|domain-[a-z0-9-]+|parked[a-z0-9-]*|coming-?soon|under-?construction)\./i.test(
-      host
-    )
+    host.startsWith("online-") ||
+    host.startsWith("buy-") ||
+    host.startsWith("domain-") ||
+    host.startsWith("parked") ||
+    host.startsWith("coming-soon") ||
+    host.startsWith("under-construction")
   ) {
     return true;
   }
 
   try {
     const pathname = new URL(cleaned).pathname.toLowerCase();
-    if (NON_DIRECT_PATH_REGEX.test(pathname)) {
-      return true;
+    for (const seg of NON_DIRECT_PATH_SEGMENTS) {
+      if (pathname === seg || pathname.startsWith(seg + "/")) {
+        return true;
+      }
     }
   } catch {
     return true;
@@ -741,21 +868,50 @@ function isDirectContactUrl(url: string): boolean {
 
 function isValidDirectEmail(email: string): boolean {
   const e = clean(email).toLowerCase();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) return false;
-  if (
-    /^(hi|hello|info|support|admin|team|contact|sales|help|noreply|no-reply|press|media|jobs|careers|billing|accounts)@/i.test(
-      e
-    )
-  ) {
+  const atIdx = e.indexOf("@");
+  if (atIdx <= 0 || atIdx === e.length - 1) return false;
+
+  const local = e.slice(0, atIdx);
+  const domain = e.slice(atIdx + 1);
+  if (!domain.includes(".") || e.includes(" ")) return false;
+
+  const blockedLocals = [
+    "hi",
+    "hello",
+    "info",
+    "support",
+    "admin",
+    "team",
+    "contact",
+    "sales",
+    "help",
+    "noreply",
+    "no-reply",
+    "press",
+    "media",
+    "jobs",
+    "careers",
+    "billing",
+    "accounts"
+  ];
+  if (blockedLocals.includes(local)) return false;
+
+  const blockedDomains = [
+    "example.com",
+    "sentry.io",
+    "wixpress.com",
+    "wordpress.com",
+    "medium.com",
+    "substack.com",
+    "amazon.com",
+    "github.com",
+    "bsky.app",
+    "w3.org"
+  ];
+  if (blockedDomains.some(d => domain === d || domain.endsWith("." + d))) {
     return false;
   }
-  if (
-    /@(example\.com|sentry|wixpress|wordpress|medium\.com|substack\.com|amazon\.com|github\.com|bsky\.app|w3\.org)/i.test(
-      e
-    )
-  ) {
-    return false;
-  }
+
   return true;
 }
 
@@ -793,7 +949,13 @@ function hasRealContact(result: SearchResult, type: LeadType): boolean {
     return true;
   }
 
-  if (clean(result.phone).replace(/\D/g, "").length >= 7) {
+  let digits = "";
+  const phoneRaw = clean(result.phone);
+  for (let i = 0; i < phoneRaw.length; i++) {
+    const ch = phoneRaw[i];
+    if (ch >= "0" && ch <= "9") digits += ch;
+  }
+  if (digits.length >= 7) {
     return true;
   }
 
@@ -847,9 +1009,18 @@ function hasProfessionalIntent(text: string): boolean {
 }
 
 function isCourseBookOrArticleSpam(text: string): boolean {
-  return /\b(buy my course|enroll now|get the book|available on amazon|kindle edition|paperback|read the full article|in this article|subscribe to my newsletter)\b/i.test(
-    text
-  );
+  const spamPhrases = [
+    "buy my course",
+    "enroll now",
+    "get the book",
+    "available on amazon",
+    "kindle edition",
+    "paperback",
+    "read the full article",
+    "in this article",
+    "subscribe to my newsletter"
+  ];
+  return containsAny(text, spamPhrases);
 }
 
 function classifyLead(result: SearchResult): LeadType | null {
@@ -889,11 +1060,22 @@ function getSaasRoleFallbackSkill(
   result: SearchResult,
   text: string
 ): SkillRow | null {
-  if (
-    /\b(quran|tajweed|tafseer|tafsir|fiqh|usul|sharia|islamic studies|arabic|urdu|french|spanish|english)\b/i.test(
-      text
-    )
-  ) {
+  const langAndIslamic = [
+    "quran",
+    "tajweed",
+    "tafseer",
+    "tafsir",
+    "fiqh",
+    "usul",
+    "sharia",
+    "islamic studies",
+    "arabic",
+    "urdu",
+    "french",
+    "spanish",
+    "english"
+  ];
+  if (containsAny(text, langAndIslamic)) {
     return {
       name: "Languages & Islamic Studies Teaching",
       category: "SaaS Prospects",
@@ -902,12 +1084,30 @@ function getSaasRoleFallbackSkill(
     };
   }
 
-  if (
-    result.saasRole === "teacher" ||
-    /\b(teacher|tutor|educator|instructor|lessons|tutoring|teaching|sociology|math|mathematics|physics|chemistry|biology|bio|history|geography|psychology|anthropology|law|kids|painting|art)\b/i.test(
-      text
-    )
-  ) {
+  const subjectAndKids = [
+    "teacher",
+    "tutor",
+    "educator",
+    "instructor",
+    "lessons",
+    "tutoring",
+    "teaching",
+    "sociology",
+    "math",
+    "mathematics",
+    "physics",
+    "chemistry",
+    "biology",
+    "history",
+    "geography",
+    "psychology",
+    "anthropology",
+    "law",
+    "kids",
+    "painting",
+    "art"
+  ];
+  if (result.saasRole === "teacher" || containsAny(text, subjectAndKids)) {
     return {
       name: "Subject, Kids & Creative Teaching",
       category: "SaaS Prospects",
@@ -916,12 +1116,22 @@ function getSaasRoleFallbackSkill(
     };
   }
 
-  if (
-    result.saasRole === "freelancer" ||
-    /\b(freelancer|freelance|writer|editor|copywriter|ghostwriter|translator|wordpress|web developer|designer|illustrator|virtual assistant|consultant)\b/i.test(
-      text
-    )
-  ) {
+  const freelanceTerms = [
+    "freelancer",
+    "freelance",
+    "writer",
+    "editor",
+    "copywriter",
+    "ghostwriter",
+    "translator",
+    "wordpress",
+    "web developer",
+    "designer",
+    "illustrator",
+    "virtual assistant",
+    "consultant"
+  ];
+  if (result.saasRole === "freelancer" || containsAny(text, freelanceTerms)) {
     return {
       name: "Writing, Design & Freelance Services",
       category: "SaaS Prospects",
@@ -930,10 +1140,8 @@ function getSaasRoleFallbackSkill(
     };
   }
 
-  if (
-    result.saasRole === "coach" ||
-    /\b(coach|coaching|mentor|mentorship)\b/i.test(text)
-  ) {
+  const coachTerms = ["coach", "coaching", "mentor", "mentorship"];
+  if (result.saasRole === "coach" || containsAny(text, coachTerms)) {
     return {
       name: "Coaching & Mentoring",
       category: "SaaS Prospects",
@@ -1070,7 +1278,7 @@ function buildProcessedLead(
     salaryMax: result.salaryMax ?? null,
     companyWebsite: cleanUrl(result.companyWebsite || "")
   };
-     }
+}
 async function collectRedditQueries(
   queries: string[],
   sourceName: string
@@ -1133,33 +1341,83 @@ async function collectRedditDemandCoaches(): Promise<SearchResult[]> {
   );
 }
 
+function stripTrailingPunctuation(token: string): string {
+  let out = token.trim();
+  const endChars = [".", ",", ";", "!", "?", ")", "]", "}", ">", '"', "'"];
+  const startChars = ["(", "[", "{", "<", '"', "'"];
+  while (out.length > 0 && endChars.includes(out[out.length - 1])) {
+    out = out.slice(0, -1);
+  }
+  while (out.length > 0 && startChars.includes(out[0])) {
+    out = out.slice(1);
+  }
+  return out;
+}
+
 function extractDirectContactFromBio(raw: string): {
   email: string;
   contactUrl: string;
 } {
-  const cleanHtml = raw.replace(/<[^>]+>/g, " ");
+  const plain = stripAllTags(raw);
+  const tokens = clean(plain).split(" ").map(stripTrailingPunctuation).filter(Boolean);
 
-  const emailMatches =
-    cleanHtml.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g) || [];
-  const validEmail = emailMatches.find(e => isValidDirectEmail(e)) || "";
+  let validEmail = "";
+  let bestUrl = "";
 
-  const explicitUrls = raw.match(/https?:\/\/[^\s<>"')\\]+/gi) || [];
-  const bareDomains =
-    cleanHtml.match(
-      /(?:^|\s)((?:[a-z0-9-]+\.)+(?:com|org|net|io|co|me|edu|uk|ca|au|de|fr|in|pk|us|info|biz|ai|app|site|online|coach|academy|tutor|studio|link|ee|cc)(?:\/[^\s<>"')]*)?)/gi
-    ) || [];
-
-  const candidates = [
-    ...explicitUrls,
-    ...bareDomains.map(d => `https://${d.trim().replace(/^\/+/, "")}`)
+  const allowedTlds = [
+    ".com",
+    ".org",
+    ".net",
+    ".io",
+    ".co",
+    ".me",
+    ".edu",
+    ".uk",
+    ".ca",
+    ".au",
+    ".de",
+    ".fr",
+    ".in",
+    ".pk",
+    ".us",
+    ".info",
+    ".biz",
+    ".ai",
+    ".app",
+    ".site",
+    ".online",
+    ".coach",
+    ".tutor",
+    ".studio",
+    ".link",
+    ".ee",
+    ".cc"
   ];
 
-  let bestUrl = "";
-  for (const candidate of candidates) {
-    const cleaned = cleanUrl(candidate.replace(/[.,;!?]+$/, ""));
-    if (!cleaned || !isDirectContactUrl(cleaned)) continue;
-    bestUrl = cleaned;
-    break;
+  for (const token of tokens) {
+    if (!validEmail && token.includes("@") && isValidDirectEmail(token)) {
+      validEmail = token;
+    }
+
+    if (!bestUrl) {
+      let candidate = "";
+      const lower = token.toLowerCase();
+      if (lower.startsWith("http://") || lower.startsWith("https://")) {
+        candidate = token;
+      } else if (
+        !token.includes("@") &&
+        allowedTlds.some(tld => lower.endsWith(tld) || lower.includes(tld + "/"))
+      ) {
+        candidate = "https://" + token;
+      }
+
+      if (candidate) {
+        const cleaned = cleanUrl(candidate);
+        if (cleaned && isDirectContactUrl(cleaned)) {
+          bestUrl = cleaned;
+        }
+      }
+    }
   }
 
   return {
@@ -1168,20 +1426,58 @@ function extractDirectContactFromBio(raw: string): {
   };
 }
 
+function hasTwoPlusLetters(value: string): boolean {
+  let count = 0;
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i);
+    if ((code >= 65 && code <= 90) || (code >= 97 && code <= 122)) {
+      count++;
+      if (count >= 2) return true;
+    }
+  }
+  return false;
+}
+
 function isRealPersonName(name: string): boolean {
   const n = clean(name);
   if (!n || n.length < 2 || n.length > 50) return false;
-  if (
-    /^(admin|staff|team|support|editorial|bot|unknown|medium|wordpress|scouthub|deleted|automoderator|official|news|daily|weekly|radar|hub|studio|agency|academy|institute|school|madrasa|books|courses|shop|store)$/i.test(
-      n
-    )
-  ) {
+  const blockedNames = [
+    "admin",
+    "staff",
+    "team",
+    "support",
+    "editorial",
+    "bot",
+    "unknown",
+    "medium",
+    "wordpress",
+    "scouthub",
+    "deleted",
+    "automoderator",
+    "official",
+    "news",
+    "daily",
+    "weekly",
+    "radar",
+    "hub",
+    "studio",
+    "agency",
+    "academy",
+    "institute",
+    "school",
+    "madrasa",
+    "books",
+    "courses",
+    "shop",
+    "store"
+  ];
+  if (blockedNames.includes(n.toLowerCase())) {
     return false;
   }
-  if (ACADEMY_OR_ORG_REGEX.test(n)) {
+  if (isAcademyOrOrganization(n, "", "")) {
     return false;
   }
-  return /[a-zA-Z]{2,}/.test(n);
+  return hasTwoPlusLetters(n);
 }
 
 async function isUrlReachableAndActive(url: string): Promise<boolean> {
@@ -1189,7 +1485,7 @@ async function isUrlReachableAndActive(url: string): Promise<boolean> {
   if (!cleaned || !isDirectContactUrl(cleaned)) return false;
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 900);
+  const timer = setTimeout(() => controller.abort(), 800);
 
   try {
     const response = await fetch(cleaned, {
@@ -1238,7 +1534,6 @@ async function collectBlueskySubjectAndFreelanceLeads(
       "history tutor",
       "psychology tutor",
       "private tutor",
-      "independent teacher",
       "kids tutor",
       "painting instructor"
     ],
@@ -1247,7 +1542,6 @@ async function collectBlueskySubjectAndFreelanceLeads(
       "content writer",
       "copywriter",
       "ghostwriter",
-      "technical writer",
       "freelance editor",
       "proofreader",
       "translator",
@@ -1315,7 +1609,7 @@ async function collectBlueskySubjectAndFreelanceLeads(
   }
 
   const verified: SearchResult[] = [];
-  const checkCap = role === "coach" ? 5 : 6;
+  const checkCap = role === "coach" ? 4 : 6;
   const toCheck = rawCandidates.slice(0, checkCap);
 
   await Promise.all(
@@ -1363,153 +1657,136 @@ async function collectBingSaaSCoaches(): Promise<SearchResult[]> {
   return collectSaaSByRole("coach", "SaaS Coaches");
     }
 async function collectJobicy(): Promise<SearchResult[]> {
-const results: SearchResult[] = [];
+  const results: SearchResult[] = [];
 
-try {
-const response = await fetchJson(
-"https://jobicy.com/api/jobs?count=100"
-);
+  try {
+    const response = await fetchJson(
+      "https://jobicy.com/api/jobs?count=100"
+    );
 
-const jobs = Array.isArray(response)  
-  ? response  
-  : response?.jobs || [];  
+    const jobs = Array.isArray(response)
+      ? response
+      : response?.jobs || [];
 
-for (const job of jobs) {  
-  const title = clean(job.jobTitle || job.title || "");  
-  const description = stripHtml(  
-    job.jobDescription || job.description || ""  
-  );  
-  const link = cleanUrl(job.url || job.jobUrl || "");  
+    for (const job of jobs) {
+      const title = clean(job.jobTitle || job.title || "");
+      const description = stripHtml(
+        job.jobDescription || job.description || ""
+      );
+      const link = cleanUrl(job.url || job.jobUrl || "");
 
-  if (!title || !link) continue;  
+      if (!title || !link) continue;
 
-  results.push({  
-    title,  
-    description,  
-    snippet: description,  
-    link,  
-    sourceUrl: link,  
-    source: "Jobicy",  
-    sourceType: "job",  
-    publishedAt: job.pubDate || job.date || job.createdAt || "",  
-    published: job.pubDate || job.date || job.createdAt || "",  
-    company: clean(job.companyName || job.company || ""),  
-    location: clean(job.jobGeo || job.location || ""),  
-    salaryRange: clean(job.salary || job.salaryRange || ""),  
-    salaryMin: Number(job.salaryMin) || undefined,  
-    salaryMax: Number(job.salaryMax) || undefined,  
-    companyWebsite: cleanUrl(job.companyUrl || job.companyWebsite || ""),  
-    applicationUrl: link,  
-    contactUrl: link  
-  });  
-}
+      results.push({
+        title,
+        description,
+        snippet: description,
+        link,
+        sourceUrl: link,
+        source: "Jobicy",
+        sourceType: "job",
+        publishedAt: job.pubDate || job.date || job.createdAt || "",
+        published: job.pubDate || job.date || job.createdAt || "",
+        company: clean(job.companyName || job.company || ""),
+        location: clean(job.jobGeo || job.location || ""),
+        salaryRange: clean(job.salary || job.salaryRange || ""),
+        salaryMin: Number(job.salaryMin) || undefined,
+        salaryMax: Number(job.salaryMax) || undefined,
+        companyWebsite: cleanUrl(job.companyUrl || job.companyWebsite || ""),
+        applicationUrl: link,
+        contactUrl: link
+      });
+    }
+  } catch (error) {
+    console.error("[Jobicy] Collection failed:", error);
+  }
 
-} catch (error) {
-console.error("[Jobicy] Collection failed:", error);
-}
-
-return results.slice(0, MAX_RESULTS_PER_SOURCE);
+  return results.slice(0, MAX_RESULTS_PER_SOURCE);
 }
 
 const WWR_FEEDS = [
-"https://weworkremotely.com/categories/remote-programming-jobs.rss",
-"https://weworkremotely.com/categories/remote-design-jobs.rss",
-"https://weworkremotely.com/categories/remote-marketing-jobs.rss",
-"https://weworkremotely.com/categories/remote-customer-support-jobs.rss",
-"https://weworkremotely.com/categories/remote-sales-jobs.rss"
+  "https://weworkremotely.com/categories/remote-programming-jobs.rss",
+  "https://weworkremotely.com/categories/remote-design-jobs.rss",
+  "https://weworkremotely.com/categories/remote-marketing-jobs.rss",
+  "https://weworkremotely.com/categories/remote-customer-support-jobs.rss",
+  "https://weworkremotely.com/categories/remote-sales-jobs.rss"
 ];
 
 async function collectWeWorkRemotely(): Promise<SearchResult[]> {
-const results: SearchResult[] = [];
+  const results: SearchResult[] = [];
 
-const batches = await Promise.all(
-WWR_FEEDS.map(async feed => {
-try {
-const xml = await fetchText(feed);
-const feedResults = parseRssFeed(xml, "We Work Remotely");
+  const batches = await Promise.all(
+    WWR_FEEDS.map(async feed => {
+      try {
+        const xml = await fetchText(feed);
+        const feedResults = parseRssFeed(xml, "We Work Remotely");
 
-return feedResults.map(result => ({  
-      ...result,  
-      sourceType: "job",  
-      applicationUrl: result.link,  
-      contactUrl: result.link  
-    }));  
-  } catch (error) {  
-    console.error("[We Work Remotely] Feed failed:", feed, error);  
-    return [];  
-  }  
-})
+        return feedResults.map(result => ({
+          ...result,
+          sourceType: "job",
+          applicationUrl: result.link,
+          contactUrl: result.link
+        }));
+      } catch (error) {
+        console.error("[We Work Remotely] Feed failed:", feed, error);
+        return [];
+      }
+    })
+  );
 
-);
+  for (const batch of batches) {
+    results.push(...batch);
+  }
 
-for (const batch of batches) {
-results.push(...batch);
-}
-
-return results.slice(0, MAX_RESULTS_PER_SOURCE);
+  return results.slice(0, MAX_RESULTS_PER_SOURCE);
 }
 
 async function collectRemoteOK(): Promise<SearchResult[]> {
-const results: SearchResult[] = [];
-
-try {
-const response = await fetchJson("https://remoteok.com/api");
-
-const jobs = Array.isArray(response) ? response.slice(1) : [];  
-
-for (const job of jobs) {  
-  const title = clean(job.position || "");  
-  const description = stripHtml(job.description || "");  
-  const link = cleanUrl(  
-    job.url || (job.id ? `https://remoteok.com/remote-jobs/${job.id}` : "")  
-  );  
-
-  if (!title || !link) continue;  
-
-  results.push({  
-    title,  
-    description,  
-    snippet: description,  
-    link,  
-    sourceUrl: link,  
-    source: "Remote OK",  
-    sourceType: "job",  
-    publishedAt: job.date || job.epoch || "",  
-    published: job.date || job.epoch || "",  
-    company: clean(job.company || ""),  
-    location: clean(job.location || "Remote"),  
-    salaryRange: clean(job.salary || ""),  
-    companyWebsite: cleanUrl(job.company_url || ""),  
-    applicationUrl: link,  
-    contactUrl: link  
-  });  
-}
-
-} catch (error) {
-console.error("[Remote OK] Collection failed:", error);
-}
-
-return results.slice(0, MAX_RESULTS_PER_SOURCE);
-                    }
-const sourceCollectionErrors: Record<string, string> = {};
-const HANDLER_SOFT_BUDGET_MS = 3800;
-
-async function runSourceWithBudget(
-  source: SourceJob,
-  deadlineMs: number
-): Promise<SearchResult[]> {
-  const remaining = deadlineMs - Date.now();
-  if (remaining <= 250) {
-    return [];
-  }
+  const results: SearchResult[] = [];
 
   try {
-    const results = await Promise.race<SearchResult[]>([
-      source.collect(),
-      new Promise<SearchResult[]>(resolve =>
-        setTimeout(() => resolve([]), Math.max(250, remaining - 150))
-      )
-    ]);
+    const response = await fetchJson("https://remoteok.com/api");
+
+    const jobs = Array.isArray(response) ? response.slice(1) : [];
+
+    for (const job of jobs) {
+      const title = clean(job.position || "");
+      const description = stripHtml(job.description || "");
+      const link = cleanUrl(
+        job.url || (job.id ? `https://remoteok.com/remote-jobs/${job.id}` : "")
+      );
+
+      if (!title || !link) continue;
+
+      results.push({
+        title,
+        description,
+        snippet: description,
+        link,
+        sourceUrl: link,
+        source: "Remote OK",
+        sourceType: "job",
+        publishedAt: job.date || job.epoch || "",
+        published: job.date || job.epoch || "",
+        company: clean(job.company || ""),
+        location: clean(job.location || "Remote"),
+        salaryRange: clean(job.salary || ""),
+        companyWebsite: cleanUrl(job.company_url || ""),
+        applicationUrl: link,
+        contactUrl: link
+      });
+    }
+  } catch (error) {
+    console.error("[Remote OK] Collection failed:", error);
+  }
+
+  return results.slice(0, MAX_RESULTS_PER_SOURCE);
+        }
+const sourceCollectionErrors: Record<string, string> = {};
+
+async function runSource(source: SourceJob): Promise<SearchResult[]> {
+  try {
+    const results = await source.collect();
 
     console.log(`[${source.name}] Found ${results.length} results`);
 
@@ -1519,15 +1796,16 @@ async function runSourceWithBudget(
     }));
   } catch (error: any) {
     const message = error?.message || String(error);
+
     sourceCollectionErrors[source.name] = message;
+
     console.error(`[${source.name}] Collection error:`, message);
+
     return [];
   }
 }
 
-async function collectAllSources(
-  deadlineMs: number
-): Promise<{
+async function collectAllSources(): Promise<{
   results: SearchResult[];
   sourceJobs: SourceJob[];
 }> {
@@ -1584,7 +1862,7 @@ async function collectAllSources(
   ];
 
   const collected = await Promise.all(
-    sourceJobs.map(source => runSourceWithBudget(source, deadlineMs))
+    sourceJobs.map(source => runSource(source))
   );
 
   return {
@@ -1788,8 +2066,7 @@ function incrementTypeCount(stats: LeadStats, type: LeadType): void {
 async function processCollectedResults(
   results: SearchResult[],
   sourceJobs: SourceJob[],
-  supabase: ReturnType<typeof createClient>,
-  deadlineMs: number
+  supabase: ReturnType<typeof createClient>
 ): Promise<LeadStats> {
   const stats = createEmptyStats();
   const [skills, existingSets] = await Promise.all([
@@ -1821,10 +2098,6 @@ async function processCollectedResults(
   stats.found = results.length;
 
   for (const result of results) {
-    if (Date.now() >= deadlineMs) {
-      break;
-    }
-
     const sourceName = clean(result.source || "Unknown");
 
     if (!sourceDiagnostics[sourceName]) {
@@ -1961,18 +2234,15 @@ export default async function handler(
     });
   }
 
-  const deadlineMs = Date.now() + HANDLER_SOFT_BUDGET_MS;
-
   try {
     const supabase = getSupabaseClient();
 
-    const collection = await collectAllSources(deadlineMs);
+    const collection = await collectAllSources();
 
     const stats = await processCollectedResults(
       collection.results,
       collection.sourceJobs,
-      supabase,
-      deadlineMs
+      supabase
     );
 
     return res.status(200).json({
@@ -1988,12 +2258,10 @@ export default async function handler(
     console.error("[Fetch Leads] Handler failed:", message);
 
     if (!res.headersSent) {
-      return res.status(200).json({
+      return res.status(500).json({
         success: false,
-        message,
-        stats: createEmptyStats(),
-        sources: sourceCollectionErrors
+        message
       });
     }
   }
-  }
+      }
