@@ -466,7 +466,7 @@ function detectSkillNeeded(text: string, role?: SaasRole): string {
   }
 
   return "Freelancing & Business";
-      }
+    }
 function stripTrailingPunctuation(token: string): string {
   let out = token.trim();
   const endChars = [".", ",", ";", "!", "?", ")", "]", "}", ">", '"', "'"];
@@ -606,12 +606,79 @@ function isRealPersonName(name: string): boolean {
   return hasTwoPlusLetters(n);
 }
 
+function isArticleOrSupplyJobText(text: string, url: string): boolean {
+  const combined = ` ${clean(`${text} ${url}`).toLowerCase()} `;
+
+  const blockedUrlOrTextPatterns = [
+    " medium.com ",
+    " substack.com ",
+    " dev.to ",
+    " hashnode. ",
+    " /blog ",
+    " /blogs ",
+    " /article ",
+    " /articles ",
+    " /guide ",
+    " /guides ",
+    " /tutorial ",
+    " /news ",
+    " /careers ",
+    " /jobs ",
+    " greenhouse.io ",
+    " lever.co ",
+    " ashbyhq.com ",
+    " workdayjobs.com ",
+    " linkedin.com/jobs ",
+    " indeed.com ",
+    " remotive.com ",
+    " jobicy.com ",
+    " article ",
+    " essay ",
+    " op-ed ",
+    " press release ",
+    " benchmark ",
+    " case study ",
+    " how we built ",
+    " why i left ",
+    " job description ",
+    " job posting ",
+    " full-time ",
+    " part-time ",
+    " base salary ",
+    " equity ",
+    " benefits package ",
+    " equal opportunity employer "
+  ];
+
+  if (blockedUrlOrTextPatterns.some(pat => combined.includes(pat))) {
+    return true;
+  }
+
+  const individualRequestSignals = [
+    " looking for ",
+    " need a ",
+    " need an ",
+    " seeking a ",
+    " seeking an ",
+    " anyone know ",
+    " recommendation for ",
+    " recommendations for ",
+    " hire a ",
+    " hire an ",
+    " looking to hire ",
+    " want to hire ",
+    " need help with "
+  ];
+
+  return !individualRequestSignals.some(sig => combined.includes(sig));
+}
+
 async function isUrlReachableAndActive(url: string): Promise<boolean> {
   const cleaned = cleanUrl(url);
   if (!cleaned || !isDirectContactUrl(cleaned)) return false;
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 800);
+  const timer = setTimeout(() => controller.abort(), 1400);
 
   try {
     const response = await fetch(cleaned, {
@@ -667,6 +734,8 @@ async function collectFreshDemandFromHackerNews(
     })
   );
 
+  const candidates: SearchResult[] = [];
+
   for (const hit of batches.flat() as Array<Record<string, unknown>>) {
     const title = stripAllTags(hit?.title || "");
     const storyTitle = stripAllTags(hit?.story_title || "");
@@ -679,6 +748,7 @@ async function collectFreshDemandFromHackerNews(
     if (!combinedText || !isFreshWithin72Hours(createdAt)) continue;
     if (isAcademyOrAgencyOrCompanyDemand(authorName, combinedText, rawHitUrl)) continue;
     if (isCourseBookOrArticleSpam(combinedText)) continue;
+    if (isArticleOrSupplyJobText(combinedText, rawHitUrl)) continue;
 
     const extracted = extractDirectContactFromBio(combinedText);
     const directUrl =
@@ -691,7 +761,7 @@ async function collectFreshDemandFromHackerNews(
     if (seen.has(dedupeKey)) continue;
     seen.add(dedupeKey);
 
-    collected.push({
+    candidates.push({
       title: (title || storyTitle || bodyText).slice(0, 110),
       link: directUrl || `mailto:${directEmail}`,
       sourceUrl: directUrl || `mailto:${directEmail}`,
@@ -707,181 +777,35 @@ async function collectFreshDemandFromHackerNews(
     });
   }
 
+  await Promise.all(
+    candidates.slice(0, 20).map(async item => {
+      if (item.email && !item.contactUrl) {
+        collected.push(item);
+        return;
+      }
+      const reachable = await isUrlReachableAndActive(item.contactUrl || item.link);
+      if (reachable) {
+        collected.push(item);
+      }
+    })
+  );
+
   return collected.slice(0, MAX_RESULTS_PER_SOURCE);
 }
 
-async function collectFreshDemandFromRemotive(
-  keywords: string[],
-  sourceName: string
-): Promise<SearchResult[]> {
-  try {
-    const data = await fetchJson("https://remotive.com/api/remote-jobs?limit=100");
-    const jobs = Array.isArray(data?.jobs) ? (data.jobs as Array<Record<string, unknown>>) : [];
-    const collected: SearchResult[] = [];
-    const seen = new Set<string>();
-
-    for (const job of jobs) {
-      const title = clean(job?.title || "");
-      const company = clean(job?.company_name || "");
-      const desc = stripAllTags(job?.description || "");
-      const pubDate = clean(job?.publication_date || "");
-      const applyUrl = cleanUrl(String(job?.url || ""));
-      const location = clean(job?.candidate_required_location || "");
-      const combined = `${title} ${desc}`.toLowerCase();
-
-      if (!title || !isFreshWithin72Hours(pubDate)) continue;
-      if (isAcademyOrAgencyOrCompanyDemand(company, `${title} ${desc}`, applyUrl)) continue;
-      if (!keywords.some(kw => combined.includes(kw.toLowerCase()))) continue;
-
-      const extracted = extractDirectContactFromBio(desc);
-      const contactEmail = extracted.email;
-      const contactUrl = extracted.contactUrl || (isDirectContactUrl(applyUrl) ? applyUrl : "");
-      if (!contactEmail && !contactUrl) continue;
-
-      const key = `${(contactEmail || contactUrl).toLowerCase()}|${title.toLowerCase()}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-
-      collected.push({
-        title: title.slice(0, 110),
-        link: contactUrl || `mailto:${contactEmail}`,
-        sourceUrl: applyUrl || contactUrl,
-        contactUrl,
-        email: contactEmail,
-        author: company,
-        country: location || getCountry(`${title} ${desc}`) || "Remote / Global",
-        description: desc.slice(0, 300),
-        snippet: desc.slice(0, 300),
-        publishedAt: pubDate,
-        source: sourceName,
-        sourceType: "remotive-api"
-      });
-    }
-
-    return collected.slice(0, MAX_RESULTS_PER_SOURCE);
-  } catch (error) {
-    console.error(`[${sourceName}] Remotive failed:`, error);
-    return [];
-  }
-}
-
-async function collectFreshDemandFromJobicy(
-  keywords: string[],
-  sourceName: string
-): Promise<SearchResult[]> {
-  try {
-    const data = await fetchJson("https://jobicy.com/api/v2/remote-jobs?count=50");
-    const jobs = Array.isArray(data?.jobs) ? (data.jobs as Array<Record<string, unknown>>) : [];
-    const collected: SearchResult[] = [];
-    const seen = new Set<string>();
-
-    for (const job of jobs) {
-      const title = clean(job?.jobTitle || "");
-      const company = clean(job?.companyName || "");
-      const desc = stripAllTags(job?.jobDescription || job?.jobExcerpt || "");
-      const pubDate = clean(job?.pubDate || "");
-      const applyUrl = cleanUrl(String(job?.url || ""));
-      const geo = clean(job?.jobGeo || "");
-      const combined = `${title} ${desc}`.toLowerCase();
-
-      if (!title || !isFreshWithin72Hours(pubDate)) continue;
-      if (isAcademyOrAgencyOrCompanyDemand(company, `${title} ${desc}`, applyUrl)) continue;
-      if (!keywords.some(kw => combined.includes(kw.toLowerCase()))) continue;
-
-      const extracted = extractDirectContactFromBio(desc);
-      const contactEmail = extracted.email;
-      const contactUrl = extracted.contactUrl || (isDirectContactUrl(applyUrl) ? applyUrl : "");
-      if (!contactEmail && !contactUrl) continue;
-
-      const key = `${(contactEmail || contactUrl).toLowerCase()}|${title.toLowerCase()}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-
-      collected.push({
-        title: title.slice(0, 110),
-        link: contactUrl || `mailto:${contactEmail}`,
-        sourceUrl: applyUrl || contactUrl,
-        contactUrl,
-        email: contactEmail,
-        author: company,
-        country: geo || getCountry(`${title} ${desc}`) || "Remote / Global",
-        description: desc.slice(0, 300),
-        snippet: desc.slice(0, 300),
-        publishedAt: pubDate,
-        source: sourceName,
-        sourceType: "jobicy-api"
-      });
-    }
-
-    return collected.slice(0, MAX_RESULTS_PER_SOURCE);
-  } catch (error) {
-    console.error(`[${sourceName}] Jobicy failed:`, error);
-    return [];
-  }
-}
-
 async function collectRedditDemandTeachers(): Promise<SearchResult[]> {
-  const teacherKeywords = [
-    "quran",
-    "tajweed",
-    "arabic",
-    "tutor",
-    "teacher",
-    "instructor",
-    "esl",
-    "ielts",
-    "math tutor",
-    "english tutor"
-  ];
-  const [hn, remotive, jobicy] = await Promise.all([
-    collectFreshDemandFromHackerNews(DEMAND_TEACHER_QUERIES, "Demand Teachers"),
-    collectFreshDemandFromRemotive(teacherKeywords, "Demand Teachers"),
-    collectFreshDemandFromJobicy(teacherKeywords, "Demand Teachers")
-  ]);
-  return [...hn, ...remotive, ...jobicy].slice(0, MAX_RESULTS_PER_SOURCE);
+  return collectFreshDemandFromHackerNews(DEMAND_TEACHER_QUERIES, "Demand Teachers");
 }
 
 async function collectRedditDemandCoaches(): Promise<SearchResult[]> {
-  const coachKeywords = [
-    "career coach",
-    "business coach",
-    "executive coach",
-    "life coach",
-    "interview coach",
-    "mentor",
-    "coaching"
-  ];
-  const [hn, remotive, jobicy] = await Promise.all([
-    collectFreshDemandFromHackerNews(DEMAND_COACH_QUERIES, "Demand Coaches"),
-    collectFreshDemandFromRemotive(coachKeywords, "Demand Coaches"),
-    collectFreshDemandFromJobicy(coachKeywords, "Demand Coaches")
-  ]);
-  return [...hn, ...remotive, ...jobicy].slice(0, MAX_RESULTS_PER_SOURCE);
+  return collectFreshDemandFromHackerNews(DEMAND_COACH_QUERIES, "Demand Coaches");
 }
 
 async function collectRedditDemandFreelancers(): Promise<SearchResult[]> {
-  const freelancerKeywords = [
-    "arabic",
-    "translator",
-    "translation",
-    "freelance writer",
-    "content writer",
-    "copywriter",
-    "editor",
-    "proofreader",
-    "legal",
-    "paralegal",
-    "contract"
-  ];
-  const [hn, remotive, jobicy] = await Promise.all([
-    collectFreshDemandFromHackerNews(
-      DEMAND_TRANSLATION_WRITING_LEGAL_QUERIES,
-      "Demand Translation Writing Legal"
-    ),
-    collectFreshDemandFromRemotive(freelancerKeywords, "Demand Translation Writing Legal"),
-    collectFreshDemandFromJobicy(freelancerKeywords, "Demand Translation Writing Legal")
-  ]);
-  return [...hn, ...remotive, ...jobicy].slice(0, MAX_RESULTS_PER_SOURCE);
+  return collectFreshDemandFromHackerNews(
+    DEMAND_TRANSLATION_WRITING_LEGAL_QUERIES,
+    "Demand Translation Writing Legal"
+  );
 }
 
 async function collectBlueskySubjectAndFreelanceLeads(
@@ -1137,6 +1061,9 @@ function processCollectedResults(results: SearchResult[]): ProcessedLead[] {
           contactUrl || sourceUrl
         )
       ) {
+        continue;
+      }
+      if (isArticleOrSupplyJobText(`${title} ${description}`, contactUrl || sourceUrl)) {
         continue;
       }
     }
