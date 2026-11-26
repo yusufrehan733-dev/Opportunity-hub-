@@ -281,7 +281,7 @@ function isAcademyOrAgencyOrCompanyDemand(
     " we are hiring "
   ];
   return blockedOrgTerms.some(term => combined.includes(term));
-  }
+}
 async function fetchText(url: string): Promise<string> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -657,7 +657,7 @@ async function collectFreshDemandFromHackerNews(
           encodeURIComponent(q) +
           "&numericFilters=created_at_i>" +
           cutoffSec +
-          "&hitsPerPage=20";
+          "&hitsPerPage=25";
         const data = await fetchJson(url);
         return Array.isArray(data?.hits) ? data.hits : [];
       } catch (error) {
@@ -1039,7 +1039,7 @@ async function collectBingSaaSFreelancers(): Promise<SearchResult[]> {
 
 async function collectBingSaaSCoaches(): Promise<SearchResult[]> {
   return collectSaaSByRole("coach", "SaaS Coaches");
-}
+    }
 async function collectAllSources(): Promise<{
   results: SearchResult[];
   errors: Array<{ source: string; error: string }>;
@@ -1157,7 +1157,7 @@ function processCollectedResults(results: SearchResult[]): ProcessedLead[] {
       source: clean(item.source || "Collector"),
       source_url: sourceUrl || contactUrl,
       published_at: clean(item.publishedAt || "") || new Date().toISOString(),
-      status: "active",
+      status: "new",
       tags: [leadType.toLowerCase(), skillNeeded.toLowerCase()],
       raw_data: {
         sourceType: clean(item.sourceType || ""),
@@ -1203,9 +1203,9 @@ async function insertProcessedLead(
       country: lead.country,
       budget: lead.budget_range || lead.salary_range,
       contact_email: lead.contact_email,
+      content_email: lead.contact_email,
       contact_url: lead.contact_url || lead.source_url,
-      source_url: lead.source_url || lead.contact_url,
-      status: lead.status || "active"
+      source_url: lead.source_url || lead.contact_url
     };
   } else if (lead.lead_type === "SaaS") {
     payload = {
@@ -1218,7 +1218,7 @@ async function insertProcessedLead(
       landing_url: lead.contact_url || lead.source_url,
       contact_url: lead.contact_url || lead.source_url,
       source_url: lead.source_url || lead.contact_url,
-      status: lead.status || "active"
+      status: lead.status || "new"
     };
   } else {
     payload = {
@@ -1252,27 +1252,9 @@ async function insertProcessedLead(
     return { inserted: false, duplicate: true };
   }
 
-  if (msg.includes("check") || msg.includes("status") || msg.includes("value too long")) {
-    const retryPayload: Record<string, string> = { ...payload };
-    delete retryPayload.status;
-    retryPayload.title = retryPayload.title ? retryPayload.title.slice(0, 95) : "";
-    retryPayload.description = retryPayload.description ? retryPayload.description.slice(0, 240) : "";
-
-    const retry = await supabase.from(table).insert(retryPayload);
-    if (!retry.error) {
-      return { inserted: true, duplicate: false };
-    }
-    const retryMsg = String(retry.error.message || "").toLowerCase();
-    if (retryMsg.includes("duplicate") || retryMsg.includes("unique")) {
-      return { inserted: false, duplicate: true };
-    }
-    console.error(`[Insert Error - ${table}]`, retry.error.message);
-    return { inserted: false, duplicate: false, error: retry.error.message };
-  }
-
   console.error(`[Insert Error - ${table}]`, error.message);
   return { inserted: false, duplicate: false, error: error.message };
-    }
+  }
 export default async function handler(
   req: VercelRequest,
   res: VercelResponse
@@ -1294,6 +1276,7 @@ export default async function handler(
     let insertedCount = 0;
     let duplicateCount = 0;
     let insertErrorCount = 0;
+    const sampleInsertErrors: string[] = [];
 
     const insertedByType = {
       Demand: 0,
@@ -1310,11 +1293,22 @@ export default async function handler(
         duplicateCount++;
       } else {
         insertErrorCount++;
+        if (
+          outcome.error &&
+          sampleInsertErrors.length < 3 &&
+          !sampleInsertErrors.includes(outcome.error)
+        ) {
+          sampleInsertErrors.push(`${lead.lead_type}: ${outcome.error}`);
+        }
       }
     }
 
     return res.status(200).json({
       success: true,
+      added: insertedCount,
+      demand: insertedByType.Demand,
+      supply: insertedByType.Supply,
+      saas: insertedByType.SaaS,
       stats: {
         found: results.length,
         accepted: processed.length,
@@ -1323,6 +1317,7 @@ export default async function handler(
         insertErrors: insertErrorCount,
         insertedByType
       },
+      sampleInsertErrors,
       sourceErrors: errors
     });
   } catch (error: unknown) {
@@ -1335,4 +1330,4 @@ export default async function handler(
       message
     });
   }
-  }
+      }
