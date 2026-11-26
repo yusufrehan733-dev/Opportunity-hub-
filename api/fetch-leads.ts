@@ -82,964 +82,973 @@ const DEMAND_TRANSLATION_WRITING_LEGAL_QUERIES = [
   "legal writer"
 ];
 function getSupabaseClient() {
-  const supabaseUrl =
-    process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabaseUrl =
+process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  if (!supabaseUrl || !serviceRoleKey) {
-    throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
-  }
+if (!supabaseUrl || !serviceRoleKey) {
+throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
+}
 
-  return createClient(supabaseUrl, serviceRoleKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false
-    }
-  });
+return createClient(supabaseUrl, serviceRoleKey, {
+auth: {
+autoRefreshToken: false,
+persistSession: false
+}
+});
 }
 
 function clean(value: unknown): string {
-  const raw = String(value ?? "");
-  let out = "";
-  let inWhitespace = false;
+const raw = String(value ?? "");
+let out = "";
+let inWhitespace = false;
 
-  for (let i = 0; i < raw.length; i++) {
-    const ch = raw[i];
-    const code = ch.charCodeAt(0);
-    const isSpace =
-      ch === " " ||
-      ch === "\n" ||
-      ch === "\r" ||
-      ch === "\t" ||
-      code === 160;
+for (let i = 0; i < raw.length; i++) {
+const ch = raw[i];
+const code = ch.charCodeAt(0);
+const isSpace =
+ch === " " ||
+ch === "\n" ||
+ch === "\r" ||
+ch === "\t" ||
+code === 160;
 
-    if (isSpace) {
-      if (!inWhitespace) {
-        out += " ";
-        inWhitespace = true;
-      }
-    } else {
-      out += ch;
-      inWhitespace = false;
-    }
-  }
+if (isSpace) {  
+  if (!inWhitespace) {  
+    out += " ";  
+    inWhitespace = true;  
+  }  
+} else {  
+  out += ch;  
+  inWhitespace = false;  
+}
 
-  return out.trim();
+}
+
+return out.trim();
 }
 
 function decodeEntities(text: string): string {
-  return String(text ?? "")
-    .replaceAll("&amp;", "&")
-    .replaceAll("&lt;", "<")
-    .replaceAll("&gt;", ">")
-    .replaceAll("&quot;", '"')
-    .replaceAll("&#39;", "'")
-    .replaceAll("&nbsp;", " ");
+return String(text ?? "")
+.replaceAll("&", "&")
+.replaceAll("<", "<")
+.replaceAll(">", ">")
+.replaceAll(""", '"')
+.replaceAll("'", "'")
+.replaceAll(" ", " ");
 }
 
 function stripAllTags(input: string): string {
-  const raw = decodeEntities(String(input ?? ""));
-  let out = "";
-  let inTag = false;
+const raw = decodeEntities(String(input ?? ""));
+let out = "";
+let inTag = false;
 
-  for (let i = 0; i < raw.length; i++) {
-    const ch = raw[i];
-    if (ch === "<") {
-      inTag = true;
-      out += " ";
-    } else if (ch === ">") {
-      inTag = false;
-      out += " ";
-    } else if (!inTag) {
-      out += ch;
-    }
-  }
+for (let i = 0; i < raw.length; i++) {
+const ch = raw[i];
+if (ch === "<") {
+inTag = true;
+out += " ";
+} else if (ch === ">") {
+inTag = false;
+out += " ";
+} else if (!inTag) {
+out += ch;
+}
+}
 
-  return clean(out);
+return clean(out);
 }
 
 function cleanUrl(rawUrl: string): string {
-  const trimmed = clean(rawUrl);
-  if (!trimmed) return "";
+const trimmed = clean(rawUrl);
+if (!trimmed) return "";
 
-  const lower = trimmed.toLowerCase();
-  if (lower.startsWith("mailto:")) {
-    return "mailto:" + clean(trimmed.slice(7));
-  }
+const lower = trimmed.toLowerCase();
+if (lower.startsWith("mailto:")) {
+return "mailto:" + clean(trimmed.slice(7));
+}
 
-  let candidate = trimmed;
-  if (!lower.startsWith("http://") && !lower.startsWith("https://")) {
-    candidate = "https://" + trimmed;
-  }
+let candidate = trimmed;
+if (!lower.startsWith("http://") && !lower.startsWith("https://")) {
+candidate = "https://" + trimmed;
+}
 
-  try {
-    const parsed = new URL(candidate);
-    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-      return "";
-    }
-    return parsed.toString();
-  } catch {
-    return "";
-  }
+try {
+const parsed = new URL(candidate);
+if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+return "";
+}
+return parsed.toString();
+} catch {
+return "";
+}
 }
 
 function isValidDirectEmail(email: string): boolean {
-  const val = clean(email).toLowerCase();
-  const atIndex = val.indexOf("@");
-  if (atIndex <= 0 || atIndex !== val.lastIndexOf("@")) return false;
+const val = clean(email).toLowerCase();
+const atIndex = val.indexOf("@");
+if (atIndex <= 0 || atIndex !== val.lastIndexOf("@")) return false;
 
-  const local = val.slice(0, atIndex);
-  const domain = val.slice(atIndex + 1);
-  if (!local || !domain || !domain.includes(".")) return false;
-  if (local.startsWith(".") || local.endsWith(".")) return false;
-  if (domain.startsWith(".") || domain.endsWith(".")) return false;
-  if (domain.includes("..")) return false;
-  return true;
+const local = val.slice(0, atIndex);
+const domain = val.slice(atIndex + 1);
+if (!local || !domain || !domain.includes(".")) return false;
+if (local.startsWith(".") || local.endsWith(".")) return false;
+if (domain.startsWith(".") || domain.endsWith(".")) return false;
+if (domain.includes("..")) return false;
+return true;
 }
 
 function isParkedOrJunkUrl(url: string): boolean {
-  const lower = clean(url).toLowerCase();
-  if (!lower) return true;
+const lower = clean(url).toLowerCase();
+if (!lower) return true;
 
-  const blockedHosts = [
-    "godaddy.com",
-    "sedo.com",
-    "afternic.com",
-    "dan.com",
-    "hugedomains.com",
-    "namecheap.com",
-    "bluehost.com",
-    "wix.com/domain",
-    "squarespace.com/domains",
-    "example.com",
-    "localhost",
-    "127.0.0.1",
-    "bit.ly",
-    "tinyurl.com",
-    "t.co",
-    "bsky.app/profile/",
-    "news.ycombinator.com/item"
-  ];
+const blockedHosts = [
+"godaddy.com",
+"sedo.com",
+"afternic.com",
+"dan.com",
+"hugedomains.com",
+"namecheap.com",
+"bluehost.com",
+"wix.com/domain",
+"squarespace.com/domains",
+"example.com",
+"localhost",
+"127.0.0.1",
+"bit.ly",
+"tinyurl.com",
+"t.co",
+"bsky.app/profile/",
+"news.ycombinator.com/item"
+];
 
-  return blockedHosts.some(host => lower.includes(host));
+return blockedHosts.some(host => lower.includes(host));
 }
 
 function isDirectContactUrl(url: string): boolean {
-  const cleaned = cleanUrl(url);
-  if (!cleaned) return false;
-  if (cleaned.toLowerCase().startsWith("mailto:")) {
-    return isValidDirectEmail(cleaned.slice(7));
-  }
-  return !isParkedOrJunkUrl(cleaned);
+const cleaned = cleanUrl(url);
+if (!cleaned) return false;
+if (cleaned.toLowerCase().startsWith("mailto:")) {
+return isValidDirectEmail(cleaned.slice(7));
+}
+return !isParkedOrJunkUrl(cleaned);
 }
 
 function isFreshWithin72Hours(rawDate?: string): boolean {
-  const val = clean(rawDate || "");
-  if (!val) return false;
-  const parsed = Date.parse(val);
-  if (Number.isNaN(parsed)) return false;
-  const now = Date.now();
-  const age = now - parsed;
-  return age >= -60000 && age <= MAX_DEMAND_AGE_MS;
+const val = clean(rawDate || "");
+if (!val) return false;
+const parsed = Date.parse(val);
+if (Number.isNaN(parsed)) return false;
+const now = Date.now();
+const age = now - parsed;
+return age >= -60000 && age <= MAX_DEMAND_AGE_MS;
 }
 
 function isAcademyOrAgencyOrCompanyDemand(
-  author: string,
-  text: string,
-  url: string
+author: string,
+text: string,
+url: string
 ): boolean {
-  const combined = ` ${clean(`${author} ${text} ${url}`).toLowerCase()} `;
-  const blockedOrgTerms = [
-    " academy ",
-    " institute ",
-    " university ",
-    " college ",
-    " school ",
-    " madrasa ",
-    " madrassa ",
-    " agency ",
-    " agencies ",
-    " staffing ",
-    " recruiter ",
-    " recruiting ",
-    " law firm ",
-    " attorneys ",
-    " studio ",
-    " inc.",
-    " llc ",
-    " ltd ",
-    " corp ",
-    " foundation ",
-    " center ",
-    " centre ",
-    " platform ",
-    " marketplace ",
-    " our company ",
-    " our team ",
-    " our agency ",
-    " our school ",
-    " we are hiring "
-  ];
-  return blockedOrgTerms.some(term => combined.includes(term));
+const combined =  ${clean(${author} ${text} ${url}).toLowerCase()} ;
+const blockedOrgTerms = [
+" academy ",
+" institute ",
+" university ",
+" college ",
+" school ",
+" madrasa ",
+" madrassa ",
+" agency ",
+" agencies ",
+" staffing ",
+" recruiter ",
+" recruiting ",
+" law firm ",
+" attorneys ",
+" studio ",
+" inc.",
+" llc ",
+" ltd ",
+" corp ",
+" foundation ",
+" center ",
+" centre ",
+" platform ",
+" marketplace ",
+" our company ",
+" our team ",
+" our agency ",
+" our school ",
+" we are hiring "
+];
+return blockedOrgTerms.some(term => combined.includes(term));
 }
 async function fetchText(url: string): Promise<string> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+const controller = new AbortController();
+const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
-  try {
-    const response = await fetch(url, {
-      method: "GET",
-      headers: {
-        "User-Agent": USER_AGENT,
-        Accept: "application/rss+xml, application/xml, text/xml, text/html, */*"
-      },
-      signal: controller.signal
-    });
+try {
+const response = await fetch(url, {
+method: "GET",
+headers: {
+"User-Agent": USER_AGENT,
+Accept: "application/rss+xml, application/xml, text/xml, text/html, /"
+},
+signal: controller.signal
+});
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status} for ${url}`);
-    }
+if (!response.ok) {  
+  throw new Error(`HTTP ${response.status} for ${url}`);  
+}  
 
-    return await response.text();
-  } finally {
-    clearTimeout(timer);
-  }
+return await response.text();
+
+} finally {
+clearTimeout(timer);
+}
 }
 
 async function fetchJson(url: string): Promise<Record<string, unknown>> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+const controller = new AbortController();
+const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
-  try {
-    const response = await fetch(url, {
-      method: "GET",
-      headers: {
-        "User-Agent": USER_AGENT,
-        Accept: "application/json"
-      },
-      signal: controller.signal
-    });
+try {
+const response = await fetch(url, {
+method: "GET",
+headers: {
+"User-Agent": USER_AGENT,
+Accept: "application/json"
+},
+signal: controller.signal
+});
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status} for ${url}`);
-    }
+if (!response.ok) {  
+  throw new Error(`HTTP ${response.status} for ${url}`);  
+}  
 
-    return (await response.json()) as Record<string, unknown>;
-  } finally {
-    clearTimeout(timer);
-  }
+return (await response.json()) as Record<string, unknown>;
+
+} finally {
+clearTimeout(timer);
+}
 }
 
 function getCountry(text: string): string {
-  const t = ` ${clean(text).toLowerCase()} `;
+const t = ${clean(text).toLowerCase()};
 
-  const countryMap: Array<[string, string[]]> = [
-    ["United States", [" united states ", " usa ", " u.s. ", " new york ", " california ", " texas ", " florida ", " chicago "]],
-    ["United Kingdom", [" united kingdom ", " uk ", " u.k. ", " london ", " manchester ", " birmingham ", " scotland "]],
-    ["Canada", [" canada ", " toronto ", " vancouver ", " montreal "]],
-    ["Australia", [" australia ", " sydney ", " melbourne "]],
-    ["Pakistan", [" pakistan ", " rawalpindi ", " islamabad ", " lahore ", " karachi "]],
-    ["India", [" india ", " mumbai ", " delhi ", " bangalore ", " bengaluru ", " hyderabad "]],
-    ["United Arab Emirates", [" uae ", " dubai ", " abu dhabi ", " sharjah "]],
-    ["Saudi Arabia", [" saudi arabia ", " riyadh ", " jeddah "]],
-    ["Germany", [" germany ", " berlin ", " munich "]],
-    ["France", [" france ", " paris "]]
-  ];
+const countryMap: Array<[string, string[]]> = [
+["United States", [" united states ", " usa ", " u.s. ", " new york ", " california ", " texas ", " florida ", " chicago "]],
+["United Kingdom", [" united kingdom ", " uk ", " u.k. ", " london ", " manchester ", " birmingham ", " scotland "]],
+["Canada", [" canada ", " toronto ", " vancouver ", " montreal "]],
+["Australia", [" australia ", " sydney ", " melbourne "]],
+["Pakistan", [" pakistan ", " rawalpindi ", " islamabad ", " lahore ", " karachi "]],
+["India", [" india ", " mumbai ", " delhi ", " bangalore ", " bengaluru ", " hyderabad "]],
+["United Arab Emirates", [" uae ", " dubai ", " abu dhabi ", " sharjah "]],
+["Saudi Arabia", [" saudi arabia ", " riyadh ", " jeddah "]],
+["Germany", [" germany ", " berlin ", " munich "]],
+["France", [" france ", " paris "]]
+];
 
-  for (const [country, patterns] of countryMap) {
-    if (patterns.some(p => t.includes(p))) {
-      return country;
-    }
-  }
+for (const [country, patterns] of countryMap) {
+if (patterns.some(p => t.includes(p))) {
+return country;
+}
+}
 
-  return "Remote / Global";
+return "Remote / Global";
 }
 
 function isAcademyOrOrganization(
-  name: string,
-  bio: string,
-  url: string
+name: string,
+bio: string,
+url: string
 ): boolean {
-  const combined = ` ${clean(`${name} ${bio} ${url}`).toLowerCase()} `;
-  const orgTerms = [
-    " academy ",
-    " institute ",
-    " university ",
-    " college ",
-    " school ",
-    " madrasa ",
-    " madrassa ",
-    " agency ",
-    " studio ",
-    " inc.",
-    " llc ",
-    " ltd ",
-    " corp ",
-    " foundation ",
-    " center ",
-    " centre ",
-    " platform ",
-    " marketplace "
-  ];
-  return orgTerms.some(term => combined.includes(term));
+const combined =  ${clean(${name} ${bio} ${url}).toLowerCase()} ;
+const orgTerms = [
+" academy ",
+" institute ",
+" university ",
+" college ",
+" school ",
+" madrasa ",
+" madrassa ",
+" agency ",
+" studio ",
+" inc.",
+" llc ",
+" ltd ",
+" corp ",
+" foundation ",
+" center ",
+" centre ",
+" platform ",
+" marketplace "
+];
+return orgTerms.some(term => combined.includes(term));
 }
 
 function isCourseBookOrArticleSpam(text: string): boolean {
-  const t = ` ${clean(text).toLowerCase()} `;
-  const spamTerms = [
-    " buy my course ",
-    " enroll now ",
-    " limited spots course ",
-    " free webinar ",
-    " crypto signal ",
-    " forex signal ",
-    " get rich ",
-    " make $",
-    " passive income course "
-  ];
-  return spamTerms.some(term => t.includes(term));
+const t = ${clean(text).toLowerCase()};
+const spamTerms = [
+" buy my course ",
+" enroll now ",
+" limited spots course ",
+" free webinar ",
+" crypto signal ",
+" forex signal ",
+" get rich ",
+" make $",
+" passive income course "
+];
+return spamTerms.some(term => t.includes(term));
 }
 
 function detectSkillNeeded(text: string, role?: SaasRole): string {
-  const t = ` ${clean(text).toLowerCase()} `;
+const t = ${clean(text).toLowerCase()};
 
-  if (
-    t.includes(" quran ") ||
-    t.includes(" tajweed ") ||
-    t.includes(" arabic ") ||
-    t.includes(" urdu ") ||
-    t.includes(" islamic ")
-  ) {
-    return "Languages & Islamic Studies Teaching";
-  }
-
-  if (
-    t.includes(" legal ") ||
-    t.includes(" contract ") ||
-    t.includes(" paralegal ") ||
-    t.includes(" lawyer ") ||
-    t.includes(" attorney ")
-  ) {
-    return "Freelancing & Business";
-  }
-
-  if (
-    t.includes(" history ") ||
-    t.includes(" historian ") ||
-    t.includes(" math ") ||
-    t.includes(" physics ") ||
-    t.includes(" chemistry ") ||
-    t.includes(" biology ") ||
-    t.includes(" science ") ||
-    t.includes(" english ") ||
-    t.includes(" esl ") ||
-    t.includes(" ielts ") ||
-    t.includes(" tutor ") ||
-    t.includes(" teacher ") ||
-    t.includes(" phonics ") ||
-    t.includes(" reading ") ||
-    role === "teacher"
-  ) {
-    return "Education & Teaching";
-  }
-
-  if (
-    t.includes(" coach ") ||
-    t.includes(" coaching ") ||
-    t.includes(" mentor ") ||
-    role === "coach"
-  ) {
-    return "Coaching & Mentorship";
-  }
-
-  if (
-    t.includes(" writer ") ||
-    t.includes(" editor ") ||
-    t.includes(" designer ") ||
-    t.includes(" developer ") ||
-    t.includes(" freelance ") ||
-    t.includes(" translation ") ||
-    t.includes(" translator ") ||
-    role === "freelancer"
-  ) {
-    return "Writing, Design & Freelance Services";
-  }
-
-  return "Freelancing & Business";
+if (
+t.includes(" quran ") ||
+t.includes(" tajweed ") ||
+t.includes(" arabic ") ||
+t.includes(" urdu ") ||
+t.includes(" islamic ")
+) {
+return "Languages & Islamic Studies Teaching";
 }
+
+if (
+t.includes(" legal ") ||
+t.includes(" contract ") ||
+t.includes(" paralegal ") ||
+t.includes(" lawyer ") ||
+t.includes(" attorney ")
+) {
+return "Freelancing & Business";
+}
+
+if (
+t.includes(" history ") ||
+t.includes(" historian ") ||
+t.includes(" math ") ||
+t.includes(" physics ") ||
+t.includes(" chemistry ") ||
+t.includes(" biology ") ||
+t.includes(" science ") ||
+t.includes(" english ") ||
+t.includes(" esl ") ||
+t.includes(" ielts ") ||
+t.includes(" tutor ") ||
+t.includes(" teacher ") ||
+t.includes(" phonics ") ||
+t.includes(" reading ") ||
+role === "teacher"
+) {
+return "Education & Teaching";
+}
+
+if (
+t.includes(" coach ") ||
+t.includes(" coaching ") ||
+t.includes(" mentor ") ||
+role === "coach"
+) {
+return "Coaching & Mentorship";
+}
+
+if (
+t.includes(" writer ") ||
+t.includes(" editor ") ||
+t.includes(" designer ") ||
+t.includes(" developer ") ||
+t.includes(" freelance ") ||
+t.includes(" translation ") ||
+t.includes(" translator ") ||
+role === "freelancer"
+) {
+return "Writing, Design & Freelance Services";
+}
+
+return "Freelancing & Business";
+  }
 function stripTrailingPunctuation(token: string): string {
-  let out = token.trim();
-  const endChars = [".", ",", ";", "!", "?", ")", "]", "}", ">", '"', "'"];
-  const startChars = ["(", "[", "{", "<", '"', "'"];
-  while (out.length > 0 && endChars.includes(out[out.length - 1])) {
-    out = out.slice(0, -1);
-  }
-  while (out.length > 0 && startChars.includes(out[0])) {
-    out = out.slice(1);
-  }
-  return out;
+let out = token.trim();
+const endChars = [".", ",", ";", "!", "?", ")", "]", "}", ">", '"', "'"];
+const startChars = ["(", "[", "{", "<", '"', "'"];
+while (out.length > 0 && endChars.includes(out[out.length - 1])) {
+out = out.slice(0, -1);
+}
+while (out.length > 0 && startChars.includes(out[0])) {
+out = out.slice(1);
+}
+return out;
 }
 
 function extractDirectContactFromBio(raw: string): {
-  email: string;
-  contactUrl: string;
+email: string;
+contactUrl: string;
 } {
-  const plain = stripAllTags(raw);
-  const tokens = clean(plain).split(" ").map(stripTrailingPunctuation).filter(Boolean);
+const plain = stripAllTags(raw);
+const tokens = clean(plain).split(" ").map(stripTrailingPunctuation).filter(Boolean);
 
-  let validEmail = "";
-  let bestUrl = "";
+let validEmail = "";
+let bestUrl = "";
 
-  const allowedTlds = [
-    ".com",
-    ".org",
-    ".net",
-    ".io",
-    ".co",
-    ".me",
-    ".edu",
-    ".uk",
-    ".ca",
-    ".au",
-    ".de",
-    ".fr",
-    ".in",
-    ".pk",
-    ".us",
-    ".info",
-    ".biz",
-    ".ai",
-    ".app",
-    ".site",
-    ".online",
-    ".coach",
-    ".tutor",
-    ".studio",
-    ".link",
-    ".ee",
-    ".cc"
-  ];
+const allowedTlds = [
+".com",
+".org",
+".net",
+".io",
+".co",
+".me",
+".edu",
+".uk",
+".ca",
+".au",
+".de",
+".fr",
+".in",
+".pk",
+".us",
+".info",
+".biz",
+".ai",
+".app",
+".site",
+".online",
+".coach",
+".tutor",
+".studio",
+".link",
+".ee",
+".cc"
+];
 
-  for (const token of tokens) {
-    if (!validEmail && token.includes("@") && isValidDirectEmail(token)) {
-      validEmail = token;
-    }
+for (const token of tokens) {
+if (!validEmail && token.includes("@") && isValidDirectEmail(token)) {
+validEmail = token;
+}
 
-    if (!bestUrl) {
-      let candidate = "";
-      const lower = token.toLowerCase();
-      if (lower.startsWith("http://") || lower.startsWith("https://")) {
-        candidate = token;
-      } else if (
-        !token.includes("@") &&
-        allowedTlds.some(tld => lower.endsWith(tld) || lower.includes(tld + "/"))
-      ) {
-        candidate = "https://" + token;
-      }
+if (!bestUrl) {  
+  let candidate = "";  
+  const lower = token.toLowerCase();  
+  if (lower.startsWith("http://") || lower.startsWith("https://")) {  
+    candidate = token;  
+  } else if (  
+    !token.includes("@") &&  
+    allowedTlds.some(tld => lower.endsWith(tld) || lower.includes(tld + "/"))  
+  ) {  
+    candidate = "https://" + token;  
+  }  
 
-      if (candidate) {
-        const cleaned = cleanUrl(candidate);
-        if (cleaned && isDirectContactUrl(cleaned)) {
-          bestUrl = cleaned;
-        }
-      }
-    }
-  }
+  if (candidate) {  
+    const cleaned = cleanUrl(candidate);  
+    if (cleaned && isDirectContactUrl(cleaned)) {  
+      bestUrl = cleaned;  
+    }  
+  }  
+}
 
-  return {
-    email: clean(validEmail),
-    contactUrl: bestUrl
-  };
+}
+
+return {
+email: clean(validEmail),
+contactUrl: bestUrl
+};
 }
 
 function hasTwoPlusLetters(value: string): boolean {
-  let count = 0;
-  for (let i = 0; i < value.length; i++) {
-    const code = value.charCodeAt(i);
-    if ((code >= 65 && code <= 90) || (code >= 97 && code <= 122)) {
-      count++;
-      if (count >= 2) return true;
-    }
-  }
-  return false;
+let count = 0;
+for (let i = 0; i < value.length; i++) {
+const code = value.charCodeAt(i);
+if ((code >= 65 && code <= 90) || (code >= 97 && code <= 122)) {
+count++;
+if (count >= 2) return true;
+}
+}
+return false;
 }
 
 function isRealPersonName(name: string): boolean {
-  const n = clean(name);
-  if (!n || n.length < 2 || n.length > 50) return false;
-  const blockedNames = [
-    "admin",
-    "staff",
-    "team",
-    "support",
-    "editorial",
-    "bot",
-    "unknown",
-    "medium",
-    "wordpress",
-    "scouthub",
-    "deleted",
-    "automoderator",
-    "official",
-    "news",
-    "daily",
-    "weekly",
-    "radar",
-    "hub",
-    "studio",
-    "agency",
-    "academy",
-    "institute",
-    "school",
-    "madrasa",
-    "books",
-    "courses",
-    "shop",
-    "store"
-  ];
-  if (blockedNames.includes(n.toLowerCase())) {
-    return false;
-  }
-  if (isAcademyOrOrganization(n, "", "")) {
-    return false;
-  }
-  return hasTwoPlusLetters(n);
+const n = clean(name);
+if (!n || n.length < 2 || n.length > 50) return false;
+const blockedNames = [
+"admin",
+"staff",
+"team",
+"support",
+"editorial",
+"bot",
+"unknown",
+"medium",
+"wordpress",
+"scouthub",
+"deleted",
+"automoderator",
+"official",
+"news",
+"daily",
+"weekly",
+"radar",
+"hub",
+"studio",
+"agency",
+"academy",
+"institute",
+"school",
+"madrasa",
+"books",
+"courses",
+"shop",
+"store"
+];
+if (blockedNames.includes(n.toLowerCase())) {
+return false;
+}
+if (isAcademyOrOrganization(n, "", "")) {
+return false;
+}
+return hasTwoPlusLetters(n);
 }
 
 async function isUrlReachableAndActive(url: string): Promise<boolean> {
-  const cleaned = cleanUrl(url);
-  if (!cleaned || !isDirectContactUrl(cleaned)) return false;
+const cleaned = cleanUrl(url);
+if (!cleaned || !isDirectContactUrl(cleaned)) return false;
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 800);
+const controller = new AbortController();
+const timer = setTimeout(() => controller.abort(), 800);
 
-  try {
-    const response = await fetch(cleaned, {
-      method: "GET",
-      redirect: "follow",
-      headers: {
-        "User-Agent": USER_AGENT,
-        Range: "bytes=0-1024"
-      },
-      signal: controller.signal
-    });
+try {
+const response = await fetch(cleaned, {
+method: "GET",
+redirect: "follow",
+headers: {
+"User-Agent": USER_AGENT,
+Range: "bytes=0-1024"
+},
+signal: controller.signal
+});
 
-    if (!response.ok || response.status >= 400) {
-      return false;
-    }
+if (!response.ok || response.status >= 400) {  
+  return false;  
+}  
 
-    const finalUrl = cleanUrl(response.url || cleaned);
-    if (finalUrl && isParkedOrJunkUrl(finalUrl)) {
-      return false;
-    }
+const finalUrl = cleanUrl(response.url || cleaned);  
+if (finalUrl && isParkedOrJunkUrl(finalUrl)) {  
+  return false;  
+}  
 
-    return true;
-  } catch {
-    return false;
-  } finally {
-    clearTimeout(timer);
-  }
+return true;
+
+} catch {
+return false;
+} finally {
+clearTimeout(timer);
+}
 }
 
 async function collectFreshDemandFromHackerNews(
-  queries: string[],
-  sourceName: string
+queries: string[],
+sourceName: string
 ): Promise<SearchResult[]> {
-  const cutoffSec = Math.floor((Date.now() - MAX_DEMAND_AGE_MS) / 1000);
-  const collected: SearchResult[] = [];
-  const seen = new Set<string>();
+const cutoffSec = Math.floor((Date.now() - MAX_DEMAND_AGE_MS) / 1000);
+const collected: SearchResult[] = [];
+const seen = new Set<string>();
 
-  const batches = await Promise.all(
-    queries.map(async q => {
-      try {
-        const url =
-          "https://hn.algolia.com/api/v1/search_by_date?query=" +
-          encodeURIComponent(q) +
-          "&numericFilters=created_at_i>" +
-          cutoffSec +
-          "&hitsPerPage=25";
-        const data = await fetchJson(url);
-        return Array.isArray(data?.hits) ? data.hits : [];
-      } catch (error) {
-        console.error(`[${sourceName}] HN query failed:`, q, error);
-        return [];
-      }
-    })
-  );
+const batches = await Promise.all(
+queries.map(async q => {
+try {
+const url =
+"https://hn.algolia.com/api/v1/search_by_date?query=" +
+encodeURIComponent(q) +
+"&numericFilters=created_at_i>" +
+cutoffSec +
+"&hitsPerPage=25";
+const data = await fetchJson(url);
+return Array.isArray(data?.hits) ? data.hits : [];
+} catch (error) {
+console.error([${sourceName}] HN query failed:, q, error);
+return [];
+}
+})
+);
 
-  for (const hit of batches.flat() as Array<Record<string, unknown>>) {
-    const title = stripAllTags(hit?.title || "");
-    const storyTitle = stripAllTags(hit?.story_title || "");
-    const bodyText = stripAllTags(hit?.comment_text || hit?.story_text || title || storyTitle);
-    const createdAt = clean(hit?.created_at || "");
-    const authorName = clean(hit?.author || "");
-    const rawHitUrl = cleanUrl(String(hit?.url || ""));
-    const combinedText = `${title || storyTitle} ${bodyText}`;
+for (const hit of batches.flat() as Array<Record<string, unknown>>) {
+const title = stripAllTags(hit?.title || "");
+const storyTitle = stripAllTags(hit?.story_title || "");
+const bodyText = stripAllTags(hit?.comment_text || hit?.story_text || title || storyTitle);
+const createdAt = clean(hit?.created_at || "");
+const authorName = clean(hit?.author || "");
+const rawHitUrl = cleanUrl(String(hit?.url || ""));
+const combinedText = ${title || storyTitle} ${bodyText};
 
-    if (!combinedText || !isFreshWithin72Hours(createdAt)) continue;
-    if (isAcademyOrAgencyOrCompanyDemand(authorName, combinedText, rawHitUrl)) continue;
-    if (isCourseBookOrArticleSpam(combinedText)) continue;
+if (!combinedText || !isFreshWithin72Hours(createdAt)) continue;  
+if (isAcademyOrAgencyOrCompanyDemand(authorName, combinedText, rawHitUrl)) continue;  
+if (isCourseBookOrArticleSpam(combinedText)) continue;  
 
-    const extracted = extractDirectContactFromBio(combinedText);
-    const directUrl =
-      extracted.contactUrl || (rawHitUrl && isDirectContactUrl(rawHitUrl) ? rawHitUrl : "");
-    const directEmail = extracted.email;
+const extracted = extractDirectContactFromBio(combinedText);  
+const directUrl =  
+  extracted.contactUrl || (rawHitUrl && isDirectContactUrl(rawHitUrl) ? rawHitUrl : "");  
+const directEmail = extracted.email;  
 
-    if (!directEmail && !directUrl) continue;
+if (!directEmail && !directUrl) continue;  
 
-    const dedupeKey = `${(directEmail || directUrl).toLowerCase()}|${combinedText.slice(0, 60).toLowerCase()}`;
-    if (seen.has(dedupeKey)) continue;
-    seen.add(dedupeKey);
+const dedupeKey = `${(directEmail || directUrl).toLowerCase()}|${combinedText.slice(0, 60).toLowerCase()}`;  
+if (seen.has(dedupeKey)) continue;  
+seen.add(dedupeKey);  
 
-    collected.push({
-      title: (title || storyTitle || bodyText).slice(0, 110),
-      link: directUrl || `mailto:${directEmail}`,
-      sourceUrl: directUrl || `mailto:${directEmail}`,
-      contactUrl: directUrl,
-      email: directEmail,
-      author: authorName,
-      country: getCountry(combinedText) || "Remote / Global",
-      description: bodyText,
-      snippet: bodyText,
-      publishedAt: createdAt,
-      source: sourceName,
-      sourceType: "hn-api"
-    });
-  }
+collected.push({  
+  title: (title || storyTitle || bodyText).slice(0, 110),  
+  link: directUrl || `mailto:${directEmail}`,  
+  sourceUrl: directUrl || `mailto:${directEmail}`,  
+  contactUrl: directUrl,  
+  email: directEmail,  
+  author: authorName,  
+  country: getCountry(combinedText) || "Remote / Global",  
+  description: bodyText,  
+  snippet: bodyText,  
+  publishedAt: createdAt,  
+  source: sourceName,  
+  sourceType: "hn-api"  
+});
 
-  return collected.slice(0, MAX_RESULTS_PER_SOURCE);
+}
+
+return collected.slice(0, MAX_RESULTS_PER_SOURCE);
 }
 
 async function collectFreshDemandFromRemotive(
-  keywords: string[],
-  sourceName: string
+keywords: string[],
+sourceName: string
 ): Promise<SearchResult[]> {
-  try {
-    const data = await fetchJson("https://remotive.com/api/remote-jobs?limit=100");
-    const jobs = Array.isArray(data?.jobs) ? (data.jobs as Array<Record<string, unknown>>) : [];
-    const collected: SearchResult[] = [];
-    const seen = new Set<string>();
+try {
+const data = await fetchJson("https://remotive.com/api/remote-jobs?limit=100");
+const jobs = Array.isArray(data?.jobs) ? (data.jobs as Array<Record<string, unknown>>) : [];
+const collected: SearchResult[] = [];
+const seen = new Set<string>();
 
-    for (const job of jobs) {
-      const title = clean(job?.title || "");
-      const company = clean(job?.company_name || "");
-      const desc = stripAllTags(job?.description || "");
-      const pubDate = clean(job?.publication_date || "");
-      const applyUrl = cleanUrl(String(job?.url || ""));
-      const location = clean(job?.candidate_required_location || "");
-      const combined = `${title} ${desc}`.toLowerCase();
+for (const job of jobs) {  
+  const title = clean(job?.title || "");  
+  const company = clean(job?.company_name || "");  
+  const desc = stripAllTags(job?.description || "");  
+  const pubDate = clean(job?.publication_date || "");  
+  const applyUrl = cleanUrl(String(job?.url || ""));  
+  const location = clean(job?.candidate_required_location || "");  
+  const combined = `${title} ${desc}`.toLowerCase();  
 
-      if (!title || !isFreshWithin72Hours(pubDate)) continue;
-      if (isAcademyOrAgencyOrCompanyDemand(company, `${title} ${desc}`, applyUrl)) continue;
-      if (!keywords.some(kw => combined.includes(kw.toLowerCase()))) continue;
+  if (!title || !isFreshWithin72Hours(pubDate)) continue;  
+  if (isAcademyOrAgencyOrCompanyDemand(company, `${title} ${desc}`, applyUrl)) continue;  
+  if (!keywords.some(kw => combined.includes(kw.toLowerCase()))) continue;  
 
-      const extracted = extractDirectContactFromBio(desc);
-      const contactEmail = extracted.email;
-      const contactUrl = extracted.contactUrl || (isDirectContactUrl(applyUrl) ? applyUrl : "");
-      if (!contactEmail && !contactUrl) continue;
+  const extracted = extractDirectContactFromBio(desc);  
+  const contactEmail = extracted.email;  
+  const contactUrl = extracted.contactUrl || (isDirectContactUrl(applyUrl) ? applyUrl : "");  
+  if (!contactEmail && !contactUrl) continue;  
 
-      const key = `${(contactEmail || contactUrl).toLowerCase()}|${title.toLowerCase()}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
+  const key = `${(contactEmail || contactUrl).toLowerCase()}|${title.toLowerCase()}`;  
+  if (seen.has(key)) continue;  
+  seen.add(key);  
 
-      collected.push({
-        title: title.slice(0, 110),
-        link: contactUrl || `mailto:${contactEmail}`,
-        sourceUrl: applyUrl || contactUrl,
-        contactUrl,
-        email: contactEmail,
-        author: company,
-        country: location || getCountry(`${title} ${desc}`) || "Remote / Global",
-        description: desc.slice(0, 300),
-        snippet: desc.slice(0, 300),
-        publishedAt: pubDate,
-        source: sourceName,
-        sourceType: "remotive-api"
-      });
-    }
+  collected.push({  
+    title: title.slice(0, 110),  
+    link: contactUrl || `mailto:${contactEmail}`,  
+    sourceUrl: applyUrl || contactUrl,  
+    contactUrl,  
+    email: contactEmail,  
+    author: company,  
+    country: location || getCountry(`${title} ${desc}`) || "Remote / Global",  
+    description: desc.slice(0, 300),  
+    snippet: desc.slice(0, 300),  
+    publishedAt: pubDate,  
+    source: sourceName,  
+    sourceType: "remotive-api"  
+  });  
+}  
 
-    return collected.slice(0, MAX_RESULTS_PER_SOURCE);
-  } catch (error) {
-    console.error(`[${sourceName}] Remotive failed:`, error);
-    return [];
-  }
+return collected.slice(0, MAX_RESULTS_PER_SOURCE);
+
+} catch (error) {
+console.error([${sourceName}] Remotive failed:, error);
+return [];
+}
 }
 
 async function collectFreshDemandFromJobicy(
-  keywords: string[],
-  sourceName: string
+keywords: string[],
+sourceName: string
 ): Promise<SearchResult[]> {
-  try {
-    const data = await fetchJson("https://jobicy.com/api/v2/remote-jobs?count=50");
-    const jobs = Array.isArray(data?.jobs) ? (data.jobs as Array<Record<string, unknown>>) : [];
-    const collected: SearchResult[] = [];
-    const seen = new Set<string>();
+try {
+const data = await fetchJson("https://jobicy.com/api/v2/remote-jobs?count=50");
+const jobs = Array.isArray(data?.jobs) ? (data.jobs as Array<Record<string, unknown>>) : [];
+const collected: SearchResult[] = [];
+const seen = new Set<string>();
 
-    for (const job of jobs) {
-      const title = clean(job?.jobTitle || "");
-      const company = clean(job?.companyName || "");
-      const desc = stripAllTags(job?.jobDescription || job?.jobExcerpt || "");
-      const pubDate = clean(job?.pubDate || "");
-      const applyUrl = cleanUrl(String(job?.url || ""));
-      const geo = clean(job?.jobGeo || "");
-      const combined = `${title} ${desc}`.toLowerCase();
+for (const job of jobs) {  
+  const title = clean(job?.jobTitle || "");  
+  const company = clean(job?.companyName || "");  
+  const desc = stripAllTags(job?.jobDescription || job?.jobExcerpt || "");  
+  const pubDate = clean(job?.pubDate || "");  
+  const applyUrl = cleanUrl(String(job?.url || ""));  
+  const geo = clean(job?.jobGeo || "");  
+  const combined = `${title} ${desc}`.toLowerCase();  
 
-      if (!title || !isFreshWithin72Hours(pubDate)) continue;
-      if (isAcademyOrAgencyOrCompanyDemand(company, `${title} ${desc}`, applyUrl)) continue;
-      if (!keywords.some(kw => combined.includes(kw.toLowerCase()))) continue;
+  if (!title || !isFreshWithin72Hours(pubDate)) continue;  
+  if (isAcademyOrAgencyOrCompanyDemand(company, `${title} ${desc}`, applyUrl)) continue;  
+  if (!keywords.some(kw => combined.includes(kw.toLowerCase()))) continue;  
 
-      const extracted = extractDirectContactFromBio(desc);
-      const contactEmail = extracted.email;
-      const contactUrl = extracted.contactUrl || (isDirectContactUrl(applyUrl) ? applyUrl : "");
-      if (!contactEmail && !contactUrl) continue;
+  const extracted = extractDirectContactFromBio(desc);  
+  const contactEmail = extracted.email;  
+  const contactUrl = extracted.contactUrl || (isDirectContactUrl(applyUrl) ? applyUrl : "");  
+  if (!contactEmail && !contactUrl) continue;  
 
-      const key = `${(contactEmail || contactUrl).toLowerCase()}|${title.toLowerCase()}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
+  const key = `${(contactEmail || contactUrl).toLowerCase()}|${title.toLowerCase()}`;  
+  if (seen.has(key)) continue;  
+  seen.add(key);  
 
-      collected.push({
-        title: title.slice(0, 110),
-        link: contactUrl || `mailto:${contactEmail}`,
-        sourceUrl: applyUrl || contactUrl,
-        contactUrl,
-        email: contactEmail,
-        author: company,
-        country: geo || getCountry(`${title} ${desc}`) || "Remote / Global",
-        description: desc.slice(0, 300),
-        snippet: desc.slice(0, 300),
-        publishedAt: pubDate,
-        source: sourceName,
-        sourceType: "jobicy-api"
-      });
-    }
+  collected.push({  
+    title: title.slice(0, 110),  
+    link: contactUrl || `mailto:${contactEmail}`,  
+    sourceUrl: applyUrl || contactUrl,  
+    contactUrl,  
+    email: contactEmail,  
+    author: company,  
+    country: geo || getCountry(`${title} ${desc}`) || "Remote / Global",  
+    description: desc.slice(0, 300),  
+    snippet: desc.slice(0, 300),  
+    publishedAt: pubDate,  
+    source: sourceName,  
+    sourceType: "jobicy-api"  
+  });  
+}  
 
-    return collected.slice(0, MAX_RESULTS_PER_SOURCE);
-  } catch (error) {
-    console.error(`[${sourceName}] Jobicy failed:`, error);
-    return [];
-  }
+return collected.slice(0, MAX_RESULTS_PER_SOURCE);
+
+} catch (error) {
+console.error([${sourceName}] Jobicy failed:, error);
+return [];
+}
 }
 
 async function collectRedditDemandTeachers(): Promise<SearchResult[]> {
-  const teacherKeywords = [
-    "quran",
-    "tajweed",
-    "arabic",
-    "tutor",
-    "teacher",
-    "instructor",
-    "esl",
-    "ielts",
-    "math tutor",
-    "english tutor"
-  ];
-  const [hn, remotive, jobicy] = await Promise.all([
-    collectFreshDemandFromHackerNews(DEMAND_TEACHER_QUERIES, "Demand Teachers"),
-    collectFreshDemandFromRemotive(teacherKeywords, "Demand Teachers"),
-    collectFreshDemandFromJobicy(teacherKeywords, "Demand Teachers")
-  ]);
-  return [...hn, ...remotive, ...jobicy].slice(0, MAX_RESULTS_PER_SOURCE);
+const teacherKeywords = [
+"quran",
+"tajweed",
+"arabic",
+"tutor",
+"teacher",
+"instructor",
+"esl",
+"ielts",
+"math tutor",
+"english tutor"
+];
+const [hn, remotive, jobicy] = await Promise.all([
+collectFreshDemandFromHackerNews(DEMAND_TEACHER_QUERIES, "Demand Teachers"),
+collectFreshDemandFromRemotive(teacherKeywords, "Demand Teachers"),
+collectFreshDemandFromJobicy(teacherKeywords, "Demand Teachers")
+]);
+return [...hn, ...remotive, ...jobicy].slice(0, MAX_RESULTS_PER_SOURCE);
 }
 
 async function collectRedditDemandCoaches(): Promise<SearchResult[]> {
-  const coachKeywords = [
-    "career coach",
-    "business coach",
-    "executive coach",
-    "life coach",
-    "interview coach",
-    "mentor",
-    "coaching"
-  ];
-  const [hn, remotive, jobicy] = await Promise.all([
-    collectFreshDemandFromHackerNews(DEMAND_COACH_QUERIES, "Demand Coaches"),
-    collectFreshDemandFromRemotive(coachKeywords, "Demand Coaches"),
-    collectFreshDemandFromJobicy(coachKeywords, "Demand Coaches")
-  ]);
-  return [...hn, ...remotive, ...jobicy].slice(0, MAX_RESULTS_PER_SOURCE);
+const coachKeywords = [
+"career coach",
+"business coach",
+"executive coach",
+"life coach",
+"interview coach",
+"mentor",
+"coaching"
+];
+const [hn, remotive, jobicy] = await Promise.all([
+collectFreshDemandFromHackerNews(DEMAND_COACH_QUERIES, "Demand Coaches"),
+collectFreshDemandFromRemotive(coachKeywords, "Demand Coaches"),
+collectFreshDemandFromJobicy(coachKeywords, "Demand Coaches")
+]);
+return [...hn, ...remotive, ...jobicy].slice(0, MAX_RESULTS_PER_SOURCE);
 }
 
 async function collectRedditDemandFreelancers(): Promise<SearchResult[]> {
-  const freelancerKeywords = [
-    "arabic",
-    "translator",
-    "translation",
-    "freelance writer",
-    "content writer",
-    "copywriter",
-    "editor",
-    "proofreader",
-    "legal",
-    "paralegal",
-    "contract"
-  ];
-  const [hn, remotive, jobicy] = await Promise.all([
-    collectFreshDemandFromHackerNews(
-      DEMAND_TRANSLATION_WRITING_LEGAL_QUERIES,
-      "Demand Translation Writing Legal"
-    ),
-    collectFreshDemandFromRemotive(freelancerKeywords, "Demand Translation Writing Legal"),
-    collectFreshDemandFromJobicy(freelancerKeywords, "Demand Translation Writing Legal")
-  ]);
-  return [...hn, ...remotive, ...jobicy].slice(0, MAX_RESULTS_PER_SOURCE);
+const freelancerKeywords = [
+"arabic",
+"translator",
+"translation",
+"freelance writer",
+"content writer",
+"copywriter",
+"editor",
+"proofreader",
+"legal",
+"paralegal",
+"contract"
+];
+const [hn, remotive, jobicy] = await Promise.all([
+collectFreshDemandFromHackerNews(
+DEMAND_TRANSLATION_WRITING_LEGAL_QUERIES,
+"Demand Translation Writing Legal"
+),
+collectFreshDemandFromRemotive(freelancerKeywords, "Demand Translation Writing Legal"),
+collectFreshDemandFromJobicy(freelancerKeywords, "Demand Translation Writing Legal")
+]);
+return [...hn, ...remotive, ...jobicy].slice(0, MAX_RESULTS_PER_SOURCE);
 }
 
 async function collectBlueskySubjectAndFreelanceLeads(
-  role: SaasRole,
-  sourceName: string
+role: SaasRole,
+sourceName: string
 ): Promise<SearchResult[]> {
-  const queriesByRole: Record<SaasRole, string[]> = {
-    teacher: [
-      "quran tutor",
-      "tajweed tutor",
-      "arabic tutor",
-      "urdu tutor",
-      "french tutor",
-      "english tutor",
-      "math tutor",
-      "physics tutor",
-      "chemistry tutor",
-      "biology tutor",
-      "history tutor",
-      "psychology tutor",
-      "private tutor",
-      "kids tutor",
-      "painting instructor",
-      "esl tutor",
-      "ielts tutor",
-      "reading tutor",
-      "phonics teacher",
-      "science tutor",
-      "exam prep tutor",
-      "music teacher",
-      "art teacher"
-    ],
-    freelancer: [
-      "freelance writer",
-      "content writer",
-      "copywriter",
-      "ghostwriter",
-      "freelance editor",
-      "proofreader",
-      "translator",
-      "wordpress developer",
-      "web designer",
-      "graphic designer",
-      "illustrator",
-      "virtual assistant"
-    ],
-    coach: [
-      "career coach",
-      "business coach",
-      "life coach",
-      "executive coach",
-      "academic coach",
-      "writing coach",
-      "wellness coach",
-      "health coach",
-      "mindset coach",
-      "interview coach",
-      "parenting coach",
-      "productivity coach"
-    ]
-  };
+const queriesByRole: Record<SaasRole, string[]> = {
+teacher: [
+"quran tutor",
+"tajweed tutor",
+"arabic tutor",
+"urdu tutor",
+"french tutor",
+"english tutor",
+"math tutor",
+"physics tutor",
+"chemistry tutor",
+"biology tutor",
+"history tutor",
+"psychology tutor",
+"private tutor",
+"kids tutor",
+"painting instructor",
+"esl tutor",
+"ielts tutor",
+"reading tutor",
+"phonics teacher",
+"science tutor",
+"exam prep tutor",
+"music teacher",
+"art teacher"
+],
+freelancer: [
+"freelance writer",
+"content writer",
+"copywriter",
+"ghostwriter",
+"freelance editor",
+"proofreader",
+"translator",
+"wordpress developer",
+"web designer",
+"graphic designer",
+"illustrator",
+"virtual assistant"
+],
+coach: [
+"career coach",
+"business coach",
+"life coach",
+"executive coach",
+"academic coach",
+"writing coach",
+"wellness coach",
+"health coach",
+"mindset coach",
+"interview coach",
+"parenting coach",
+"productivity coach"
+]
+};
 
-  const seen = new Set<string>();
-  const rawCandidates: SearchResult[] = [];
+const seen = new Set<string>();
+const rawCandidates: SearchResult[] = [];
 
-  const batches = await Promise.all(
-    (queriesByRole[role] || []).map(async q => {
-      try {
-        const data = await fetchJson(
-          `https://public.api.bsky.app/xrpc/app.bsky.actor.searchActors?q=${encodeURIComponent(q)}&limit=50`
-        );
-        const actors = Array.isArray(data?.actors) ? data.actors : [];
-        return actors as Array<Record<string, unknown>>;
-      } catch (error) {
-        console.error(`[${sourceName}] Bluesky query failed:`, q, error);
-        return [];
-      }
-    })
-  );
+const batches = await Promise.all(
+(queriesByRole[role] || []).map(async q => {
+try {
+const data = await fetchJson(
+https://public.api.bsky.app/xrpc/app.bsky.actor.searchActors?q=${encodeURIComponent(q)}&limit=50
+);
+const actors = Array.isArray(data?.actors) ? data.actors : [];
+return actors as Array<Record<string, unknown>>;
+} catch (error) {
+console.error([${sourceName}] Bluesky query failed:, q, error);
+return [];
+}
+})
+);
 
-  for (const actor of batches.flat()) {
-    const displayName = clean(actor?.displayName || actor?.handle || "");
-    const bio = clean(actor?.description || "");
-    if (!bio || !isRealPersonName(displayName)) continue;
-    if (isCourseBookOrArticleSpam(bio)) continue;
-    if (isAcademyOrOrganization(displayName, bio, "")) continue;
+for (const actor of batches.flat()) {
+const displayName = clean(actor?.displayName || actor?.handle || "");
+const bio = clean(actor?.description || "");
+if (!bio || !isRealPersonName(displayName)) continue;
+if (isCourseBookOrArticleSpam(bio)) continue;
+if (isAcademyOrOrganization(displayName, bio, "")) continue;
 
-    const extracted = extractDirectContactFromBio(bio);
-    if (!extracted.email && !extracted.contactUrl) continue;
+const extracted = extractDirectContactFromBio(bio);  
+if (!extracted.email && !extracted.contactUrl) continue;  
 
-    const key = (extracted.email || extracted.contactUrl).toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
+const key = (extracted.email || extracted.contactUrl).toLowerCase();  
+if (seen.has(key)) continue;  
+seen.add(key);  
 
-    rawCandidates.push({
-      title: `${displayName} — ${bio.slice(0, 80)}`,
-      link: extracted.contactUrl || `mailto:${extracted.email}`,
-      sourceUrl: extracted.contactUrl || `mailto:${extracted.email}`,
-      contactUrl: extracted.contactUrl,
-      email: extracted.email,
-      author: displayName,
-      country: getCountry(bio) || "Remote / Global",
-      description: bio,
-      snippet: bio,
-      source: sourceName,
-      sourceType: "social-profile",
-      saasRole: role
-    });
-  }
+rawCandidates.push({  
+  title: `${displayName} — ${bio.slice(0, 80)}`,  
+  link: extracted.contactUrl || `mailto:${extracted.email}`,  
+  sourceUrl: extracted.contactUrl || `mailto:${extracted.email}`,  
+  contactUrl: extracted.contactUrl,  
+  email: extracted.email,  
+  author: displayName,  
+  country: getCountry(bio) || "Remote / Global",  
+  description: bio,  
+  snippet: bio,  
+  source: sourceName,  
+  sourceType: "social-profile",  
+  saasRole: role  
+});
 
-  const verified: SearchResult[] = [];
-  const checkCap = role === "coach" ? 6 : 8;
-  const toCheck = rawCandidates.slice(0, checkCap);
+}
 
-  await Promise.all(
-    toCheck.map(async item => {
-      if (item.email && !item.contactUrl) {
-        verified.push(item);
-        return;
-      }
-      const ok = await isUrlReachableAndActive(item.contactUrl || item.link);
-      if (ok) {
-        verified.push(item);
-      }
-    })
-  );
+const verified: SearchResult[] = [];
+const checkCap = role === "coach" ? 6 : 8;
+const toCheck = rawCandidates.slice(0, checkCap);
 
-  return verified;
+await Promise.all(
+toCheck.map(async item => {
+if (item.email && !item.contactUrl) {
+verified.push(item);
+return;
+}
+const ok = await isUrlReachableAndActive(item.contactUrl || item.link);
+if (ok) {
+verified.push(item);
+}
+})
+);
+
+return verified;
 }
 
 async function collectSaaSByRole(
-  role: SaasRole,
-  sourceName: string
+role: SaasRole,
+sourceName: string
 ): Promise<SearchResult[]> {
-  const rows = await collectBlueskySubjectAndFreelanceLeads(role, sourceName);
-  const merged = new Map<string, SearchResult>();
+const rows = await collectBlueskySubjectAndFreelanceLeads(role, sourceName);
+const merged = new Map<string, SearchResult>();
 
-  for (const row of rows) {
-    const key = clean(row.email || row.contactUrl || row.link || "").toLowerCase();
-    if (key && !merged.has(key)) {
-      merged.set(key, row);
-    }
-  }
+for (const row of rows) {
+const key = clean(row.email || row.contactUrl || row.link || "").toLowerCase();
+if (key && !merged.has(key)) {
+merged.set(key, row);
+}
+}
 
-  return Array.from(merged.values()).slice(0, MAX_RESULTS_PER_SOURCE);
+return Array.from(merged.values()).slice(0, MAX_RESULTS_PER_SOURCE);
 }
 
 async function collectBingSaaSTeachers(): Promise<SearchResult[]> {
-  return collectSaaSByRole("teacher", "SaaS Teachers");
+return collectSaaSByRole("teacher", "SaaS Teachers");
 }
 
 async function collectBingSaaSFreelancers(): Promise<SearchResult[]> {
-  return collectSaaSByRole("freelancer", "SaaS Freelancers");
+return collectSaaSByRole("freelancer", "SaaS Freelancers");
 }
 
 async function collectBingSaaSCoaches(): Promise<SearchResult[]> {
-  return collectSaaSByRole("coach", "SaaS Coaches");
-    }
+return collectSaaSByRole("coach", "SaaS Coaches");
+           }
 async function collectAllSources(): Promise<{
   results: SearchResult[];
   errors: Array<{ source: string; error: string }>;
@@ -1188,27 +1197,8 @@ async function insertProcessedLead(
   const directContact = lead.contact_email || lead.contact_url || lead.source_url;
   const authorName = clean(lead.raw_data?.author || "");
 
-  let payload: Record<string, string> = {};
-
-  if (lead.lead_type === "Demand") {
-    payload = {
-      type: "Demand",
-      source: lead.source,
-      client_name: authorName,
-      contact_name: authorName,
-      skill_needed: lead.skill_needed,
-      category: lead.skill_needed,
-      title: lead.title,
-      description: lead.description,
-      country: lead.country,
-      budget: lead.budget_range || lead.salary_range,
-      contact_email: lead.contact_email,
-      content_email: lead.contact_email,
-      contact_url: lead.contact_url || lead.source_url,
-      source_url: lead.source_url || lead.contact_url
-    };
-  } else if (lead.lead_type === "SaaS") {
-    payload = {
+  if (lead.lead_type === "SaaS") {
+    const saasPayload: Record<string, string> = {
       name: authorName || lead.title,
       platform: lead.source,
       niche: lead.skill_needed,
@@ -1220,8 +1210,18 @@ async function insertProcessedLead(
       source_url: lead.source_url || lead.contact_url,
       status: lead.status || "new"
     };
-  } else {
-    payload = {
+
+    const { error } = await supabase.from(table).insert(saasPayload);
+    if (!error) return { inserted: true, duplicate: false };
+    const msg = String(error.message || "").toLowerCase();
+    if (msg.includes("duplicate") || msg.includes("unique")) {
+      return { inserted: false, duplicate: true };
+    }
+    return { inserted: false, duplicate: false, error: error.message };
+  }
+
+  if (lead.lead_type === "Supply") {
+    const supplyPayload: Record<string, string> = {
       name: authorName || lead.title,
       company_name: authorName || lead.title,
       job_title: lead.title,
@@ -1239,95 +1239,148 @@ async function insertProcessedLead(
       source: lead.source,
       contact_name: authorName
     };
+
+    const { error } = await supabase.from(table).insert(supplyPayload);
+    if (!error) return { inserted: true, duplicate: false };
+    const msg = String(error.message || "").toLowerCase();
+    if (msg.includes("duplicate") || msg.includes("unique")) {
+      return { inserted: false, duplicate: true };
+    }
+    return { inserted: false, duplicate: false, error: error.message };
   }
 
-  const { error } = await supabase.from(table).insert(payload);
+  const existing = await supabase
+    .from("demand_leads")
+    .select("id")
+    .eq("title", lead.title)
+    .limit(1);
 
-  if (!error) {
-    return { inserted: true, duplicate: false };
-  }
-
-  const msg = String(error.message || "").toLowerCase();
-  if (msg.includes("duplicate") || msg.includes("unique")) {
+  if (existing.data && existing.data.length > 0) {
     return { inserted: false, duplicate: true };
   }
 
-  console.error(`[Insert Error - ${table}]`, error.message);
-  return { inserted: false, duplicate: false, error: error.message };
+  const demandPayload: Record<string, string> = {
+    type: "demand",
+    source: lead.source,
+    client_name: authorName || "Individual Client",
+    contact_name: authorName || "Individual Client",
+    skill_needed: lead.skill_needed,
+    category: lead.skill_needed,
+    title: lead.title,
+    description: lead.description,
+    country: lead.country,
+    budget: lead.budget_range || lead.salary_range || "",
+    contact_email: lead.contact_email || "",
+    contact_url: lead.contact_url || lead.source_url,
+    source_url: lead.source_url || lead.contact_url,
+    status: "active"
+  };
+
+  const firstTry = await supabase.from("demand_leads").insert(demandPayload);
+  if (!firstTry.error) {
+    return { inserted: true, duplicate: false };
   }
+
+  const fallbackPayload: Record<string, string> = {
+    type: "Demand",
+    source: lead.source,
+    client_name: authorName || "Individual Client",
+    skill_needed: lead.skill_needed,
+    category: lead.skill_needed,
+    title: lead.title,
+    description: lead.description,
+    country: lead.country,
+    contact_email: lead.contact_email || "",
+    contact_url: lead.contact_url || lead.source_url,
+    source_url: lead.source_url || lead.contact_url
+  };
+
+  const secondTry = await supabase.from("demand_leads").insert(fallbackPayload);
+  if (!secondTry.error) {
+    return { inserted: true, duplicate: false };
+  }
+
+  console.error("[Insert Error - demand_leads]", firstTry.error.message, "|", secondTry.error.message);
+  return {
+    inserted: false,
+    duplicate: false,
+    error: `${firstTry.error.message} | ${secondTry.error.message}`
+  };
+}
 export default async function handler(
-  req: VercelRequest,
-  res: VercelResponse
+req: VercelRequest,
+res: VercelResponse
 ) {
-  res.setHeader("Content-Type", "application/json; charset=utf-8");
+res.setHeader("Content-Type", "application/json; charset=utf-8");
 
-  if (req.method !== "POST" && req.method !== "GET") {
-    return res.status(405).json({
-      success: false,
-      message: "Method not allowed. Use POST."
-    });
-  }
+if (req.method !== "POST" && req.method !== "GET") {
+return res.status(405).json({
+success: false,
+message: "Method not allowed. Use POST."
+});
+}
 
-  try {
-    const supabase = getSupabaseClient();
-    const { results, errors } = await collectAllSources();
-    const processed = processCollectedResults(results);
+try {
+const supabase = getSupabaseClient();
+const { results, errors } = await collectAllSources();
+const processed = processCollectedResults(results);
 
-    let insertedCount = 0;
-    let duplicateCount = 0;
-    let insertErrorCount = 0;
-    const sampleInsertErrors: string[] = [];
+let insertedCount = 0;  
+let duplicateCount = 0;  
+let insertErrorCount = 0;  
+const sampleInsertErrors: string[] = [];  
 
-    const insertedByType = {
-      Demand: 0,
-      Supply: 0,
-      SaaS: 0
-    };
+const insertedByType = {  
+  Demand: 0,  
+  Supply: 0,  
+  SaaS: 0  
+};  
 
-    for (const lead of processed) {
-      const outcome = await insertProcessedLead(supabase, lead);
-      if (outcome.inserted) {
-        insertedCount++;
-        insertedByType[lead.lead_type]++;
-      } else if (outcome.duplicate) {
-        duplicateCount++;
-      } else {
-        insertErrorCount++;
-        if (
-          outcome.error &&
-          sampleInsertErrors.length < 3 &&
-          !sampleInsertErrors.includes(outcome.error)
-        ) {
-          sampleInsertErrors.push(`${lead.lead_type}: ${outcome.error}`);
-        }
-      }
+for (const lead of processed) {  
+  const outcome = await insertProcessedLead(supabase, lead);  
+  if (outcome.inserted) {  
+    insertedCount++;  
+    insertedByType[lead.lead_type]++;  
+  } else if (outcome.duplicate) {  
+    duplicateCount++;  
+  } else {  
+    insertErrorCount++;  
+    if (  
+      outcome.error &&  
+      sampleInsertErrors.length < 3 &&  
+      !sampleInsertErrors.includes(outcome.error)  
+    ) {  
+      sampleInsertErrors.push(`${lead.lead_type}: ${outcome.error}`);  
+    }  
+  }  
+}  
+
+return res.status(200).json({  
+  success: true,  
+  added: insertedCount,  
+  demand: insertedByType.Demand,  
+  supply: insertedByType.Supply,  
+  saas: insertedByType.SaaS,  
+  stats: {  
+    found: results.length,  
+    accepted: processed.length,  
+    inserted: insertedCount,  
+    duplicates: duplicateCount,  
+    insertErrors: insertErrorCount,  
+    insertedByType  
+  },  
+  sampleInsertErrors,  
+  sourceErrors: errors  
+});
+
+} catch (error: unknown) {
+const message =
+error && typeof error === "object" && "message" in error
+? String((error as { message?: string }).message || "Lead collector failed.")
+: "Lead collector failed.";
+return res.status(500).json({
+success: false,
+message
+});
+}
     }
-
-    return res.status(200).json({
-      success: true,
-      added: insertedCount,
-      demand: insertedByType.Demand,
-      supply: insertedByType.Supply,
-      saas: insertedByType.SaaS,
-      stats: {
-        found: results.length,
-        accepted: processed.length,
-        inserted: insertedCount,
-        duplicates: duplicateCount,
-        insertErrors: insertErrorCount,
-        insertedByType
-      },
-      sampleInsertErrors,
-      sourceErrors: errors
-    });
-  } catch (error: unknown) {
-    const message =
-      error && typeof error === "object" && "message" in error
-        ? String((error as { message?: string }).message || "Lead collector failed.")
-        : "Lead collector failed.";
-    return res.status(500).json({
-      success: false,
-      message
-    });
-  }
-      }
