@@ -281,7 +281,7 @@ function isAcademyOrAgencyOrCompanyDemand(
     " we are hiring "
   ];
   return blockedOrgTerms.some(term => combined.includes(term));
-      }
+  }
 async function fetchText(url: string): Promise<string> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -466,7 +466,7 @@ function detectSkillNeeded(text: string, role?: SaasRole): string {
   }
 
   return "Freelancing & Business";
-}
+  }
 function stripTrailingPunctuation(token: string): string {
   let out = token.trim();
   const endChars = [".", ",", ";", "!", "?", ")", "]", "}", ">", '"', "'"];
@@ -1025,7 +1025,7 @@ async function collectBingSaaSFreelancers(): Promise<SearchResult[]> {
 
 async function collectBingSaaSCoaches(): Promise<SearchResult[]> {
   return collectSaaSByRole("coach", "SaaS Coaches");
-                                             }
+}
 async function collectAllSources(): Promise<{
   results: SearchResult[];
   errors: Array<{ source: string; error: string }>;
@@ -1276,7 +1276,7 @@ async function insertProcessedLead(
     duplicate: false,
     error: `${firstTry.error.message} | ${secondTry.error.message}`
   };
-     }
+}
 export default async function handler(
   req: VercelRequest,
   res: VercelResponse
@@ -1352,4 +1352,4 @@ export default async function handler(
       message
     });
   }
-                }
+    }
