@@ -43,41 +43,40 @@ interface ProcessedLead {
 const REQUEST_TIMEOUT_MS = 9000;
 const MAX_RESULTS_PER_SOURCE = 25;
 const MAX_INSERT_PER_RUN = 120;
-const MAX_DEMAND_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const MAX_DEMAND_AGE_MS = 14 * 24 * 60 * 60 * 1000;
 
 const USER_AGENT =
   "Mozilla/5.0 (compatible; OpportunityHubBot/1.0; +https://opportunity-hub-umber.vercel.app)";
 
 const DEMAND_TEACHER_QUERIES = [
+  "looking for tutor",
   "looking for quran tutor",
   "need quran teacher",
-  "looking for tajweed teacher",
   "looking for arabic tutor",
   "need arabic teacher",
   "looking for math tutor",
   "looking for english tutor",
-  "need online tutor"
+  "need a tutor"
 ];
 
 const DEMAND_COACH_QUERIES = [
   "looking for career coach",
-  "need business coach",
+  "need a coach",
+  "looking for business coach",
   "looking for life coach",
-  "need executive coach",
+  "looking for executive coach",
   "looking for interview coach"
 ];
 
 const DEMAND_TRANSLATION_WRITING_LEGAL_QUERIES = [
-  "looking for arabic translator",
+  "looking for translator",
   "need arabic translation",
-  "need english to arabic translator",
   "looking for freelance writer",
-  "need content writer",
-  "need copywriter",
-  "looking for editor",
-  "need legal translation",
+  "need a freelance writer",
+  "need a copywriter",
+  "looking for an editor",
   "need contract review",
-  "looking for legal writer"
+  "looking for legal help"
 ];
 function getSupabaseClient() {
   const supabaseUrl =
@@ -201,6 +200,10 @@ function isParkedOrJunkUrl(url: string): boolean {
   const lower = clean(url).toLowerCase();
   if (!lower) return true;
 
+  if (lower.includes("bsky.app/profile/") && !lower.includes("/post/")) {
+    return true;
+  }
+
   const blockedHosts = [
     "godaddy.com",
     "sedo.com",
@@ -216,9 +219,7 @@ function isParkedOrJunkUrl(url: string): boolean {
     "127.0.0.1",
     "bit.ly",
     "tinyurl.com",
-    "t.co",
-    "bsky.app/profile/",
-    "news.ycombinator.com/item"
+    "t.co"
   ];
 
   return blockedHosts.some(host => lower.includes(host));
@@ -281,7 +282,7 @@ function isAcademyOrAgencyOrCompanyDemand(
     " we are hiring "
   ];
   return blockedOrgTerms.some(term => combined.includes(term));
-  }
+}
 async function fetchText(url: string): Promise<string> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -306,7 +307,10 @@ async function fetchText(url: string): Promise<string> {
   }
 }
 
-async function fetchJson(url: string): Promise<Record<string, unknown>> {
+async function fetchJson(
+  url: string,
+  extraHeaders?: Record<string, string>
+): Promise<Record<string, unknown>> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
@@ -315,7 +319,8 @@ async function fetchJson(url: string): Promise<Record<string, unknown>> {
       method: "GET",
       headers: {
         "User-Agent": USER_AGENT,
-        Accept: "application/json"
+        Accept: "application/json",
+        ...(extraHeaders || {})
       },
       signal: controller.signal
     });
@@ -466,7 +471,7 @@ function detectSkillNeeded(text: string, role?: SaasRole): string {
   }
 
   return "Freelancing & Business";
-  }
+}
 function stripTrailingPunctuation(token: string): string {
   let out = token.trim();
   const endChars = [".", ",", ";", "!", "?", ")", "]", "}", ">", '"', "'"];
@@ -634,35 +639,52 @@ function isBookCourseOrProductPage(text: string, url: string): boolean {
     " checkout ",
     " refund ",
     " your-email@example.com ",
-    " learning to play vim ",
-    " mouseless dev ",
     " operations manual ",
-    " manual ",
     " documentation ",
     " sdk ",
-    " reference ",
     " bashbots ",
     " combat programming game ",
-    " drivers ",
-    " kernel ",
-    " deployables ",
-    " openskill ",
     " neui ",
     " swiphtnum ",
-    " aisma ",
-    " c++26 ",
-    " mailchimp ",
-    " intuit ",
-    " nvidia "
+    " aisma "
   ];
 
   return productDocAndBookTerms.some(term => combined.includes(term));
+}
+
+function isSelfPromoProviderPost(text: string): boolean {
+  const t = ` ${stripAllTags(text).toLowerCase()} `;
+  const selfPromoTerms = [
+    " i am a tutor ",
+    " i'm a tutor ",
+    " i am a teacher ",
+    " i'm a teacher ",
+    " i am a coach ",
+    " i'm a coach ",
+    " i am a translator ",
+    " i'm a translator ",
+    " i am a freelance ",
+    " i'm a freelance ",
+    " offering tutoring ",
+    " offering coaching ",
+    " my tutoring ",
+    " my coaching ",
+    " book a session ",
+    " dm me for lessons ",
+    " available for hire ",
+    " open for commissions "
+  ];
+  return selfPromoTerms.some(term => t.includes(term));
 }
 
 function isArticleOrSupplyJobText(text: string, url: string): boolean {
   const combined = ` ${stripAllTags(`${text} ${url}`).toLowerCase()} `;
 
   if (isBookCourseOrProductPage(text, url)) {
+    return true;
+  }
+
+  if (isSelfPromoProviderPost(text)) {
     return true;
   }
 
@@ -697,7 +719,6 @@ function isArticleOrSupplyJobText(text: string, url: string): boolean {
     " case study ",
     " how we built ",
     " why i left ",
-    " how to ",
     " job description ",
     " job posting ",
     " about the role ",
@@ -721,9 +742,11 @@ function isArticleOrSupplyJobText(text: string, url: string): boolean {
     " looking for ",
     " need a ",
     " need an ",
+    " need someone ",
     " seeking a ",
     " seeking an ",
     " anyone know ",
+    " any recommendations ",
     " recommendation for ",
     " recommendations for ",
     " hire a ",
@@ -738,6 +761,14 @@ function isArticleOrSupplyJobText(text: string, url: string): boolean {
 async function isUrlReachableAndActive(url: string): Promise<boolean> {
   const cleaned = cleanUrl(url);
   if (!cleaned || !isDirectContactUrl(cleaned)) return false;
+
+  const lower = cleaned.toLowerCase();
+  if (
+    lower.includes("news.ycombinator.com/item?id=") ||
+    (lower.includes("bsky.app/profile/") && lower.includes("/post/"))
+  ) {
+    return true;
+  }
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 1400);
@@ -770,6 +801,80 @@ async function isUrlReachableAndActive(url: string): Promise<boolean> {
   }
 }
 
+async function collectFreshDemandFromBlueskyPosts(
+  queries: string[],
+  sourceName: string
+): Promise<SearchResult[]> {
+  const token = clean(process.env.BLUESKY_ACCESS_TOKEN || "");
+  if (!token) {
+    return [];
+  }
+
+  const collected: SearchResult[] = [];
+  const seen = new Set<string>();
+
+  const batches = await Promise.all(
+    queries.map(async q => {
+      try {
+        const url =
+          "https://bsky.social/xrpc/app.bsky.feed.searchPosts?q=" +
+          encodeURIComponent(q) +
+          "&sort=latest&limit=25";
+        const data = await fetchJson(url, {
+          Authorization: `Bearer ${token}`
+        });
+        return Array.isArray(data?.posts) ? data.posts : [];
+      } catch (error) {
+        console.error(`[${sourceName}] Bluesky post query failed:`, q, error);
+        return [];
+      }
+    })
+  );
+
+  for (const post of batches.flat() as Array<Record<string, unknown>>) {
+    const record = (post?.record as Record<string, unknown>) || {};
+    const author = (post?.author as Record<string, unknown>) || {};
+    const bodyText = stripAllTags(record?.text || "");
+    const createdAt = clean(record?.createdAt || post?.indexedAt || "");
+    const handle = clean(author?.handle || "");
+    const displayName = clean(author?.displayName || handle || "");
+    const uri = clean(post?.uri || "");
+    const rkey = uri.split("/").pop() || "";
+
+    if (!bodyText || !handle || !rkey) continue;
+    if (!isFreshWithin72Hours(createdAt)) continue;
+    if (isAcademyOrAgencyOrCompanyDemand(displayName, bodyText, "")) continue;
+    if (isCourseBookOrArticleSpam(bodyText)) continue;
+    if (isArticleOrSupplyJobText(bodyText, "")) continue;
+
+    const postUrl = `https://bsky.app/profile/${handle}/post/${rkey}`;
+    const extracted = extractDirectContactFromBio(bodyText);
+    const contactUrl = extracted.contactUrl || postUrl;
+    const email = extracted.email;
+
+    const dedupeKey = `${postUrl.toLowerCase()}|${bodyText.slice(0, 50).toLowerCase()}`;
+    if (seen.has(dedupeKey)) continue;
+    seen.add(dedupeKey);
+
+    collected.push({
+      title: bodyText.slice(0, 110),
+      link: contactUrl,
+      sourceUrl: postUrl,
+      contactUrl,
+      email,
+      author: displayName || handle,
+      country: getCountry(bodyText) || "Remote / Global",
+      description: bodyText,
+      snippet: bodyText,
+      publishedAt: createdAt,
+      source: sourceName,
+      sourceType: "bsky-demand-post"
+    });
+  }
+
+  return collected.slice(0, MAX_RESULTS_PER_SOURCE);
+}
+
 async function collectFreshDemandFromHackerNews(
   queries: string[],
   sourceName: string
@@ -796,8 +901,6 @@ async function collectFreshDemandFromHackerNews(
     })
   );
 
-  const candidates: SearchResult[] = [];
-
   for (const hit of batches.flat() as Array<Record<string, unknown>>) {
     const title = stripAllTags(hit?.title || "");
     const storyTitle = stripAllTags(hit?.story_title || "");
@@ -805,6 +908,8 @@ async function collectFreshDemandFromHackerNews(
     const createdAt = clean(hit?.created_at || "");
     const authorName = clean(hit?.author || "");
     const rawHitUrl = cleanUrl(String(hit?.url || ""));
+    const objectId = clean(hit?.objectID || "");
+    const hnItemUrl = objectId ? `https://news.ycombinator.com/item?id=${objectId}` : "";
     const combinedText = `${title || storyTitle} ${bodyText}`;
 
     if (!combinedText || !isFreshWithin72Hours(createdAt)) continue;
@@ -814,7 +919,9 @@ async function collectFreshDemandFromHackerNews(
 
     const extracted = extractDirectContactFromBio(combinedText);
     const directUrl =
-      extracted.contactUrl || (rawHitUrl && isDirectContactUrl(rawHitUrl) ? rawHitUrl : "");
+      extracted.contactUrl ||
+      (rawHitUrl && isDirectContactUrl(rawHitUrl) ? rawHitUrl : "") ||
+      hnItemUrl;
     const directEmail = extracted.email;
 
     if (!directEmail && !directUrl) continue;
@@ -823,10 +930,10 @@ async function collectFreshDemandFromHackerNews(
     if (seen.has(dedupeKey)) continue;
     seen.add(dedupeKey);
 
-    candidates.push({
+    collected.push({
       title: (title || storyTitle || bodyText).slice(0, 110),
       link: directUrl || `mailto:${directEmail}`,
-      sourceUrl: directUrl || `mailto:${directEmail}`,
+      sourceUrl: hnItemUrl || directUrl || `mailto:${directEmail}`,
       contactUrl: directUrl,
       email: directEmail,
       author: authorName,
@@ -839,35 +946,37 @@ async function collectFreshDemandFromHackerNews(
     });
   }
 
-  await Promise.all(
-    candidates.slice(0, 20).map(async item => {
-      if (item.email && !item.contactUrl) {
-        collected.push(item);
-        return;
-      }
-      const reachable = await isUrlReachableAndActive(item.contactUrl || item.link);
-      if (reachable) {
-        collected.push(item);
-      }
-    })
-  );
-
   return collected.slice(0, MAX_RESULTS_PER_SOURCE);
 }
 
 async function collectRedditDemandTeachers(): Promise<SearchResult[]> {
-  return collectFreshDemandFromHackerNews(DEMAND_TEACHER_QUERIES, "Demand Teachers");
+  const [bsky, hn] = await Promise.all([
+    collectFreshDemandFromBlueskyPosts(DEMAND_TEACHER_QUERIES, "Demand Teachers"),
+    collectFreshDemandFromHackerNews(DEMAND_TEACHER_QUERIES, "Demand Teachers")
+  ]);
+  return [...bsky, ...hn].slice(0, MAX_RESULTS_PER_SOURCE);
 }
 
 async function collectRedditDemandCoaches(): Promise<SearchResult[]> {
-  return collectFreshDemandFromHackerNews(DEMAND_COACH_QUERIES, "Demand Coaches");
+  const [bsky, hn] = await Promise.all([
+    collectFreshDemandFromBlueskyPosts(DEMAND_COACH_QUERIES, "Demand Coaches"),
+    collectFreshDemandFromHackerNews(DEMAND_COACH_QUERIES, "Demand Coaches")
+  ]);
+  return [...bsky, ...hn].slice(0, MAX_RESULTS_PER_SOURCE);
 }
 
 async function collectRedditDemandFreelancers(): Promise<SearchResult[]> {
-  return collectFreshDemandFromHackerNews(
-    DEMAND_TRANSLATION_WRITING_LEGAL_QUERIES,
-    "Demand Translation Writing Legal"
-  );
+  const [bsky, hn] = await Promise.all([
+    collectFreshDemandFromBlueskyPosts(
+      DEMAND_TRANSLATION_WRITING_LEGAL_QUERIES,
+      "Demand Translation Writing Legal"
+    ),
+    collectFreshDemandFromHackerNews(
+      DEMAND_TRANSLATION_WRITING_LEGAL_QUERIES,
+      "Demand Translation Writing Legal"
+    )
+  ]);
+  return [...bsky, ...hn].slice(0, MAX_RESULTS_PER_SOURCE);
 }
 
 async function collectBlueskySubjectAndFreelanceLeads(
@@ -1025,7 +1134,7 @@ async function collectBingSaaSFreelancers(): Promise<SearchResult[]> {
 
 async function collectBingSaaSCoaches(): Promise<SearchResult[]> {
   return collectSaaSByRole("coach", "SaaS Coaches");
-}
+                    }
 async function collectAllSources(): Promise<{
   results: SearchResult[];
   errors: Array<{ source: string; error: string }>;
@@ -1088,9 +1197,8 @@ function isRecentDemand(rawDate?: string): boolean {
   if (!val) return true;
   const parsed = Date.parse(val);
   if (Number.isNaN(parsed)) return true;
-  const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
   const age = Date.now() - parsed;
-  return age >= -60000 && age <= sevenDaysMs;
+  return age >= -60000 && age <= MAX_DEMAND_AGE_MS;
 }
 
 function processCollectedResults(results: SearchResult[]): ProcessedLead[] {
@@ -1276,7 +1384,7 @@ async function insertProcessedLead(
     duplicate: false,
     error: `${firstTry.error.message} | ${secondTry.error.message}`
   };
-}
+  }
 export default async function handler(
   req: VercelRequest,
   res: VercelResponse
@@ -1352,4 +1460,4 @@ export default async function handler(
       message
     });
   }
-    }
+  }
