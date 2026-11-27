@@ -68,19 +68,17 @@ const DEMAND_COACH_QUERIES = [
 ];
 
 const DEMAND_TRANSLATION_WRITING_LEGAL_QUERIES = [
-  "arabic translator",
-  "arabic translation",
-  "english to arabic translation",
-  "arabic writer",
+  "looking for arabic translator",
+  "need arabic translation",
+  "need english to arabic translator",
   "looking for freelance writer",
   "need content writer",
   "need copywriter",
-  "need editor",
-  "legal translation",
-  "arabic legal translator",
-  "contract review",
-  "legal writer"
-];
+  "looking for editor",
+  "need legal translation",
+  "need contract review",
+  "looking for legal writer"
+]
 function getSupabaseClient() {
   const supabaseUrl =
     process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
@@ -134,6 +132,8 @@ function decodeEntities(text: string): string {
     .replaceAll("&gt;", ">")
     .replaceAll("&quot;", '"')
     .replaceAll("&#39;", "'")
+    .replaceAll("&#x27;", "'")
+    .replaceAll("&#x2F;", "/")
     .replaceAll("&nbsp;", " ");
 }
 
@@ -248,7 +248,7 @@ function isAcademyOrAgencyOrCompanyDemand(
   text: string,
   url: string
 ): boolean {
-  const combined = ` ${clean(`${author} ${text} ${url}`).toLowerCase()} `;
+  const combined = ` ${stripAllTags(`${author} ${text} ${url}`).toLowerCase()} `;
   const blockedOrgTerms = [
     " academy ",
     " institute ",
@@ -281,7 +281,7 @@ function isAcademyOrAgencyOrCompanyDemand(
     " we are hiring "
   ];
   return blockedOrgTerms.some(term => combined.includes(term));
-}
+                }
 async function fetchText(url: string): Promise<string> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -385,7 +385,7 @@ function isAcademyOrOrganization(
 }
 
 function isCourseBookOrArticleSpam(text: string): boolean {
-  const t = ` ${clean(text).toLowerCase()} `;
+  const t = ` ${stripAllTags(text).toLowerCase()} `;
   const spamTerms = [
     " buy my course ",
     " enroll now ",
@@ -466,7 +466,7 @@ function detectSkillNeeded(text: string, role?: SaasRole): string {
   }
 
   return "Freelancing & Business";
-    }
+            }
 function stripTrailingPunctuation(token: string): string {
   let out = token.trim();
   const endChars = [".", ",", ";", "!", "?", ")", "]", "}", ">", '"', "'"];
@@ -606,8 +606,65 @@ function isRealPersonName(name: string): boolean {
   return hasTwoPlusLetters(n);
 }
 
+function isBookCourseOrProductPage(text: string, url: string): boolean {
+  const combined = ` ${stripAllTags(`${text} ${url}`).toLowerCase()} `;
+
+  const productDocAndBookTerms = [
+    " show hn",
+    " launch hn",
+    " ebook ",
+    " e-book ",
+    " print version ",
+    " cover of the book ",
+    " show me a sample ",
+    " i want the ebook ",
+    " subscribe to the newsletter ",
+    " about the author ",
+    " paperback ",
+    " hardcover ",
+    " kindle ",
+    " audible ",
+    " isbn ",
+    " chapters ",
+    " table of contents ",
+    " buy the book ",
+    " buy now ",
+    " order now ",
+    " add to cart ",
+    " checkout ",
+    " refund ",
+    " your-email@example.com ",
+    " learning to play vim ",
+    " mouseless dev ",
+    " operations manual ",
+    " manual ",
+    " documentation ",
+    " sdk ",
+    " reference ",
+    " bashbots ",
+    " combat programming game ",
+    " drivers ",
+    " kernel ",
+    " deployables ",
+    " openskill ",
+    " neui ",
+    " swiphtnum ",
+    " aisma ",
+    " c++26 ",
+    " mailchimp ",
+    " intuit ",
+    " nvidia "
+  ];
+
+  return productDocAndBookTerms.some(term => combined.includes(term));
+}
+
 function isArticleOrSupplyJobText(text: string, url: string): boolean {
-  const combined = ` ${clean(`${text} ${url}`).toLowerCase()} `;
+  const combined = ` ${stripAllTags(`${text} ${url}`).toLowerCase()} `;
+
+  if (isBookCourseOrProductPage(text, url)) {
+    return true;
+  }
 
   const blockedUrlOrTextPatterns = [
     " medium.com ",
@@ -640,11 +697,17 @@ function isArticleOrSupplyJobText(text: string, url: string): boolean {
     " case study ",
     " how we built ",
     " why i left ",
+    " how to ",
     " job description ",
     " job posting ",
+    " about the role ",
+    " we're seeking ",
+    " we are seeking ",
+    " business developer ",
     " full-time ",
     " part-time ",
     " base salary ",
+    " salary ",
     " equity ",
     " benefits package ",
     " equal opportunity employer "
@@ -666,8 +729,7 @@ function isArticleOrSupplyJobText(text: string, url: string): boolean {
     " hire a ",
     " hire an ",
     " looking to hire ",
-    " want to hire ",
-    " need help with "
+    " want to hire "
   ];
 
   return !individualRequestSignals.some(sig => combined.includes(sig));
@@ -963,7 +1025,7 @@ async function collectBingSaaSFreelancers(): Promise<SearchResult[]> {
 
 async function collectBingSaaSCoaches(): Promise<SearchResult[]> {
   return collectSaaSByRole("coach", "SaaS Coaches");
-    }
+          }
 async function collectAllSources(): Promise<{
   results: SearchResult[];
   errors: Array<{ source: string; error: string }>;
@@ -1214,8 +1276,7 @@ async function insertProcessedLead(
     duplicate: false,
     error: `${firstTry.error.message} | ${secondTry.error.message}`
   };
-  }
-export default async function handler(
+     }export default async function handler(
   req: VercelRequest,
   res: VercelResponse
 ) {
@@ -1290,4 +1351,4 @@ export default async function handler(
       message
     });
   }
-      }
+}
