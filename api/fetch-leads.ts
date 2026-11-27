@@ -49,29 +49,29 @@ const USER_AGENT =
   "Mozilla/5.0 (compatible; OpportunityHubBot/1.0; +https://opportunity-hub-umber.vercel.app)";
 
 const DEMAND_TEACHER_QUERIES = [
-  "looking for tutor",
-  "looking for quran tutor",
-  "need quran teacher",
-  "looking for arabic tutor",
-  "need arabic teacher",
-  "looking for math tutor",
-  "looking for english tutor",
-  "need a tutor"
+  "looking for a quran tutor",
+  "need a quran teacher",
+  "looking for a tajweed teacher",
+  "looking for an arabic tutor",
+  "need an arabic teacher",
+  "looking for a math tutor",
+  "looking for an english tutor",
+  "looking for a tutor"
 ];
 
 const DEMAND_COACH_QUERIES = [
-  "looking for career coach",
-  "need a coach",
-  "looking for business coach",
-  "looking for life coach",
-  "looking for executive coach",
-  "looking for interview coach"
+  "looking for a career coach",
+  "looking for a business coach",
+  "looking for a life coach",
+  "looking for an executive coach",
+  "looking for an interview coach",
+  "looking for a coach"
 ];
 
 const DEMAND_TRANSLATION_WRITING_LEGAL_QUERIES = [
-  "looking for translator",
+  "looking for a translator",
   "need arabic translation",
-  "looking for freelance writer",
+  "looking for a freelance writer",
   "need a freelance writer",
   "need a copywriter",
   "looking for an editor",
@@ -282,7 +282,7 @@ function isAcademyOrAgencyOrCompanyDemand(
     " we are hiring "
   ];
   return blockedOrgTerms.some(term => combined.includes(term));
-}
+  }
 async function fetchText(url: string): Promise<string> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -646,7 +646,21 @@ function isBookCourseOrProductPage(text: string, url: string): boolean {
     " combat programming game ",
     " neui ",
     " swiphtnum ",
-    " aisma "
+    " aisma ",
+    " twinkle, twinkle ",
+    " little star ",
+    " stanza ",
+    " lyrics ",
+    " n-gram ",
+    " copyright filter ",
+    " recitation detector ",
+    " sql ",
+    " self-joins ",
+    " anti-join ",
+    " self-anti-join ",
+    " llm-generated ",
+    " procedural language ",
+    " syntax reference "
   ];
 
   return productDocAndBookTerms.some(term => combined.includes(term));
@@ -675,6 +689,54 @@ function isSelfPromoProviderPost(text: string): boolean {
     " open for commissions "
   ];
   return selfPromoTerms.some(term => t.includes(term));
+}
+
+function isGenuineServiceDemand(text: string): boolean {
+  const t = ` ${stripAllTags(text).toLowerCase()} `;
+
+  const buyerRequestSignals = [
+    " looking for a ",
+    " looking for an ",
+    " looking for someone ",
+    " need a ",
+    " need an ",
+    " need someone ",
+    " seeking a ",
+    " seeking an ",
+    " anyone know a ",
+    " anyone know an ",
+    " recommendation for a ",
+    " recommendations for a ",
+    " hire a ",
+    " hire an ",
+    " looking to hire ",
+    " want to hire "
+  ];
+
+  const targetServiceRoles = [
+    " tutor ",
+    " tutors ",
+    " teacher ",
+    " teachers ",
+    " quran ",
+    " tajweed ",
+    " arabic ",
+    " coach ",
+    " coaches ",
+    " mentor ",
+    " translator ",
+    " translation ",
+    " writer ",
+    " copywriter ",
+    " editor ",
+    " legal ",
+    " contract "
+  ];
+
+  return (
+    buyerRequestSignals.some(sig => t.includes(sig)) &&
+    targetServiceRoles.some(role => t.includes(role))
+  );
 }
 
 function isArticleOrSupplyJobText(text: string, url: string): boolean {
@@ -738,24 +800,7 @@ function isArticleOrSupplyJobText(text: string, url: string): boolean {
     return true;
   }
 
-  const individualRequestSignals = [
-    " looking for ",
-    " need a ",
-    " need an ",
-    " need someone ",
-    " seeking a ",
-    " seeking an ",
-    " anyone know ",
-    " any recommendations ",
-    " recommendation for ",
-    " recommendations for ",
-    " hire a ",
-    " hire an ",
-    " looking to hire ",
-    " want to hire "
-  ];
-
-  return !individualRequestSignals.some(sig => combined.includes(sig));
+  return !isGenuineServiceDemand(text);
 }
 
 async function isUrlReachableAndActive(url: string): Promise<boolean> {
@@ -806,9 +851,10 @@ async function collectFreshDemandFromBlueskyPosts(
   sourceName: string
 ): Promise<SearchResult[]> {
   const token = clean(process.env.BLUESKY_ACCESS_TOKEN || "");
-  if (!token) {
-    return [];
-  }
+  const endpointBase = token
+    ? "https://bsky.social/xrpc/app.bsky.feed.searchPosts"
+    : "https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts";
+  const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
 
   const collected: SearchResult[] = [];
   const seen = new Set<string>();
@@ -817,12 +863,8 @@ async function collectFreshDemandFromBlueskyPosts(
     queries.map(async q => {
       try {
         const url =
-          "https://bsky.social/xrpc/app.bsky.feed.searchPosts?q=" +
-          encodeURIComponent(q) +
-          "&sort=latest&limit=25";
-        const data = await fetchJson(url, {
-          Authorization: `Bearer ${token}`
-        });
+          `${endpointBase}?q=` + encodeURIComponent(q) + "&sort=latest&limit=25";
+        const data = await fetchJson(url, headers);
         return Array.isArray(data?.posts) ? data.posts : [];
       } catch (error) {
         console.error(`[${sourceName}] Bluesky post query failed:`, q, error);
@@ -1134,7 +1176,7 @@ async function collectBingSaaSFreelancers(): Promise<SearchResult[]> {
 
 async function collectBingSaaSCoaches(): Promise<SearchResult[]> {
   return collectSaaSByRole("coach", "SaaS Coaches");
-                    }
+  }
 async function collectAllSources(): Promise<{
   results: SearchResult[];
   errors: Array<{ source: string; error: string }>;
@@ -1384,7 +1426,7 @@ async function insertProcessedLead(
     duplicate: false,
     error: `${firstTry.error.message} | ${secondTry.error.message}`
   };
-  }
+}
 export default async function handler(
   req: VercelRequest,
   res: VercelResponse
@@ -1460,4 +1502,4 @@ export default async function handler(
       message
     });
   }
-  }
+    }
