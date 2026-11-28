@@ -51,9 +51,7 @@ const USER_AGENT =
 const DEMAND_TEACHER_QUERIES = [
   "looking for a quran tutor",
   "need a quran teacher",
-  "looking for a tajweed teacher",
   "looking for an arabic tutor",
-  "need an arabic teacher",
   "looking for a math tutor",
   "looking for an english tutor",
   "looking for a tutor"
@@ -64,7 +62,6 @@ const DEMAND_COACH_QUERIES = [
   "looking for a business coach",
   "looking for a life coach",
   "looking for an executive coach",
-  "looking for an interview coach",
   "looking for a coach"
 ];
 
@@ -75,8 +72,7 @@ const DEMAND_TRANSLATION_WRITING_LEGAL_QUERIES = [
   "need a freelance writer",
   "need a copywriter",
   "looking for an editor",
-  "need contract review",
-  "looking for legal help"
+  "need contract review"
 ];
 function getSupabaseClient() {
   const supabaseUrl =
@@ -282,195 +278,6 @@ function isAcademyOrAgencyOrCompanyDemand(
     " we are hiring "
   ];
   return blockedOrgTerms.some(term => combined.includes(term));
-  }
-async function fetchText(url: string): Promise<string> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-
-  try {
-    const response = await fetch(url, {
-      method: "GET",
-      headers: {
-        "User-Agent": USER_AGENT,
-        Accept: "application/rss+xml, application/xml, text/xml, text/html, */*"
-      },
-      signal: controller.signal
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status} for ${url}`);
-    }
-
-    return await response.text();
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-async function fetchJson(
-  url: string,
-  extraHeaders?: Record<string, string>
-): Promise<Record<string, unknown>> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-
-  try {
-    const response = await fetch(url, {
-      method: "GET",
-      headers: {
-        "User-Agent": USER_AGENT,
-        Accept: "application/json",
-        ...(extraHeaders || {})
-      },
-      signal: controller.signal
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status} for ${url}`);
-    }
-
-    return (await response.json()) as Record<string, unknown>;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-function getCountry(text: string): string {
-  const t = ` ${clean(text).toLowerCase()} `;
-
-  const countryMap: Array<[string, string[]]> = [
-    ["United States", [" united states ", " usa ", " u.s. ", " new york ", " california ", " texas ", " florida ", " chicago "]],
-    ["United Kingdom", [" united kingdom ", " uk ", " u.k. ", " london ", " manchester ", " birmingham ", " scotland "]],
-    ["Canada", [" canada ", " toronto ", " vancouver ", " montreal "]],
-    ["Australia", [" australia ", " sydney ", " melbourne "]],
-    ["Pakistan", [" pakistan ", " rawalpindi ", " islamabad ", " lahore ", " karachi "]],
-    ["India", [" india ", " mumbai ", " delhi ", " bangalore ", " bengaluru ", " hyderabad "]],
-    ["United Arab Emirates", [" uae ", " dubai ", " abu dhabi ", " sharjah "]],
-    ["Saudi Arabia", [" saudi arabia ", " riyadh ", " jeddah "]],
-    ["Germany", [" germany ", " berlin ", " munich "]],
-    ["France", [" france ", " paris "]]
-  ];
-
-  for (const [country, patterns] of countryMap) {
-    if (patterns.some(p => t.includes(p))) {
-      return country;
-    }
-  }
-
-  return "Remote / Global";
-}
-
-function isAcademyOrOrganization(
-  name: string,
-  bio: string,
-  url: string
-): boolean {
-  const combined = ` ${clean(`${name} ${bio} ${url}`).toLowerCase()} `;
-  const orgTerms = [
-    " academy ",
-    " institute ",
-    " university ",
-    " college ",
-    " school ",
-    " madrasa ",
-    " madrassa ",
-    " agency ",
-    " studio ",
-    " inc.",
-    " llc ",
-    " ltd ",
-    " corp ",
-    " foundation ",
-    " center ",
-    " centre ",
-    " platform ",
-    " marketplace "
-  ];
-  return orgTerms.some(term => combined.includes(term));
-}
-
-function isCourseBookOrArticleSpam(text: string): boolean {
-  const t = ` ${stripAllTags(text).toLowerCase()} `;
-  const spamTerms = [
-    " buy my course ",
-    " enroll now ",
-    " limited spots course ",
-    " free webinar ",
-    " crypto signal ",
-    " forex signal ",
-    " get rich ",
-    " make $",
-    " passive income course "
-  ];
-  return spamTerms.some(term => t.includes(term));
-}
-
-function detectSkillNeeded(text: string, role?: SaasRole): string {
-  const t = ` ${clean(text).toLowerCase()} `;
-
-  if (
-    t.includes(" quran ") ||
-    t.includes(" tajweed ") ||
-    t.includes(" arabic ") ||
-    t.includes(" urdu ") ||
-    t.includes(" islamic ")
-  ) {
-    return "Languages & Islamic Studies Teaching";
-  }
-
-  if (
-    t.includes(" legal ") ||
-    t.includes(" contract ") ||
-    t.includes(" paralegal ") ||
-    t.includes(" lawyer ") ||
-    t.includes(" attorney ")
-  ) {
-    return "Freelancing & Business";
-  }
-
-  if (
-    t.includes(" history ") ||
-    t.includes(" historian ") ||
-    t.includes(" math ") ||
-    t.includes(" physics ") ||
-    t.includes(" chemistry ") ||
-    t.includes(" biology ") ||
-    t.includes(" science ") ||
-    t.includes(" english ") ||
-    t.includes(" esl ") ||
-    t.includes(" ielts ") ||
-    t.includes(" tutor ") ||
-    t.includes(" teacher ") ||
-    t.includes(" phonics ") ||
-    t.includes(" reading ") ||
-    role === "teacher"
-  ) {
-    return "Education & Teaching";
-  }
-
-  if (
-    t.includes(" coach ") ||
-    t.includes(" coaching ") ||
-    t.includes(" mentor ") ||
-    role === "coach"
-  ) {
-    return "Coaching & Mentorship";
-  }
-
-  if (
-    t.includes(" writer ") ||
-    t.includes(" editor ") ||
-    t.includes(" designer ") ||
-    t.includes(" developer ") ||
-    t.includes(" freelance ") ||
-    t.includes(" translation ") ||
-    t.includes(" translator ") ||
-    role === "freelancer"
-  ) {
-    return "Writing, Design & Freelance Services";
-  }
-
-  return "Freelancing & Business";
 }
 function stripTrailingPunctuation(token: string): string {
   let out = token.trim();
@@ -809,7 +616,7 @@ async function isUrlReachableAndActive(url: string): Promise<boolean> {
 
   const lower = cleaned.toLowerCase();
   if (
-    lower.includes("news.ycombinator.com/item?id=") ||
+    lower.includes("mastodon.social/") ||
     (lower.includes("bsky.app/profile/") && lower.includes("/post/"))
   ) {
     return true;
@@ -846,16 +653,10 @@ async function isUrlReachableAndActive(url: string): Promise<boolean> {
   }
 }
 
-async function collectFreshDemandFromBlueskyPosts(
+async function collectFreshDemandFromMastodon(
   queries: string[],
   sourceName: string
 ): Promise<SearchResult[]> {
-  const token = clean(process.env.BLUESKY_ACCESS_TOKEN || "");
-  const endpointBase = token
-    ? "https://bsky.social/xrpc/app.bsky.feed.searchPosts"
-    : "https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts";
-  const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
-
   const collected: SearchResult[] = [];
   const seen = new Set<string>();
 
@@ -863,128 +664,53 @@ async function collectFreshDemandFromBlueskyPosts(
     queries.map(async q => {
       try {
         const url =
-          `${endpointBase}?q=` + encodeURIComponent(q) + "&sort=latest&limit=25";
-        const data = await fetchJson(url, headers);
-        return Array.isArray(data?.posts) ? data.posts : [];
+          "https://mastodon.social/api/v2/search?q=" +
+          encodeURIComponent(q) +
+          "&type=statuses&limit=25";
+        const data = await fetchJson(url);
+        return Array.isArray(data?.statuses) ? data.statuses : [];
       } catch (error) {
-        console.error(`[${sourceName}] Bluesky post query failed:`, q, error);
+        console.error(`[${sourceName}] Mastodon search failed:`, q, error);
         return [];
       }
     })
   );
 
-  for (const post of batches.flat() as Array<Record<string, unknown>>) {
-    const record = (post?.record as Record<string, unknown>) || {};
-    const author = (post?.author as Record<string, unknown>) || {};
-    const bodyText = stripAllTags(record?.text || "");
-    const createdAt = clean(record?.createdAt || post?.indexedAt || "");
-    const handle = clean(author?.handle || "");
-    const displayName = clean(author?.displayName || handle || "");
-    const uri = clean(post?.uri || "");
-    const rkey = uri.split("/").pop() || "";
+  for (const status of batches.flat() as Array<Record<string, unknown>>) {
+    const account = (status?.account as Record<string, unknown>) || {};
+    const bodyText = stripAllTags(String(status?.content || ""));
+    const createdAt = clean(status?.created_at || "");
+    const statusUrl = cleanUrl(String(status?.url || status?.uri || ""));
+    const acct = clean(account?.acct || account?.username || "");
+    const displayName = clean(account?.display_name || acct || "");
 
-    if (!bodyText || !handle || !rkey) continue;
+    if (!bodyText || !statusUrl) continue;
     if (!isFreshWithin72Hours(createdAt)) continue;
-    if (isAcademyOrAgencyOrCompanyDemand(displayName, bodyText, "")) continue;
+    if (isAcademyOrAgencyOrCompanyDemand(displayName, bodyText, statusUrl)) continue;
     if (isCourseBookOrArticleSpam(bodyText)) continue;
-    if (isArticleOrSupplyJobText(bodyText, "")) continue;
+    if (isArticleOrSupplyJobText(bodyText, statusUrl)) continue;
 
-    const postUrl = `https://bsky.app/profile/${handle}/post/${rkey}`;
     const extracted = extractDirectContactFromBio(bodyText);
-    const contactUrl = extracted.contactUrl || postUrl;
+    const contactUrl = extracted.contactUrl || statusUrl;
     const email = extracted.email;
 
-    const dedupeKey = `${postUrl.toLowerCase()}|${bodyText.slice(0, 50).toLowerCase()}`;
+    const dedupeKey = `${statusUrl.toLowerCase()}|${bodyText.slice(0, 50).toLowerCase()}`;
     if (seen.has(dedupeKey)) continue;
     seen.add(dedupeKey);
 
     collected.push({
       title: bodyText.slice(0, 110),
       link: contactUrl,
-      sourceUrl: postUrl,
+      sourceUrl: statusUrl,
       contactUrl,
       email,
-      author: displayName || handle,
+      author: displayName || acct,
       country: getCountry(bodyText) || "Remote / Global",
       description: bodyText,
       snippet: bodyText,
       publishedAt: createdAt,
       source: sourceName,
-      sourceType: "bsky-demand-post"
-    });
-  }
-
-  return collected.slice(0, MAX_RESULTS_PER_SOURCE);
-}
-
-async function collectFreshDemandFromHackerNews(
-  queries: string[],
-  sourceName: string
-): Promise<SearchResult[]> {
-  const cutoffSec = Math.floor((Date.now() - MAX_DEMAND_AGE_MS) / 1000);
-  const collected: SearchResult[] = [];
-  const seen = new Set<string>();
-
-  const batches = await Promise.all(
-    queries.map(async q => {
-      try {
-        const url =
-          "https://hn.algolia.com/api/v1/search_by_date?query=" +
-          encodeURIComponent(q) +
-          "&numericFilters=created_at_i>" +
-          cutoffSec +
-          "&hitsPerPage=25";
-        const data = await fetchJson(url);
-        return Array.isArray(data?.hits) ? data.hits : [];
-      } catch (error) {
-        console.error(`[${sourceName}] HN query failed:`, q, error);
-        return [];
-      }
-    })
-  );
-
-  for (const hit of batches.flat() as Array<Record<string, unknown>>) {
-    const title = stripAllTags(hit?.title || "");
-    const storyTitle = stripAllTags(hit?.story_title || "");
-    const bodyText = stripAllTags(hit?.comment_text || hit?.story_text || title || storyTitle);
-    const createdAt = clean(hit?.created_at || "");
-    const authorName = clean(hit?.author || "");
-    const rawHitUrl = cleanUrl(String(hit?.url || ""));
-    const objectId = clean(hit?.objectID || "");
-    const hnItemUrl = objectId ? `https://news.ycombinator.com/item?id=${objectId}` : "";
-    const combinedText = `${title || storyTitle} ${bodyText}`;
-
-    if (!combinedText || !isFreshWithin72Hours(createdAt)) continue;
-    if (isAcademyOrAgencyOrCompanyDemand(authorName, combinedText, rawHitUrl)) continue;
-    if (isCourseBookOrArticleSpam(combinedText)) continue;
-    if (isArticleOrSupplyJobText(combinedText, rawHitUrl)) continue;
-
-    const extracted = extractDirectContactFromBio(combinedText);
-    const directUrl =
-      extracted.contactUrl ||
-      (rawHitUrl && isDirectContactUrl(rawHitUrl) ? rawHitUrl : "") ||
-      hnItemUrl;
-    const directEmail = extracted.email;
-
-    if (!directEmail && !directUrl) continue;
-
-    const dedupeKey = `${(directEmail || directUrl).toLowerCase()}|${combinedText.slice(0, 60).toLowerCase()}`;
-    if (seen.has(dedupeKey)) continue;
-    seen.add(dedupeKey);
-
-    collected.push({
-      title: (title || storyTitle || bodyText).slice(0, 110),
-      link: directUrl || `mailto:${directEmail}`,
-      sourceUrl: hnItemUrl || directUrl || `mailto:${directEmail}`,
-      contactUrl: directUrl,
-      email: directEmail,
-      author: authorName,
-      country: getCountry(combinedText) || "Remote / Global",
-      description: bodyText,
-      snippet: bodyText,
-      publishedAt: createdAt,
-      source: sourceName,
-      sourceType: "hn-api"
+      sourceType: "mastodon-status"
     });
   }
 
@@ -992,33 +718,18 @@ async function collectFreshDemandFromHackerNews(
 }
 
 async function collectRedditDemandTeachers(): Promise<SearchResult[]> {
-  const [bsky, hn] = await Promise.all([
-    collectFreshDemandFromBlueskyPosts(DEMAND_TEACHER_QUERIES, "Demand Teachers"),
-    collectFreshDemandFromHackerNews(DEMAND_TEACHER_QUERIES, "Demand Teachers")
-  ]);
-  return [...bsky, ...hn].slice(0, MAX_RESULTS_PER_SOURCE);
+  return collectFreshDemandFromMastodon(DEMAND_TEACHER_QUERIES, "Demand Teachers");
 }
 
 async function collectRedditDemandCoaches(): Promise<SearchResult[]> {
-  const [bsky, hn] = await Promise.all([
-    collectFreshDemandFromBlueskyPosts(DEMAND_COACH_QUERIES, "Demand Coaches"),
-    collectFreshDemandFromHackerNews(DEMAND_COACH_QUERIES, "Demand Coaches")
-  ]);
-  return [...bsky, ...hn].slice(0, MAX_RESULTS_PER_SOURCE);
+  return collectFreshDemandFromMastodon(DEMAND_COACH_QUERIES, "Demand Coaches");
 }
 
 async function collectRedditDemandFreelancers(): Promise<SearchResult[]> {
-  const [bsky, hn] = await Promise.all([
-    collectFreshDemandFromBlueskyPosts(
-      DEMAND_TRANSLATION_WRITING_LEGAL_QUERIES,
-      "Demand Translation Writing Legal"
-    ),
-    collectFreshDemandFromHackerNews(
-      DEMAND_TRANSLATION_WRITING_LEGAL_QUERIES,
-      "Demand Translation Writing Legal"
-    )
-  ]);
-  return [...bsky, ...hn].slice(0, MAX_RESULTS_PER_SOURCE);
+  return collectFreshDemandFromMastodon(
+    DEMAND_TRANSLATION_WRITING_LEGAL_QUERIES,
+    "Demand Translation Writing Legal"
+  );
 }
 
 async function collectBlueskySubjectAndFreelanceLeads(
@@ -1426,7 +1137,7 @@ async function insertProcessedLead(
     duplicate: false,
     error: `${firstTry.error.message} | ${secondTry.error.message}`
   };
-}
+  }
 export default async function handler(
   req: VercelRequest,
   res: VercelResponse
@@ -1502,4 +1213,4 @@ export default async function handler(
       message
     });
   }
-    }
+      }
